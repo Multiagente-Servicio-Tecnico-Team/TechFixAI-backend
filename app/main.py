@@ -399,10 +399,10 @@ def create_app(
                         raise HTTPException(status_code=404, detail="Conversación no encontrada.")
                     if "ejecutar_ticket" in snapshot.next:
                         from app.agents.decentralized.ticket_operations import validate_pending_ticket_operation
-                        from app.agents.decentralized.policy import normalizar
+                        from app.agents.decentralized.policy import normalize_text
                         validate_pending_ticket_operation(saved.get("pending_ticket_operation"),
                             authenticated_customer_id=customer.id, request_revision=saved.get("request_revision"))
-                        if saved.get("ticket_correction_required") or normalizar(message).strip(" .!¿?¡") not in {
+                        if saved.get("ticket_correction_required") or normalize_text(message).strip(" .!¿?¡") not in {
                                 "continuar", "continua", "confirmo", "registrar", "reintentar", "reintento", "si"}:
                             from app.agents.decentralized.ticket_intake import classify_request
                             blocked = saved.get("ticket_correction_required") or classify_request(message) not in {"INFO_QUERY", "WARRANTY_STATUS_CHECK"}

@@ -3,8 +3,8 @@ from langchain_groq import ChatGroq
 from app.rag.tools import consultar_base_conocimiento
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, HumanMessage
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import ultimo_usuario, es_atencion, es_compatibilidad, handoff, ATENCION_NO_CONFIGURADA, es_inventario, es_marcador
-from app.agents.decentralized.policy import triaje_soporte
+from app.agents.decentralized.policy import latest_user_message, is_customer_service_query, is_compatibility_query, handoff, ATENCION_NO_CONFIGURADA, is_inventory_query, contains_placeholder
+from app.agents.decentralized.policy import classify_support_triage
 from app.agents.decentralized.tools.soporte_tools import (
     consultar_estado_ticket,
     transferir_a_tecnico,
@@ -141,11 +141,11 @@ def soporte_node(state: AgentState, *, authenticated_customer_id=None):
                 captured.get("pending_ticket_operation") and not captured.get("ticket_correction_required")
                 and not state.get("ticket_correction_required"))
             return captured
-    user = ultimo_usuario(state)
+    user = latest_user_message(state)
     # A service FAQ must not recover repair symptoms from an earlier turn.
-    from app.agents.decentralized.policy import normalizar
+    from app.agents.decentralized.policy import normalize_text
     import re
-    if re.search(r"\bque servicios\b|\bservicios\b.*\bofrec", normalizar(user)):
+    if re.search(r"\bque servicios\b|\bservicios\b.*\bofrec", normalize_text(user)):
         results = [m for m in state["messages"][state.get("turn_start_index", 0):]
                    if isinstance(m, ToolMessage) and m.name == "consultar_base_conocimiento"]
         if not results:
@@ -170,29 +170,29 @@ def soporte_node(state: AgentState, *, authenticated_customer_id=None):
         return handoff("soporte", "transferir_a_ventas", motivo="Consulta comercial; faltan especificaciones si la referencia es genérica")
     if request in {"WARRANTY_STATUS_CHECK", "WARRANTY_CLAIM"}:
         return handoff("soporte", "transferir_a_garantia", motivo="Consultar garantía o revisar reclamo sin asumir cobertura")
-    if es_marcador(user):
+    if contains_placeholder(user):
         return {"current_agent": "soporte", "messages": [AIMessage(content="Indica el nombre real del repuesto, sustituyendo el texto entre corchetes.")]}
-    if es_inventario(user):
+    if is_inventory_query(user):
         return handoff("soporte", "transferir_a_ventas", motivo="Consultar disponibilidad de repuestos")
-    if es_compatibilidad(user):
+    if is_compatibility_query(user):
         return handoff("soporte", "transferir_a_tecnico", motivo="Verificar compatibilidad con evidencia técnica")
-    atendiendo_transferencia = any(
+    handling_return_handoff = any(
         isinstance(m, ToolMessage) and m.name == "transferir_a_soporte" and m.status != "error"
         for m in state["messages"][state.get("turn_start_index", 0):]
     )
-    if es_atencion(user):
+    if is_customer_service_query(user):
         return {"current_agent": "soporte", "messages": [AIMessage(content=ATENCION_NO_CONFIGURADA)]}
-    if atendiendo_transferencia:
+    if handling_return_handoff:
         return {"current_agent": "soporte", "messages": [AIMessage(content="¿Necesitas consultar un ticket, disponibilidad de un repuesto o información de atención? Indícame qué consulta quieres continuar.")]}
 
     # Seguimiento y atención general no deben rescatar una falla del historial.
     if "ticket" not in user.lower():
-        destino = triaje_soporte(state)
-        if destino in {"software", "tecnico"}:
-            return handoff("soporte", f"transferir_a_{destino}",
-                           motivo="Evaluar consulta lógica reportada, sin causa confirmada" if destino == "software"
+        destination = classify_support_triage(state)
+        if destination in {"software", "tecnico"}:
+            return handoff("soporte", f"transferir_a_{destination}",
+                           motivo="Evaluar consulta lógica reportada, sin causa confirmada" if destination == "software"
                            else "Evaluar indicios físicos o componentes reportados, sin causa confirmada")
-        if destino == "aclarar":
+        if destination == "aclarar":
             return {"current_agent": "soporte", "messages": [AIMessage(content=(
                 "No puedo determinar el área solo con ese síntoma. ¿Qué ocurre exactamente y en qué aplicación o momento aparece?"
             ))]}

@@ -24,14 +24,14 @@ def consultar_inventario(
     if cantidad < 1:
         raise ValueError("La cantidad debe ser mayor que cero.")
 
-    resultado = lookup_inventory(
+    result = lookup_inventory(
         requested_name=nombre_repuesto,
         quantity=cantidad,
     )
 
     return {
-        **resultado,
-        "unit_price": str(resultado["unit_price"]),
+        **result,
+        "unit_price": str(result["unit_price"]),
     }
 
 @tool

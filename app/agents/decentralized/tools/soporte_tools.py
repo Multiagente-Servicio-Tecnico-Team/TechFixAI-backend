@@ -50,10 +50,10 @@ def consultar_estado_ticket(numero_ticket: int) -> str:
         1003: "Resuelto"
     }
 
-    estado = tickets.get(numero_ticket)
+    status = tickets.get(numero_ticket)
 
-    if estado:
-        return f"El ticket {numero_ticket} se encuentra: {estado}"
+    if status:
+        return f"El ticket {numero_ticket} se encuentra: {status}"
 
     return f"No se encontró el ticket {numero_ticket}"
 

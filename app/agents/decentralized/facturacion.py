@@ -11,12 +11,12 @@ from app.agents.decentralized.payment_operations import (
 from app.database.decentralized_repository import _id, _money, RetryConflict
 from app.agents.decentralized.policy import handoff
 from app.agents.decentralized.tools.facturacion_tools import (
-    transferir_a_soporte, transferir_a_ventas, consultar_capacidades_financieras,
+    transferir_a_soporte, transferir_a_ventas, get_financial_capabilities,
 )
 
 from app.agents.decentralized.tools.logistica_tools import transferir_a_logistica
 
-facturacion_tools = [transferir_a_soporte, transferir_a_ventas, consultar_capacidades_financieras, transferir_a_logistica]
+facturacion_tools = [transferir_a_soporte, transferir_a_ventas, get_financial_capabilities, transferir_a_logistica]
 
 SYSTEM_PROMPT = """Eres Facturación y Pagos de la red descentralizada.
 Ventas conserva los precios y la cotización. Solo una cotización SQL ACCEPTED,

@@ -47,7 +47,7 @@ def test_confirmed_ticket_precedes_handoff(network, database, kind, text, destin
     row = repo.get_ticket(customer_id=1, ticket_id=result["ticket_id"])
     assert row["request_type"] == kind and row["status"] == "NEW"
     assert result["ticket_code"] == row["code"]
-    assert result["handoff_history"][0] == {"origen": "soporte", "destino": destination}
+    assert result["handoff_history"][0] == {"origin": "soporte", "destination": destination}
     with engine.connect() as conn:
         assert conn.scalar(select(func.count()).select_from(tickets)) == 1
     pairs(result)
@@ -161,7 +161,7 @@ def test_confirmed_sale_intake_drives_inventory_without_model_routing(network, d
     graph.invoke(initial("Quiero comprar dos SSD 500GB SATA"), config,
                  context={"authenticated_customer_id": 1}, durability="sync")
     result = graph.invoke(None, config, context={"authenticated_customer_id": 1}, durability="sync")
-    assert [item["destino"] for item in result["handoff_history"]] == expected
+    assert [item["destination"] for item in result["handoff_history"]] == expected
     assert controls["inventory_calls"] == [("SSD 500GB SATA", 2)]
     assert bool(result.get("out_of_stock_items")) == (stock < 2)
     assert result.get("quote_id") is None and result.get("payment_id") is None

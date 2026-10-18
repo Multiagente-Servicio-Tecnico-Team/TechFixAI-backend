@@ -4,13 +4,18 @@ Usa Groq y puede consultar RAG/PostgreSQL; no ejecutar como prueba aislada.
 """
 
 import re
+from app.agents.decentralized.data_compat import normalize_handoff_history_entry
 
 
 def mostrar_diagnostico(result):
     """Solo metadatos: nunca mensajes, argumentos ni textos de excepciones."""
     agents = {"soporte", "tecnico", "almacen", "ventas"}
     for handoff in result.get("handoff_history", []):
-        origin, target = handoff.get("origen"), handoff.get("destino")
+        try:
+            entry = normalize_handoff_history_entry(handoff)
+        except (ValueError, TypeError):
+            continue
+        origin, target = entry.get("origin"), entry.get("destination")
         if origin in agents and target in agents:
             print(f"[Transferencia: {origin} → {target}]")
     for error in result.get("errors", []):

@@ -10,7 +10,7 @@ def diagnosticar_problema(sintoma: str) -> str:
     """
 
     # Diagnósticos simulados temporalmente
-    diagnosticos = {
+    diagnoses = {
         "no enciende": (
             "Posible falla en la fuente de alimentación. "
             "Se recomienda revisar la fuente y el cable de energía."
@@ -28,13 +28,13 @@ def diagnosticar_problema(sintoma: str) -> str:
         ),
     }
 
-    sintoma_normalizado = sintoma.lower().strip()
+    normalized_symptom = sintoma.lower().strip()
 
     # Buscamos si alguno de los síntomas conocidos aparece
     # dentro de la descripción enviada por el usuario.
-    for sintoma_conocido, diagnostico in diagnosticos.items():
-        if sintoma_conocido in sintoma_normalizado:
-            return diagnostico
+    for known_symptom, diagnosis in diagnoses.items():
+        if known_symptom in normalized_symptom:
+            return diagnosis
 
     return (
         "No se encontró un diagnóstico preliminar para el síntoma indicado. "

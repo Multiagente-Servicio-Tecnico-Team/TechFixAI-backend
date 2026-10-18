@@ -36,7 +36,7 @@ def test_formato_nombre_y_contrato(transfer, destination, extra):
     record = make_handoff_record({"messages": [message], "request_revision": 1},
                                  "software", destination, handoff_reason([message]),
                                  {"software", "soporte", "tecnico", "ventas", "almacen"})
-    assert record["destino"] == destination
+    assert record["destination"] == destination
     # El grafo actual aún no dispone del agente de origen Software.
     with pytest.raises(ValueError, match="no disponible"):
         make_handoff_record({"messages": [message]}, "software", destination,

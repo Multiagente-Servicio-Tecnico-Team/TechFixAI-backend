@@ -4,6 +4,9 @@ import json
 from typing_extensions import TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from app.agents.decentralized.data_compat import (
+    normalize_handoff_payload, normalize_handoff_record,
+)
 
 
 ALLOWED_HANDOFFS = {
@@ -22,9 +25,9 @@ HANDOFF_TOOLS["solicitar_inventario"] = "almacen"
 
 
 class HandoffRecord(TypedDict):
-    origen: str
-    destino: str
-    motivo: str
+    origin: str
+    destination: str
+    reason: str
     request_revision: int | None
     progress_token: str
 
@@ -60,24 +63,35 @@ def handoff_reason(messages):
     result = selected_handoff(messages)
     if result is None:
         return None
+    try:
+        data = json.loads(result.content)
+    except (ValueError, TypeError):
+        data = None
+        legacy_reason = result.content.partition(":")[2].strip() if ":" in result.content else result.content
+    else:
+        legacy_reason = None
+    if isinstance(data, dict):
+        try:
+            data = normalize_handoff_payload(data)
+        except (ValueError, TypeError):
+            return None
     for message in reversed(messages):
         if isinstance(message, AIMessage):
             for call in message.tool_calls:
                 if call["id"] == result.tool_call_id and call["name"] == result.name:
-                    args = call["args"]
+                    try:
+                        args = normalize_handoff_payload(call["args"])
+                    except (ValueError, TypeError):
+                        return None
                     if result.name == "solicitar_inventario":
-                        consulta = args.get("consulta")
-                        return "Consultar inventario" if isinstance(consulta, str) and consulta.strip() else None
-                    return args.get("motivo")
-    try:
-        data = json.loads(result.content)
-    except (ValueError, TypeError):
-        return result.content.partition(":")[2].strip() if ":" in result.content else result.content
+                        query = args.get("query")
+                        return "Consultar inventario" if isinstance(query, str) and query.strip() else None
+                    return args.get("reason")
     if isinstance(data, dict):
         return ("Consultar inventario" if result.name == "solicitar_inventario"
-                and isinstance(data.get("consulta"), str) and data["consulta"].strip()
-                else data.get("motivo"))
-    return None
+                and isinstance(data.get("query"), str) and data["query"].strip()
+                else data.get("reason"))
+    return legacy_reason
 
 
 def canonical_content(content):
@@ -120,10 +134,11 @@ def progress_token(state):
 def make_handoff_record(state, origin, destination, reason, available_agents):
     revision = state.get("request_revision")
     validate_handoff(origin, destination, reason, available_agents, revision)
+    records = [normalize_handoff_record(record) for record in state.get("handoff_records", [])]
     token = progress_token(state)
-    for record in state.get("handoff_records", []):
-        if (record["origen"] == origin and record["destino"] == destination
+    for record in records:
+        if (record["origin"] == origin and record["destination"] == destination
                 and record["request_revision"] == revision and record["progress_token"] == token):
             raise ValueError("Transferencia repetida sin información nueva")
-    return HandoffRecord(origen=origin, destino=destination, motivo=reason.strip(),
+    return HandoffRecord(origin=origin, destination=destination, reason=reason.strip(),
                          request_revision=revision, progress_token=token)

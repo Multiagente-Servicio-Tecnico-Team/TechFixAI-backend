@@ -5,7 +5,7 @@ No LLM receives address/contact fields. No workshop information is fabricated.
 import re
 from langchain_core.messages import AIMessage
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import ultimo_usuario, normalizar
+from app.agents.decentralized.policy import latest_user_message, normalize_text
 from app.agents.decentralized.logistics_operations import logistics_payload, validate_pending_logistics_operation
 from app.agents.decentralized.ticket_operations import _revision
 from app.database.decentralized_repository import _id, RetryConflict
@@ -17,8 +17,8 @@ logistica_tools = [transferir_a_soporte]
 def collect_logistics(state):
     """Only explicit user choices/labelled fields; never infer carrier or dates."""
     data = dict(state.get("logistics") or {})
-    text = ultimo_usuario(state)
-    normalized = normalizar(text)
+    text = latest_user_message(state)
+    normalized = normalize_text(text)
     courier = bool(re.search(r"\bcourier\b",normalized)) and not re.search(r"\b(?:no|sin|no quiero|no prefiero)\s+(?:por\s+)?courier\b",normalized)
     physical = any(word in normalized for word in ("retiro presencial", "entrega presencial", "ingreso presencial")) and not re.search(r"\b(?:no|sin|no quiero|no prefiero)\s+(?:retiro|entrega|ingreso) presencial",normalized)
     if courier and physical:
@@ -32,7 +32,7 @@ def collect_logistics(state):
     # Semicolon/newline delimited explicit labels. Preserve original user values.
     for segment in re.split(r"[;\n]", text):
         label, separator, value = segment.partition(":")
-        key = fields.get(normalizar(label.strip()))
+        key = fields.get(normalize_text(label.strip()))
         if separator and key and value.strip():
             data[key] = value.strip()
     return data

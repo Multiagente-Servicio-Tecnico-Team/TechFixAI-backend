@@ -66,8 +66,8 @@ def test_flujo_soporte_tecnico_ventas(network):
 
     assert herramientas == ["transferir_a_tecnico", "transferir_a_ventas"]
     assert resultado["handoff_history"] == [
-        {"origen": "soporte", "destino": "tecnico"},
-        {"origen": "tecnico", "destino": "ventas"},
+        {"origin": "soporte", "destination": "tecnico"},
+        {"origin": "tecnico", "destination": "ventas"},
     ]
     assert resultado["current_agent"] == "ventas"
     assert resultado["quote_scope"] == "solo_servicio"

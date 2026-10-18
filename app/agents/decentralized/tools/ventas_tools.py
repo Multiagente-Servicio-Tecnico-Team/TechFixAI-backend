@@ -8,13 +8,13 @@ def solicitar_inventario(consulta: str) -> dict:
     return {"accion": "CONSULTAR_DISPONIBILIDAD", "consulta": consulta}
 
 
-def normalizar_servicio(servicio: str) -> str:
+def normalize_service(servicio: str) -> str:
     servicio = servicio.lower().strip()
 
     return "".join(
-        caracter
-        for caracter in unicodedata.normalize("NFD", servicio)
-        if unicodedata.category(caracter) != "Mn"
+        character
+        for character in unicodedata.normalize("NFD", servicio)
+        if unicodedata.category(character) != "Mn"
     )
 
 
@@ -27,19 +27,19 @@ def generar_cotizacion(servicio: str) -> str:
     La mano de obra requiere una tarifa verificada.
     """
 
-    servicio_normalizado = normalizar_servicio(servicio)
+    normalized_service = normalize_service(servicio)
 
-    servicios = (
+    services = (
         "diagnostico",
         "mantenimiento",
         "reparacion",
         "instalacion",
     )
 
-    for servicio_conocido in servicios:
-        if servicio_conocido in servicio_normalizado:
+    for known_service in services:
+        if known_service in normalized_service:
             return (
-                f"Servicio: {servicio_conocido}. "
+                f"Servicio: {known_service}. "
                 "Tarifa de mano de obra pendiente de validacion. "
                 "No se puede confirmar un precio total."
             )
@@ -58,3 +58,5 @@ def transferir_a_tecnico(motivo: str) -> str:
     """
 
     return f"TRANSFERIR_TECNICO: {motivo}"
+
+normalizar_servicio = normalize_service

@@ -3,8 +3,8 @@ from app.rag.tools import consultar_base_conocimiento
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import es_revision_comercial, ultimo_usuario, handoff, no_puede_probar, es_atencion
-from app.agents.decentralized.policy import triaje_soporte, transferencia_sin_progreso, peligro_fisico_reportado
+from app.agents.decentralized.policy import is_diagnostic_pricing_query, latest_user_message, handoff, cannot_perform_checks, is_customer_service_query
+from app.agents.decentralized.policy import classify_support_triage, is_handoff_without_progress, has_reported_physical_hazard
 from app.agents.decentralized.tools.soporte_tools import transferir_a_soporte, transferir_a_software
 from app.agents.decentralized.tools.tecnico_tools import (
     diagnosticar_problema,
@@ -173,14 +173,14 @@ REGLAS GENERALES:
 def tecnico_node(state: AgentState):
     """Nodo Técnico del grafo descentralizado."""
 
-    user = ultimo_usuario(state)
-    classification = triaje_soporte(state)
-    if peligro_fisico_reportado(user):
+    user = latest_user_message(state)
+    classification = classify_support_triage(state)
+    if has_reported_physical_hazard(user):
         return {"current_agent": "tecnico", "messages": [AIMessage(content=(
             "Ante esos indicios físicos, suspende las pruebas y no sigas encendiendo ni cargando el equipo. "
             "Necesitas revisión presencial; no puedo confirmar la causa ni reservar una cita."
         ))]}
-    if es_atencion(user):
+    if is_customer_service_query(user):
         return handoff("tecnico", "transferir_a_soporte", motivo="Orientación presencial")
     if classification == "software":
         if state.get("required_parts") or state.get("requested_items") or state.get("technical_assessment", {}).get("hardware_diagnosis"):
@@ -188,20 +188,20 @@ def tecnico_node(state: AgentState):
                 "Hay información física o componentes pendientes junto a la consulta lógica. "
                 "¿La consulta de software es parte de esa reparación o una solicitud distinta?"
             ))]}
-        if transferencia_sin_progreso(state, "tecnico", "software"):
+        if is_handoff_without_progress(state, "tecnico", "software"):
             return {"current_agent": "tecnico", "messages": [AIMessage(content=(
                 "Ya derivamos esta consulta a Software. ¿Qué información nueva tienes para continuar la evaluación?"
             ))]}
         return handoff("tecnico", "transferir_a_software",
                        motivo="Evaluar evidencia lógica reportada; Hardware no confirma una causa de software")
-    if classification == "aclarar" and not es_revision_comercial(user):
+    if classification == "aclarar" and not is_diagnostic_pricing_query(user):
         return {"current_agent": "tecnico", "messages": [AIMessage(content=(
             "Ese síntoma no permite distinguir Hardware de Software. ¿Qué ocurre exactamente y qué mensaje de error aparece?"
         ))]}
-    if es_revision_comercial(user):
+    if is_diagnostic_pricing_query(user):
         return handoff("tecnico", "transferir_a_ventas", motivo="Cotizar únicamente revisión de diagnóstico",
                        alcance="solo_servicio")
-    if no_puede_probar(ultimo_usuario(state)):
+    if cannot_perform_checks(latest_user_message(state)):
         return {"current_agent": "tecnico", "messages": [AIMessage(content=(
             "Entiendo que no puedes realizar esas pruebas. No necesitas conectar otro equipo "
             "ni entrar a Windows o al BIOS. Sin una revisión no puedo confirmar la causa ni un repuesto. "
@@ -216,20 +216,20 @@ def tecnico_node(state: AgentState):
 
     try:
         # Última solicitud del usuario.
-        texto_usuario = next(
+        user_text = next(
             (
-                mensaje.content.lower()
-                for mensaje in reversed(state["messages"])
-                if mensaje.type == "human"
-                and isinstance(mensaje.content, str)
+                message.content.lower()
+                for message in reversed(state["messages"])
+                if message.type == "human"
+                and isinstance(message.content, str)
             ),
             "",
         )
 
         # Identificar solicitudes de documentación.
-        solicita_documentacion = any(
-            palabra in texto_usuario
-            for palabra in (
+        requests_documentation = any(
+            word in user_text
+            for word in (
                 "documentación",
                 "documentacion",
                 "base de conocimiento",
@@ -238,14 +238,14 @@ def tecnico_node(state: AgentState):
         )
 
         # Evitar consultar RAG repetidamente.
-        rag_ejecutado = any(
-            isinstance(mensaje, ToolMessage)
-            and mensaje.name == "consultar_base_conocimiento"
-            and mensaje.status != "error"
-            for mensaje in state["messages"][state.get("turn_start_index", 0):]
+        rag_attempted = any(
+            isinstance(message, ToolMessage)
+            and message.name == "consultar_base_conocimiento"
+            and message.status != "error"
+            for message in state["messages"][state.get("turn_start_index", 0):]
         )
 
-        if solicita_documentacion and not rag_ejecutado:
+        if requests_documentation and not rag_attempted:
             response = tecnico_llm_rag.invoke(messages)
         else:
             response = tecnico_llm.invoke(messages)

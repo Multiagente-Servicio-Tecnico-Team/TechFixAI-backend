@@ -58,7 +58,7 @@ def test_authenticated_existing_ticket_reaches_specialist(network, text, target)
     result = graph.invoke(initial(text, ticket_id=10),
         {"configurable": {"thread_id": target}}, context={"authenticated_customer_id": 1})
     assert result["current_agent"] == target
-    assert result["handoff_history"] == [{"origen": "soporte", "destino": target}]
+    assert result["handoff_history"] == [{"origin": "soporte", "destination": target}]
     assert result["ticket_id"] == 10
     assert not result.get("pending_ticket_operation")
     assert repo.mock_calls == []

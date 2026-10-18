@@ -35,7 +35,7 @@ def test_claim_checkpoint_recovery_and_logistics_handoff(network,warranty_db,mon
     assert result["warranty_claim_id"] == saved[0]
     assert result["pending_warranty_operation"] is None
     assert result["current_agent"] == "logistica"
-    assert result["handoff_history"][-1] == {"origen":"garantia","destino":"logistica"}
+    assert result["handoff_history"][-1] == {"origin":"garantia","destination":"logistica"}
     pairs(result)
 
 

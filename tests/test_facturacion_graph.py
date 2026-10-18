@@ -27,7 +27,7 @@ def test_real_incoming_handoff_and_no_financial_writes(network, monkeypatch, ori
     controls["handlers"][origin] = lambda messages: call("transferir_a_facturacion", motivo="Consultar operación financiera")
     result = graph_module.build_graph().invoke(dict(messages=[HumanMessage(content="Consulta financiera")], current_agent=origin))
     assert result["current_agent"] == "facturacion"
-    assert result["handoff_history"] == [{"origen": origin, "destino": "facturacion"}]
+    assert result["handoff_history"] == [{"origin": origin, "destination": "facturacion"}]
     assert any(isinstance(message, ToolMessage) and message.name == "transferir_a_facturacion" for message in result["messages"])
     write.assert_not_called()
 
@@ -39,8 +39,8 @@ def test_real_outgoing_tools_and_audit(network, monkeypatch, destination):
         return {"current_agent": "facturacion", "messages": [call(f"transferir_a_{destination}", motivo="Revisión requerida")]}
     monkeypatch.setitem(graph_module.AGENT_NODES, "facturacion", financial_node)
     result = graph_module.build_graph().invoke(dict(messages=[HumanMessage(content="Consulta general")], current_agent="facturacion"))
-    assert result["handoff_history"][0] == {"origen": "facturacion", "destino": destination}
-    assert result["handoff_records"][0]["motivo"] == "Revisión requerida"
+    assert result["handoff_history"][0] == {"origin": "facturacion", "destination": destination}
+    assert result["handoff_records"][0]["reason"] == "Revisión requerida"
 
 
 def test_checkpointer_continuity_financial_state(network):

@@ -1,4 +1,7 @@
 import json
+from app.agents.decentralized.data_compat import (
+    normalize_handoff_history_entry, normalize_handoff_payload, normalize_inventory_result,
+)
 from app.agents.decentralized.garantia import garantia_node, garantia_tools
 from app.agents.decentralized.warranty_operations import validate_pending_warranty_operation
 from app.agents.decentralized.policy import handoff
@@ -8,9 +11,9 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import repuesto_confirmado, software_comercial_elegible
-from app.agents.decentralized.policy import inventario_vigente, preparar_inventario
-from app.agents.decentralized.policy import evaluar_abastecimiento
+from app.agents.decentralized.policy import is_part_reference_confirmed, is_software_commercially_eligible
+from app.agents.decentralized.policy import current_inventory_results, prepare_inventory_request
+from app.agents.decentralized.policy import evaluate_supply
 from app.agents.decentralized.handoffs import (
     HANDOFF_TOOLS, handoff_reason, validate_handoff, make_handoff_record, selected_handoff,
 )
@@ -21,6 +24,7 @@ from app.agents.decentralized.almacen import almacen_node, almacen_tools
 from app.agents.decentralized.software import software_node, software_tools
 from app.agents.decentralized.compras import compras_node, compras_tools
 from app.agents.decentralized.facturacion import facturacion_node, facturacion_tools
+from app.agents.decentralized.tools.facturacion_tools import consultar_capacidades_financieras
 from app.agents.decentralized.logistica import logistica_node, logistica_tools
 from app.agents.decentralized.logistics_operations import validate_pending_logistics_operation
 from app.agents.decentralized.payment_operations import validate_pending_payment_operation
@@ -45,169 +49,178 @@ AGENT_NODES = {
 }
 
 
-def detectar_handoff(messages):
+def detect_handoff(messages):
     """Identifica la primera transferencia exitosa del lote final."""
     result = selected_handoff(messages)
     return HANDOFF_TOOLS[result.name] if result is not None else None
 
 
-def extraer_repuesto_handoff(messages):
+def extract_part_handoff(messages):
     """Valida los datos estructurados de transferir_a_almacen."""
-    for mensaje in [selected_handoff(messages)]:
-        if mensaje is None or mensaje.name != "transferir_a_almacen":
+    for message in [selected_handoff(messages)]:
+        if message is None or message.name != "transferir_a_almacen":
             return None
-        if mensaje.status == "error":
+        if message.status == "error":
             return None
         try:
-            datos = json.loads(mensaje.content)
+            data = json.loads(message.content)
+            if isinstance(data, dict):
+                data = normalize_handoff_payload(data)
         except (ValueError, TypeError):
             return None
-        if not isinstance(datos, dict):
+        if not isinstance(data, dict):
             return None
-        if datos.get("accion") != "TRANSFERIR_ALMACEN":
+        if data.get("action") != "TRANSFERIR_ALMACEN":
             return None
-        nombre = datos.get("nombre_repuesto")
-        cantidad = datos.get("cantidad")
-        if not isinstance(nombre, str) or not nombre.strip():
+        name = data.get("part_name")
+        quantity = data.get("quantity")
+        if not isinstance(name, str) or not name.strip():
             return None
-        if type(cantidad) is not int or cantidad <= 0:
+        if type(quantity) is not int or quantity <= 0:
             return None
-        return {"name": nombre.strip(), "quantity": cantidad}
+        return {"name": name.strip(), "quantity": quantity}
     return None
 
 
-def registrar_handoff(state: AgentState, origen: str):
+def record_handoff(state: AgentState, origen: str):
     """Audita herramientas y transferencias entre agentes."""
-    destino = detectar_handoff(state["messages"])
-    motivo = handoff_reason(state["messages"]) if destino else None
+    destination = detect_handoff(state["messages"])
+    reason = handoff_reason(state["messages"]) if destination else None
     # Almacén entrega datos verificados a Ventas en la misma ejecución.
-    lote = []
+    batch = []
     for message in reversed(state["messages"]):
         if not isinstance(message, ToolMessage):
             break
-        lote.append(message)
-    inventario_actual = any(
+        batch.append(message)
+    current_inventory = any(
         message.name == "consultar_inventario" and message.status != "error"
         and any(item.get("tool_call_id") == message.tool_call_id
                 for item in state.get("inventory_results", []))
-        for message in lote
+        for message in batch
     )
-    if (origen == "almacen" and destino is None and inventario_actual
-            and not any(message.status == "error" or message.name in HANDOFF_TOOLS for message in lote)
+    if (origen == "almacen" and destination is None and current_inventory
+            and not any(message.status == "error" or message.name in HANDOFF_TOOLS for message in batch)
             and state.get("required_parts") and not state.get("inventory_pending", True)):
-        destino = evaluar_abastecimiento(state)["destination"]
-        motivo = "Entregar inventario verificado"
-    historial = list(state.get("handoff_history", []))
-    contador = state.get("handoff_count", 0)
-    errores = list(state.get("errors", []))
-    iteraciones = dict(state.get("tool_iterations", {}))
-    iteraciones[origen] = iteraciones.get(origen, 0) + 1
+        destination = evaluate_supply(state)["destination"]
+        reason = "Entregar inventario verificado"
+    history = list(state.get("handoff_history", []))
+    count = state.get("handoff_count", 0)
+    errors = list(state.get("errors", []))
+    iterations = dict(state.get("tool_iterations", {}))
+    iterations[origen] = iterations.get(origen, 0) + 1
 
-    if iteraciones[origen] >= MAX_TOOL_ITERATIONS:
-        errores.append(f"Límite de herramientas alcanzado por {origen}")
+    if iterations[origen] >= MAX_TOOL_ITERATIONS:
+        errors.append(f"Límite de herramientas alcanzado por {origen}")
         return {
             "next_agent": "finalizar",
-            "tool_iterations": iteraciones,
-            "errors": errores,
+            "tool_iterations": iterations,
+            "errors": errors,
             "messages": [AIMessage(content=(
                 "No fue posible completar la solicitud "
                 "dentro del límite de operaciones permitido."
             ))],
         }
 
-    if destino is None:
-        return {"next_agent": origen, "tool_iterations": iteraciones}
+    if destination is None:
+        return {"next_agent": origen, "tool_iterations": iterations}
 
-    def rechazo(error):
-        return {"next_agent": "finalizar", "tool_iterations": iteraciones,
-                "errors": errores + [str(error)],
+    def _reject_handoff(error):
+        return {"next_agent": "finalizar", "tool_iterations": iterations,
+                "errors": errors + [str(error)],
                 "messages": [AIMessage(content="No se pudo completar la transferencia.")]}
 
     try:
-        validate_handoff(origen, destino, motivo, AGENT_NODES, state.get("request_revision"))
-    except ValueError as error:
-        return rechazo(error)
+        for entry in history:
+            normalize_handoff_history_entry(entry)
+        validate_handoff(origen, destination, reason, AGENT_NODES, state.get("request_revision"))
+    except (ValueError, TypeError) as error:
+        return _reject_handoff(error)
 
     selected = selected_handoff(state["messages"])
-    datos = None
+    data = None
     if selected is not None:
         try:
-            datos = json.loads(selected.content)
+            data = json.loads(selected.content)
         except (ValueError, TypeError):
             pass
-    consulta_inventario = None
+        if isinstance(data, dict):
+            try:
+                data = normalize_handoff_payload(data)
+            except (ValueError, TypeError) as error:
+                return _reject_handoff(error)
+    inventory_query = None
     if selected is not None and selected.name == "solicitar_inventario":
-        if isinstance(datos, dict) and isinstance(datos.get("consulta"), str):
-            consulta_inventario = datos["consulta"]
+        if isinstance(data, dict) and isinstance(data.get("query"), str):
+            inventory_query = data["query"]
 
-    if destino == origen:
-        errores.append("Transferencia al mismo agente")
+    if destination == origen:
+        errors.append("Transferencia al mismo agente")
         return {
             "next_agent": "finalizar",
-            "tool_iterations": iteraciones,
-            "errors": errores,
+            "tool_iterations": iterations,
+            "errors": errors,
             "messages": [AIMessage(content="No se pudo completar la transferencia.")],
         }
 
-    if contador >= MAX_HANDOFFS:
-        errores.append("Límite de transferencias alcanzado")
+    if count >= MAX_HANDOFFS:
+        errors.append("Límite de transferencias alcanzado")
         return {
             "next_agent": "finalizar",
-            "tool_iterations": iteraciones,
-            "errors": errores,
+            "tool_iterations": iterations,
+            "errors": errors,
             "messages": [AIMessage(content=(
                 "No fue posible completar la solicitud "
                 "tras varios intentos de transferencia."
             ))],
         }
 
-    repuesto_pendiente = None
-    abastecimiento = evaluar_abastecimiento(state)
-    if origen == "almacen" and destino in {"compras", "ventas"} and abastecimiento["destination"] != destino:
-        return rechazo(ValueError("Destino incompatible con la disponibilidad de inventario verificada"))
-    if origen == "compras" and destino == "ventas" and abastecimiento["destination"] != "compras":
-        return rechazo(ValueError("Faltante de inventario sin vigencia confirmada"))
-    if origen == "software" and destino == "ventas":
-        alcance = datos.get("alcance") if isinstance(datos, dict) else None
-        if alcance != "solo_servicio" or not software_comercial_elegible(state):
-            return rechazo(ValueError("Software solo puede transferir a Ventas un servicio sin repuestos"))
-    if origen == "tecnico" and destino == "ventas":
-        alcance = datos.get("alcance") if isinstance(datos, dict) else None
-        if alcance == "repuestos":
-            nombre = datos.get("nombre_repuesto")
-            cantidad = datos.get("cantidad")
-            if repuesto_confirmado(state, nombre) and type(cantidad) is int and cantidad > 0:
-                repuesto_pendiente = {"name": nombre.strip(), "quantity": cantidad}
-                destino = "almacen"
+    pending_part = None
+    supply_evaluation = evaluate_supply(state)
+    if origen == "almacen" and destination in {"compras", "ventas"} and supply_evaluation["destination"] != destination:
+        return _reject_handoff(ValueError("Destino incompatible con la disponibilidad de inventario verificada"))
+    if origen == "compras" and destination == "ventas" and supply_evaluation["destination"] != "compras":
+        return _reject_handoff(ValueError("Faltante de inventario sin vigencia confirmada"))
+    if origen == "software" and destination == "ventas":
+        scope = data.get("scope") if isinstance(data, dict) else None
+        if scope != "solo_servicio" or not is_software_commercially_eligible(state):
+            return _reject_handoff(ValueError("Software solo puede transferir a Ventas un servicio sin repuestos"))
+    if origen == "tecnico" and destination == "ventas":
+        scope = data.get("scope") if isinstance(data, dict) else None
+        if scope == "repuestos":
+            name = data.get("part_name")
+            quantity = data.get("quantity")
+            if is_part_reference_confirmed(state, name) and type(quantity) is int and quantity > 0:
+                pending_part = {"name": name.strip(), "quantity": quantity}
+                destination = "almacen"
             else:
-                return {"next_agent": "finalizar", "tool_iterations": iteraciones,
+                return {"next_agent": "finalizar", "tool_iterations": iterations,
                         "messages": [AIMessage(content=(
                             "Para verificar disponibilidad y cotizar el reemplazo, "
                             "¿qué tipo o modelo exacto de repuesto indicó el técnico? "
                             "Si no lo sabes, necesitamos una revisión para identificarlo."
                         ))]}
-        elif alcance != "solo_servicio":
-            return {"next_agent": "finalizar", "tool_iterations": iteraciones,
+        elif scope != "solo_servicio":
+            return {"next_agent": "finalizar", "tool_iterations": iterations,
                     "messages": [AIMessage(content=(
                         "Antes de cotizar, necesito aclarar si solicitas únicamente "
                         "una revisión de diagnóstico o una reparación con repuestos pendientes de verificar."
                     ))]}
 
-    if origen == "tecnico" and destino == "almacen" and repuesto_pendiente is None:
-        repuesto_pendiente = extraer_repuesto_handoff(state["messages"])
-        if repuesto_pendiente is None:
-            errores.append("Transferencia a Almacén sin repuesto válido")
+    if origen == "tecnico" and destination == "almacen" and pending_part is None:
+        pending_part = extract_part_handoff(state["messages"])
+        if pending_part is None:
+            errors.append("Transferencia a Almacén sin repuesto válido")
             return {
                 "next_agent": "finalizar",
-                "tool_iterations": iteraciones,
-                "errors": errores,
+                "tool_iterations": iterations,
+                "errors": errors,
                 "messages": [AIMessage(content=(
                     "No fue posible identificar un repuesto válido para consultar."
                 ))],
             }
 
-    if repuesto_pendiente is not None and not repuesto_confirmado(state, repuesto_pendiente["name"]):
-        return {"next_agent": "finalizar", "tool_iterations": iteraciones,
+    if pending_part is not None and not is_part_reference_confirmed(state, pending_part["name"]):
+        return {"next_agent": "finalizar", "tool_iterations": iterations,
                 "messages": [AIMessage(content=(
                     "¿Qué tipo o modelo exacto de repuesto indicó el técnico? "
                     "No puedo elegir una variante ni confirmar compatibilidad solo con un nombre genérico."
@@ -216,17 +229,17 @@ def registrar_handoff(state: AgentState, origen: str):
     # Impedir cotizaciones mientras falte verificar inventario.
     if (
         origen == "almacen"
-        and destino == "ventas"
+        and destination == "ventas"
         and (state.get("inventory_pending", False)
              or (state.get("required_parts") and not all(
                  any(item.get("requested_name") == part["name"] and item.get("quantity") == part["quantity"]
-                     for item in inventario_vigente(state)) for part in state["required_parts"])))
+                     for item in current_inventory_results(state)) for part in state["required_parts"])))
     ):
-        errores.append("Inventario pendiente de verificar")
+        errors.append("Inventario pendiente de verificar")
         return {
             "next_agent": "finalizar",
-            "tool_iterations": iteraciones,
-            "errors": errores,
+            "tool_iterations": iterations,
+            "errors": errors,
             "messages": [AIMessage(content=(
                 "No es posible continuar con la cotización "
                 "porque falta verificar el inventario."
@@ -234,176 +247,176 @@ def registrar_handoff(state: AgentState, origen: str):
         }
 
     try:
-        record = make_handoff_record(state, origen, destino, motivo, AGENT_NODES)
-    except ValueError as error:
-        return rechazo(error)
-    historial.append({"origen": origen, "destino": destino})
-    actualizacion = {
-        "next_agent": destino,
-        "handoff_count": contador + 1,
-        "handoff_history": historial,
-        "tool_iterations": iteraciones,
+        record = make_handoff_record(state, origen, destination, reason, AGENT_NODES)
+    except (ValueError, TypeError, KeyError) as error:
+        return _reject_handoff(error)
+    history.append({"origin": origen, "destination": destination})
+    update = {
+        "next_agent": destination,
+        "handoff_count": count + 1,
+        "handoff_history": history,
+        "tool_iterations": iterations,
         "handoff_records": [*state.get("handoff_records", []), record],
     }
-    if consulta_inventario is not None:
-        actualizacion["inventory_query"] = consulta_inventario
-    if destino == "almacen":
+    if inventory_query is not None:
+        update["inventory_query"] = inventory_query
+    if destination == "almacen":
         required = list(state.get("required_parts", []))
-        if repuesto_pendiente:
+        if pending_part:
             # Conservar otros componentes; una cantidad nueva sustituye la
             # solicitud anterior de esa referencia, sin acumular ambas.
-            required = [part for part in required if part.get("name") != repuesto_pendiente["name"]]
-            required.append(repuesto_pendiente)
-        actualizacion.update(preparar_inventario(state, required))
-        if consulta_inventario is not None:
-            actualizacion["inventory_pending"] = True
-    if origen == "almacen" and destino == "ventas":
-        actualizacion["inventory_requested_by"] = None
-    if origen in {"almacen", "compras"} and destino in {"compras", "ventas"}:
-        actualizacion.update(inventory_checks=abastecimiento["inventory_checks"],
-                             out_of_stock_items=abastecimiento["out_of_stock_items"])
-    if destino == "compras":
-        actualizacion["supplier_offers"] = []
-    if origen == "compras" and destino == "ventas":
-        actualizacion.update(inventory_requested_by=None, quote_scope="repuestos")
-    if repuesto_pendiente is not None:
-        actualizacion["quote_scope"] = "repuestos"
-    elif origen in {"tecnico", "software"} and destino == "ventas":
-        actualizacion["quote_scope"] = "solo_servicio"
-    elif origen == "almacen" and destino == "ventas":
-        actualizacion["quote_scope"] = "repuestos"
-    return actualizacion
+            required = [part for part in required if part.get("name") != pending_part["name"]]
+            required.append(pending_part)
+        update.update(prepare_inventory_request(state, required))
+        if inventory_query is not None:
+            update["inventory_pending"] = True
+    if origen == "almacen" and destination == "ventas":
+        update["inventory_requested_by"] = None
+    if origen in {"almacen", "compras"} and destination in {"compras", "ventas"}:
+        update.update(inventory_checks=supply_evaluation["inventory_checks"],
+                             out_of_stock_items=supply_evaluation["out_of_stock_items"])
+    if destination == "compras":
+        update["supplier_offers"] = []
+    if origen == "compras" and destination == "ventas":
+        update.update(inventory_requested_by=None, quote_scope="repuestos")
+    if pending_part is not None:
+        update["quote_scope"] = "repuestos"
+    elif origen in {"tecnico", "software"} and destination == "ventas":
+        update["quote_scope"] = "solo_servicio"
+    elif origen == "almacen" and destination == "ventas":
+        update["quote_scope"] = "repuestos"
+    return update
 
 
 def guardar_inventario(state: AgentState):
     """Registra inventario y verifica los repuestos requeridos."""
-    resultados = inventario_vigente(state)
-    errores = list(state.get("errors", []))
-    requeridos = state.get("required_parts", [])
+    results = current_inventory_results(state)
+    errors = list(state.get("errors", []))
+    requirements = state.get("required_parts", [])
 
-    for mensaje in reversed(state["messages"]):
-        if not isinstance(mensaje, ToolMessage):
+    for message in reversed(state["messages"]):
+        if not isinstance(message, ToolMessage):
             break
 
-        if mensaje.name != "consultar_inventario":
+        if message.name != "consultar_inventario":
             continue
 
-        if mensaje.status == "error":
-            errores.append("Error al consultar inventario")
+        if message.status == "error":
+            errors.append("Error al consultar inventario")
             continue
 
         try:
-            resultado = json.loads(mensaje.content)
+            result = normalize_inventory_result(json.loads(message.content))
 
-            if not isinstance(resultado, dict):
+            if not isinstance(result, dict):
                 raise ValueError("Resultado invalido")
 
-            campos = {
+            fields = {
                 "requested_name", "name", "quantity",
                 "stock", "unit_price", "available",
             }
 
-            if not campos.issubset(resultado):
+            if not fields.issubset(result):
                 raise ValueError("Faltan campos")
 
-            nombre = resultado["requested_name"]
-            cantidad = resultado["quantity"]
-            stock = resultado["stock"]
-            precio = resultado["unit_price"]
-            disponible = resultado["available"]
+            name = result["requested_name"]
+            quantity = result["quantity"]
+            stock = result["stock"]
+            price = result["unit_price"]
+            available = result["available"]
 
             from decimal import Decimal, InvalidOperation
 
-            if not isinstance(nombre, str) or not nombre.strip():
+            if not isinstance(name, str) or not name.strip():
                 raise ValueError("Nombre invalido")
 
-            if type(cantidad) is not int or cantidad <= 0:
+            if type(quantity) is not int or quantity <= 0:
                 raise ValueError("Cantidad invalida")
 
             if type(stock) is not int or stock < 0:
                 raise ValueError("Stock invalido")
 
-            if type(disponible) is not bool:
+            if type(available) is not bool:
                 raise ValueError("Disponibilidad invalida")
 
             try:
-                precio_decimal = Decimal(str(precio))
+                decimal_price = Decimal(str(price))
             except (InvalidOperation, TypeError, ValueError):
                 raise ValueError("Precio invalido")
 
-            if not precio_decimal.is_finite() or precio_decimal < 0:
+            if not decimal_price.is_finite() or decimal_price < 0:
                 raise ValueError("Precio invalido")
 
-            if disponible != (stock >= cantidad):
+            if available != (stock >= quantity):
                 raise ValueError("Disponibilidad inconsistente")
 
-            if requeridos and not any(part.get("name") == nombre and part.get("quantity") == cantidad
-                                      for part in requeridos):
+            if requirements and not any(part.get("name") == name and part.get("quantity") == quantity
+                                      for part in requirements):
                 raise ValueError("Resultado ajeno al requerimiento")
 
-            resultado["tool_call_id"] = mensaje.tool_call_id
+            result["tool_call_id"] = message.tool_call_id
 
-            resultados = [
-                item for item in resultados
-                if item.get("tool_call_id") != mensaje.tool_call_id
-                and (item.get("requested_name"), item.get("quantity")) != (nombre, cantidad)
+            results = [
+                item for item in results
+                if item.get("tool_call_id") != message.tool_call_id
+                and (item.get("requested_name"), item.get("quantity")) != (name, quantity)
             ]
-            resultados.append(resultado)
+            results.append(result)
 
         except (ValueError, TypeError):
-            errores.append("Resultado de inventario inválido")
+            errors.append("Resultado de inventario inválido")
 
-    def coincide(repuesto, resultado):
+    def _matches_requirement(repuesto, resultado):
         return (
             isinstance(resultado, dict)
             and resultado.get("requested_name") == repuesto.get("name")
             and resultado.get("quantity") == repuesto.get("quantity")
         )
 
-    completos = bool(requeridos) and all(
-        any(coincide(repuesto, resultado) for resultado in resultados)
-        for repuesto in requeridos
+    complete = bool(requirements) and all(
+        any(_matches_requirement(part, result) for result in results)
+        for part in requirements
     )
 
     return {
-        "inventory_results": resultados,
-        "inventory_revision": state.get("request_revision", 0) if resultados else None,
-        "inventory_pending": not completos if requeridos else
+        "inventory_results": results,
+        "inventory_revision": state.get("request_revision", 0) if results else None,
+        "inventory_pending": not complete if requirements else
             state.get("inventory_pending", False),
-        "errors": errores,
+        "errors": errors,
     }
 
 
 def auditar_soporte(state: AgentState):
-    return registrar_handoff(state, "soporte")
+    return record_handoff(state, "soporte")
 
 
 def auditar_tecnico(state: AgentState):
-    return registrar_handoff(state, "tecnico")
+    return record_handoff(state, "tecnico")
 
 
 def auditar_ventas(state: AgentState):
-    return registrar_handoff(state, "ventas")
+    return record_handoff(state, "ventas")
 
 
 def auditar_almacen(state: AgentState):
-    return registrar_handoff(state, "almacen")
+    return record_handoff(state, "almacen")
 
 
 def auditar_software(state: AgentState):
-    return registrar_handoff(state, "software")
+    return record_handoff(state, "software")
 
 
 def auditar_compras(state: AgentState):
-    return registrar_handoff(state, "compras")
+    return record_handoff(state, "compras")
 
 
 def auditar_facturacion(state: AgentState):
-    return registrar_handoff(state, "facturacion")
+    return record_handoff(state, "facturacion")
 
 
 def auditar_logistica(state: AgentState):
-    return registrar_handoff(state, "logistica")
+    return record_handoff(state, "logistica")
 
 
 def route_next_agent(state: AgentState):
@@ -412,20 +425,20 @@ def route_next_agent(state: AgentState):
 
 def route_entry(state: AgentState):
     """Retoma al agente activo; las conversaciones nuevas empiezan en Soporte."""
-    agente = state.get("current_agent", "soporte")
-    return agente if agente in AGENT_NODES else "soporte"
+    agent = state.get("current_agent", "soporte")
+    return agent if agent in AGENT_NODES else "soporte"
 
 
 def preparar_turno(state: AgentState):
     """Reinicia controles tras recuperar el historial, sin borrar datos de negocio."""
     messages = state.get("messages", [])
-    inicio = next(
+    start_index = next(
         (i for i in range(len(messages) - 1, -1, -1)
          if isinstance(messages[i], HumanMessage)),
         state.get("turn_start_index", 0),
     )
     return {
-        "turn_start_index": inicio,
+        "turn_start_index": start_index,
         "ticket_preparation_ready": False,
         "handoff_count": 0,
         "handoff_history": [],
@@ -434,6 +447,11 @@ def preparar_turno(state: AgentState):
         "errors": [],
         "next_agent": None,
     }
+
+
+detectar_handoff = detect_handoff
+extraer_repuesto_handoff = extract_part_handoff
+registrar_handoff = record_handoff
 
 
 def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=False):
@@ -500,11 +518,11 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         if any(row.get(key) != value for key, value in operation["payload"].items()):
             raise RuntimeError("Respuesta de ticket incompatible")
         ticket_id = _id(row.get("id"))
-        from app.agents.decentralized.policy import triaje_soporte
+        from app.agents.decentralized.policy import classify_support_triage
         kind = operation["payload"]["request_type"]
         destination = {"SALE": "ventas", "PC_BUILD": "ventas", "SUPPORT": "software",
                        "WARRANTY_CLAIM": "garantia", "REPAIR": "tecnico"}[kind]
-        if kind == "REPAIR" and triaje_soporte({"messages": [HumanMessage(content=operation["payload"]["failure_description"])]}) == "software":
+        if kind == "REPAIR" and classify_support_triage({"messages": [HumanMessage(content=operation["payload"]["failure_description"])]}) == "software":
             destination = "software"
         transfer = handoff("soporte", "transferir_a_" + destination,
                            motivo="Continuar solicitud con ticket persistido y cliente autenticado")
@@ -618,6 +636,8 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         ("logistica", logistica_tools),
         ("garantia", garantia_tools),
     ):
+        if name == "facturacion":
+            tools = [*tools, consultar_capacidades_financieras]
         if name == "soporte" and financial_repository is not None:
             from app.agents.decentralized.tools.soporte_tools import authenticated_ticket_tool
             tools = [authenticated_ticket_tool(financial_repository)
@@ -633,37 +653,37 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
     builder.add_node("auditar_compras", auditar_compras)
     builder.add_node("auditar_facturacion", auditar_facturacion)
     builder.add_node("auditar_logistica", auditar_logistica)
-    builder.add_node("auditar_garantia", lambda state: registrar_handoff(state, "garantia"))
+    builder.add_node("auditar_garantia", lambda state: record_handoff(state, "garantia"))
 
     builder.add_node("preparar_turno", preparar_turno)
     builder.add_edge(START, "preparar_turno")
     builder.add_conditional_edges("preparar_turno", route_entry,
                                   {name: name for name in AGENT_NODES})
-    for agente in AGENT_NODES:
-        if agente == "soporte" and ticket_writes:
+    for agent in AGENT_NODES:
+        if agent == "soporte" and ticket_writes:
             def support_route(state):
                 if tools_condition(state) == "tools":
                     return "tools"
                 return "prepare" if state.get("ticket_preparation_ready") and not state.get("ticket_correction_required") else "__end__"
-            builder.add_conditional_edges(agente, support_route,
+            builder.add_conditional_edges(agent, support_route,
                 {"tools": "soporte_tools", "prepare": "preparar_ticket", "__end__": END})
             continue
-        if agente == "garantia":
-            builder.add_conditional_edges(agente, warranty_route,
+        if agent == "garantia":
+            builder.add_conditional_edges(agent, warranty_route,
                 {"tools": "garantia_tools", "prepare": "preparar_garantia", "__end__": END})
             continue
-        if agente == "logistica":
-            builder.add_conditional_edges(agente, logistics_route,
+        if agent == "logistica":
+            builder.add_conditional_edges(agent, logistics_route,
                 {"tools": "logistica_tools", "prepare": "preparar_logistica", "__end__": END})
             continue
-        if agente == "facturacion":
-            builder.add_conditional_edges(agente, financial_route,
+        if agent == "facturacion":
+            builder.add_conditional_edges(agent, financial_route,
                 {"tools": "facturacion_tools", "prepare": "preparar_pago", "__end__": END})
             continue
         builder.add_conditional_edges(
-            agente,
+            agent,
             tools_condition,
-            {"tools": f"{agente}_tools", "__end__": END},
+            {"tools": f"{agent}_tools", "__end__": END},
         )
 
     builder.add_edge("soporte_tools", "auditar_soporte")
@@ -677,7 +697,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
     builder.add_edge("logistica_tools", "auditar_logistica")
     builder.add_edge("garantia_tools", "auditar_garantia")
 
-    rutas = {**{name: name for name in AGENT_NODES}, "finalizar": END}
+    routes = {**{name: name for name in AGENT_NODES}, "finalizar": END}
     for auditor in (
         "auditar_soporte", "auditar_tecnico",
         "auditar_almacen", "auditar_ventas",
@@ -687,7 +707,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         "auditar_logistica",
         "auditar_garantia",
     ):
-        builder.add_conditional_edges(auditor, route_next_agent, rutas)
+        builder.add_conditional_edges(auditor, route_next_agent, routes)
 
     # Static interrupt forces a saved checkpoint before the execution superstep.
     # Resume requires a trusted caller using invoke(None, context=...) explicitly.

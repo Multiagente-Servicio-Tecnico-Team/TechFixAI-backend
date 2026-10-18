@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
+from app.agents.decentralized.data_compat import normalize_handoff_record
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,7 +58,7 @@ def network(monkeypatch):
     groq.ChatGroq = FakeGroq
     monkeypatch.setitem(sys.modules, "langchain_groq", groq)
     dotenv = ModuleType("dotenv")
-    dotenv.load_dotenv = lambda: None
+    dotenv.load_dotenv = lambda *args, **kwargs: None
     monkeypatch.setitem(sys.modules, "dotenv", dotenv)
 
     retriever = ModuleType("app.rag.retriever")
@@ -114,7 +115,8 @@ def pairs(result):
 
 def edges(result):
     assert len(result["handoff_records"]) == result["handoff_count"]
-    return [(record["origen"], record["destino"]) for record in result["handoff_records"]]
+    return [(record["origin"], record["destination"])
+            for record in map(normalize_handoff_record, result["handoff_records"])]
 
 
 @pytest.mark.parametrize("text,target", [("La aplicación se cierra", "software"), ("Mi PC no enciende", "tecnico")])

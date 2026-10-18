@@ -5,6 +5,7 @@ import json
 import pytest
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
+from app.agents.decentralized.data_compat import normalize_handoff_history_entry
 from test_software_e2e import network, call, pairs
 
 
@@ -42,7 +43,7 @@ def test_six_delivery_flows(network,flow,message):
         initial["intent"]="WARRANTY_STATUS_CHECK"
     result=graph.invoke(initial,{"configurable":{"thread_id":"delivery-"+flow}},context={"authenticated_customer_id":1},durability="sync")
     history=result.get("handoff_history",[])
-    agents=["soporte"]+[item["destino"] for item in history]
+    agents=["soporte"]+[normalize_handoff_history_entry(item)["destination"] for item in history]
     pending=result.get("pending_ticket_operation")
     if flow in {"reparacion","ensamblaje","venta","reclamo"}:
         assert pending and not history

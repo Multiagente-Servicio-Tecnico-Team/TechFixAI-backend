@@ -6,8 +6,9 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_groq import ChatGroq
 
-from app.agents.decentralized.policy import es_atencion, handoff, normalizar, ultimo_usuario
-from app.agents.decentralized.policy import software_comercial_elegible
+from app.agents.decentralized.policy import is_customer_service_query, handoff, normalize_text, latest_user_message
+from app.agents.decentralized.policy import is_software_commercially_eligible
+from app.agents.decentralized.data_compat import normalize_handoff_payload
 from app.agents.decentralized.state import AgentState
 from app.agents.decentralized.tools.software_tools import (
     transferir_a_soporte, transferir_a_tecnico, transferir_a_ventas,
@@ -60,8 +61,8 @@ preliminares: no inventes resultados de comprobaciones ni integraciones.
 """
 
 
-def _servicio_definido(state):
-    return software_comercial_elegible(state)
+def _has_defined_service(state):
+    return is_software_commercially_eligible(state)
 
 def _clauses(text):
     return re.split(r"[.!?;\n,]|\b(?:pero|aunque|sin embargo|y)\b", text)
@@ -89,7 +90,7 @@ def _known_os(state):
     for message in reversed(state.get("messages", [])):
         if not isinstance(message, HumanMessage) or not isinstance(message.content, str):
             continue
-        text = normalizar(message.content)
+        text = normalize_text(message.content)
         if re.search(r"\bno (?:se|conozco) (?:que |el |mi )?(?:sistema|windows)", text):
             return False
         # Una pregunta sobre Windows no acredita el sistema del equipo.
@@ -102,25 +103,25 @@ def _known_os(state):
     return False
 
 
-def _respuesta(text):
+def _respond(text):
     return {"current_agent": "software", "messages": [AIMessage(content=text)]}
 
 
 def _software_node(state: AgentState):
     """Conserva el estado de negocio; devuelve únicamente respuesta o handoff."""
-    user = normalizar(ultimo_usuario(state))
+    user = normalize_text(latest_user_message(state))
     if _physical_report(user):
         update = handoff("software", "transferir_a_tecnico",
                          motivo="Evaluar indicios físicos reportados; suspender pruebas ante peligro. No hay causa confirmada")
         update["messages"][0].content = "Si hay humo, olor a quemado o batería hinchada, suspende las pruebas y no sigas encendiendo ni cargando el equipo."
         return update
-    if es_atencion(user):
+    if is_customer_service_query(user):
         return handoff("software", "transferir_a_soporte", motivo="Orientación de atención presencial")
     if (any(term in user for term in ("pantalla azul", "lento", "lentitud"))
             and not _known_os(state)):
-        return _respuesta("Ese síntoma puede tener causas físicas o de software. ¿Qué sistema operativo usas y qué mensaje de error aparece?")
+        return _respond("Ese síntoma puede tener causas físicas o de software. ¿Qué sistema operativo usas y qué mensaje de error aparece?")
     if any(term in user for term in ("formatear", "borrar datos", "reinstalar")):
-        return _respuesta("Ese procedimiento puede perder información. El estado no permite verificar la vigencia de permisos anteriores. Confirma el respaldo y la autorización para esta solicitud; solo puedo ofrecer orientación reversible, sin ejecutar cambios.")
+        return _respond("Ese procedimiento puede perder información. El estado no permite verificar la vigencia de permisos anteriores. Confirma el respaldo y la autorización para esta solicitud; solo puedo ofrecer orientación reversible, sin ejecutar cambios.")
     context = {key: state.get(key) for key in (
         "ticket_id", "request_revision", "intake", "technical_assessment", "required_parts",
     )}
@@ -143,31 +144,32 @@ def _software_node(state: AgentState):
         model = software_llm_rag if wants_docs and not rag_attempted else software_llm
         response = model.invoke(messages)
         if response.invalid_tool_calls:
-            return _respuesta("No se pudo validar la llamada propuesta. Necesito aclarar la operación.")
+            return _respond("No se pudo validar la llamada propuesta. Necesito aclarar la operación.")
         # Rechazar el lote completo: no fabricar ToolMessages ni dejar llamadas
         # rechazadas en el historial que luego requerirían resultados inexistentes.
         if len(response.tool_calls) > 1:
-            return _respuesta("Solo puedo proponer una operación por ejecución. Aclaremos el siguiente paso antes de transferir o consultar documentación.")
+            return _respond("Solo puedo proponer una operación por ejecución. Aclaremos el siguiente paso antes de transferir o consultar documentación.")
         for call in response.tool_calls:
             target = next((tool for tool in software_tools if tool.name == call["name"]), None)
             if target is None:
-                return _respuesta("No dispongo de una herramienta para realizar esa operación.")
+                return _respond("No dispongo de una herramienta para realizar esa operación.")
             target.args_schema.model_validate(call["args"])
             if call["name"] == "consultar_base_conocimiento" and rag_attempted:
-                return _respuesta("La consulta documental ya se intentó en este turno. No repetiré la búsqueda; podemos aclarar la consulta en el siguiente mensaje.")
+                return _respond("La consulta documental ya se intentó en este turno. No repetiré la búsqueda; podemos aclarar la consulta en el siguiente mensaje.")
             if call["name"].startswith("transferir_a_"):
-                motivo = call["args"].get("motivo")
-                if not isinstance(motivo, str) or not motivo.strip():
-                    return _respuesta("Necesito aclarar el motivo antes de transferir la consulta.")
-            if call["name"] == "transferir_a_ventas" and not _servicio_definido(state):
-                return _respuesta("Antes de cotizar, necesito definir el servicio de software y reconfirmarlo para esta solicitud. El estado no fecha los diagnósticos ni indica si un hallazgo Hardware está resuelto; necesitamos aclararlo sin reutilizar resultados antiguos.")
+                payload = normalize_handoff_payload(call["args"])
+                reason = payload.get("reason")
+                if not isinstance(reason, str) or not reason.strip():
+                    return _respond("Necesito aclarar el motivo antes de transferir la consulta.")
+            if call["name"] == "transferir_a_ventas" and not _has_defined_service(state):
+                return _respond("Antes de cotizar, necesito definir el servicio de software y reconfirmarlo para esta solicitud. El estado no fecha los diagnósticos ni indica si un hallazgo Hardware está resuelto; necesitamos aclararlo sin reutilizar resultados antiguos.")
         return {"current_agent": "software", "messages": [response]}
     except Exception as error:
         return _error_result(state, type(error).__name__)
 
 
 def _error_result(state, error_type):
-    result = _respuesta("No fue posible atender la consulta de software en este momento. Inténtalo nuevamente más tarde.")
+    result = _respond("No fue posible atender la consulta de software en este momento. Inténtalo nuevamente más tarde.")
     result["errors"] = [*state.get("errors", []), f"Error en el agente Software: {error_type}"]
     return result
 
@@ -178,3 +180,5 @@ def software_node(state: AgentState):
         return _software_node(state)
     except Exception as error:
         return _error_result(state, type(error).__name__)
+
+_servicio_definido = _has_defined_service

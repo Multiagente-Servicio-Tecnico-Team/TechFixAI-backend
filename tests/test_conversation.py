@@ -179,8 +179,8 @@ def test_registro_estructurado_y_repeticion_en_auditoria(graph_module):
                                        name="transferir_a_tecnico", tool_call_id="a")],
              "request_revision": 2}
     first = graph_module.registrar_handoff(state, "ventas")
-    assert first["handoff_history"] == [{"origen": "ventas", "destino": "tecnico"}]
-    assert first["handoff_records"][0]["motivo"] == "Compatibilidad"
+    assert first["handoff_history"] == [{"origin": "ventas", "destination": "tecnico"}]
+    assert first["handoff_records"][0]["reason"] == "Compatibilidad"
     assert first["handoff_records"][0]["request_revision"] == 2
     repeated = graph_module.registrar_handoff({**state, **first}, "ventas")
     assert repeated["next_agent"] == "finalizar"
@@ -232,10 +232,10 @@ def test_continua_tecnico_y_luego_ventas_sin_reiniciar_soporte(graph):
     conversation = Conversation(graph)
     first = conversation.send("Mi computadora no enciende")
     assert first["current_agent"] == "tecnico"
-    assert first["handoff_history"] == [{"origen": "soporte", "destino": "tecnico"}]
+    assert first["handoff_history"] == [{"origin": "soporte", "destination": "tecnico"}]
     second = conversation.send("Es Lenovo, sin luces. ¿Qué revisión necesita y cuánto cuesta?")
     assert second["current_agent"] == "ventas"
-    assert second["handoff_history"] == [{"origen": "tecnico", "destino": "ventas"}]
+    assert second["handoff_history"] == [{"origin": "tecnico", "destination": "ventas"}]
     assert len([m for m in second["messages"] if isinstance(m, HumanMessage)]) == 2
     assert second["turn_start_index"] == len(first["messages"])
     assert second["tool_iterations"] == {"tecnico": 1}
@@ -310,7 +310,7 @@ def isolated_function(filename, name, namespace):
 
 
 def test_ventas_conserva_preguntas_para_respuestas_breves():
-    build = isolated_function("app/agents/decentralized/ventas.py", "construir_contexto_ventas", {
+    build = isolated_function("app/agents/decentralized/ventas.py", "build_sales_context", {
         "AgentState": dict, "AIMessage": AIMessage, "HumanMessage": HumanMessage, "ToolMessage": ToolMessage,
     })
     messages = [AIMessage(content="¿Quieres cotizar mantenimiento?"), HumanMessage(content="Sí, ese")]
@@ -331,9 +331,9 @@ def test_rag_tecnico_se_repite_en_otro_turno_y_reintenta_errores():
     node = isolated_function("app/agents/decentralized/tecnico.py", "tecnico_node", {
         "AgentState": dict, "AIMessage": AIMessage, "SystemMessage": SystemMessage,
         "ToolMessage": ToolMessage, "SYSTEM_PROMPT": "Técnico", "tecnico_llm_rag": rag, "tecnico_llm": regular,
-        "es_revision_comercial": es_revision_comercial, "ultimo_usuario": ultimo_usuario, "handoff": handoff,
-        "no_puede_probar": no_puede_probar, "es_atencion": es_atencion,
-        "triaje_soporte": triaje_soporte, "transferencia_sin_progreso": transferencia_sin_progreso, "peligro_fisico_reportado": peligro_fisico_reportado,
+        "is_diagnostic_pricing_query": es_revision_comercial, "latest_user_message": ultimo_usuario, "handoff": handoff,
+        "cannot_perform_checks": no_puede_probar, "is_customer_service_query": es_atencion,
+        "classify_support_triage": triaje_soporte, "is_handoff_without_progress": transferencia_sin_progreso, "has_reported_physical_hazard": peligro_fisico_reportado,
     })
     previous = ToolMessage(content="Documento anterior", name="consultar_base_conocimiento", tool_call_id="old")
     user = HumanMessage(content="Consulta documentación")
@@ -350,7 +350,7 @@ def test_tecnico_devuelve_atencion_a_soporte_sin_bucle(graph):
     conversation.send("Mi laptop no prende")
     result = conversation.send("Quiero información para revisión presencial")
     assert result["current_agent"] == "soporte"
-    assert result["handoff_history"] == [{"origen": "tecnico", "destino": "soporte"}]
+    assert result["handoff_history"] == [{"origin": "tecnico", "destination": "soporte"}]
     assert result["messages"][-1].content == "No puedo registrar citas desde este chat."
 
 
@@ -371,7 +371,7 @@ def test_reemplazo_sin_modelo_no_salta_a_ventas(graph):
     conversation = Conversation(graph)
     result = conversation.send("Mi laptop necesita reemplazar el SSD y quiero cotizar")
     assert result["current_agent"] == "tecnico"
-    assert result["handoff_history"] == [{"origen": "soporte", "destino": "tecnico"}]
+    assert result["handoff_history"] == [{"origin": "soporte", "destination": "tecnico"}]
     assert "modelo exacto" in result["messages"][-1].content
     assert not result.get("inventory_results")
 
@@ -382,8 +382,8 @@ def test_reemplazo_identificado_recorre_los_cuatro_agentes(graph):
     result = conversation.send("El modelo exacto es SSD de prueba, una unidad")
     assert result["current_agent"] == "ventas"
     assert result["handoff_history"] == [
-        {"origen": "tecnico", "destino": "almacen"},
-        {"origen": "almacen", "destino": "ventas"},
+        {"origin": "tecnico", "destination": "almacen"},
+        {"origin": "almacen", "destination": "ventas"},
     ]
     assert result["inventory_pending"] is False
     assert result["required_parts"] == [{"name": "SSD de prueba", "quantity": 1}]
@@ -406,7 +406,7 @@ def test_lote_usa_mismo_destino_motivo_y_alcance(graph_module):
     assert graph_module.detectar_handoff(messages) == "ventas"
     assert result["next_agent"] == "ventas"
     assert result["quote_scope"] == "solo_servicio"
-    assert result["handoff_records"][0]["motivo"] == "Primero"
+    assert result["handoff_records"][0]["reason"] == "Primero"
 
 
 def test_lote_ignora_error_y_herramientas_ajenas(graph_module):
@@ -415,7 +415,7 @@ def test_lote_ignora_error_y_herramientas_ajenas(graph_module):
                 ToolMessage(content="Documento", name="consultar_documentacion", tool_call_id="c")]
     assert graph_module.detectar_handoff(messages) == "ventas"
     result = graph_module.registrar_handoff({"messages": messages}, "soporte")
-    assert result["handoff_records"][0]["motivo"] == "Cotizar"
+    assert result["handoff_records"][0]["reason"] == "Cotizar"
 
 
 @pytest.mark.parametrize("requester", [None, "tecnico", "software"])
@@ -428,7 +428,7 @@ def test_retorno_automatico_solicitante_y_disponibilidad(graph_module, requester
     result = graph_module.registrar_handoff(state, "almacen")
     assert result["next_agent"] == "ventas"
     assert result["inventory_requested_by"] is None
-    assert result["handoff_records"][0]["motivo"] == "Entregar inventario verificado"
+    assert result["handoff_records"][0]["reason"] == "Entregar inventario verificado"
 
 
 @pytest.mark.parametrize("name,status", [("consultar_inventario", "error"), ("transferir_a_ventas", "error"), ("otra", "success")])
@@ -458,8 +458,8 @@ def test_software_ejecuta_herramientas_y_auditoria(graph_module, user, destinati
     result = graph_module.graph.invoke({"messages": [HumanMessage(content=user)], "current_agent": "software",
                                        "request_revision": 1, "technical_assessment": {"software_diagnosis": "Servicio definido"}})
     assert result["current_agent"] == destination
-    assert result["handoff_history"] == [{"origen": "software", "destino": destination}]
-    assert result["handoff_records"][0]["destino"] == destination
+    assert result["handoff_history"] == [{"origin": "software", "destination": destination}]
+    assert result["handoff_records"][0]["destination"] == destination
     messages = result["messages"]
     call = next(m.tool_calls[0] for m in messages if isinstance(m, AIMessage) and m.tool_calls)
     output = next(m for m in messages if isinstance(m, ToolMessage))
@@ -577,8 +577,8 @@ def test_soporte_real_integrado_transfiere_y_conserva_contexto(graph_module, tex
     graph = graph_module.build_graph()
     result = graph.invoke({"messages": [HumanMessage(content=text)], "ticket_id": 7})
     assert result["current_agent"] == target and result["ticket_id"] == 7
-    assert result["handoff_history"] == [{"origen": "soporte", "destino": target}]
-    assert result["handoff_records"][0]["destino"] == target
+    assert result["handoff_history"] == [{"origin": "soporte", "destination": target}]
+    assert result["handoff_records"][0]["destination"] == target
     output = next(m for m in result["messages"] if isinstance(m, ToolMessage))
     call = next(m.tool_calls[0] for m in result["messages"] if isinstance(m, AIMessage) and m.tool_calls)
     assert output.status == "success" and output.tool_call_id == call["id"]
@@ -683,15 +683,15 @@ def test_tecnico_real_software_integracion_y_continuidad(graph_module):
     graph = graph_module.build_graph()
     result = graph.invoke({"current_agent": "tecnico", "messages": [HumanMessage(content="La aplicación se cierra")], "ticket_id": 7})
     assert result["current_agent"] == "software" and result["ticket_id"] == 7
-    assert result["handoff_history"] == [{"origen": "tecnico", "destino": "software"}]
-    assert result["handoff_records"][0]["motivo"].strip()
+    assert result["handoff_history"] == [{"origin": "tecnico", "destination": "software"}]
+    assert result["handoff_records"][0]["reason"].strip()
     output = next(m for m in result["messages"] if isinstance(m, ToolMessage))
     assert output.name == "transferir_a_software" and output.status == "success"
     next_turn = graph.invoke({**result, "messages": [*result["messages"], HumanMessage(content="Uso Windows 11")]})
     assert next_turn["current_agent"] == "software" and next_turn["handoff_history"] == []
     back = graph.invoke({"current_agent": "software", "messages": [HumanMessage(content="hardware")]})
     assert back["current_agent"] == "tecnico"
-    assert back["handoff_history"] == [{"origen": "software", "destino": "tecnico"}]
+    assert back["handoff_history"] == [{"origin": "software", "destination": "tecnico"}]
 
 
 @pytest.mark.parametrize("changes", [
@@ -724,7 +724,7 @@ def test_auditoria_comercial_valida_y_ventas_real_tarifa_pendiente(graph_module)
                  "SystemMessage": SystemMessage, "json": json,
                  "SYSTEM_PROMPT": "Ventas", "Decimal": __import__("decimal").Decimal,
                  "InvalidOperation": __import__("decimal").InvalidOperation}
-    for name in ("validar_inventario", "construir_contexto_ventas", "construir_contexto_inventario", "ventas_node"):
+    for name in ("validate_inventory", "build_sales_context", "build_inventory_context", "ventas_node"):
         namespace[name] = isolated_function("app/agents/decentralized/ventas.py", name, namespace)
     # Las funciones extraídas necesitan compartir sus dependencias.
     namespace["ventas_node"].__globals__.update(namespace)
@@ -781,7 +781,7 @@ def test_almacen_real_retorno_y_solicitante_obsoleto(graph_module, complete):
         "inventory_results": [inventory_fixture()], "inventory_requested_by": "software"})
     assert result["current_agent"] == "ventas" and result["inventory_requested_by"] is None
     assert result["inventory_revision"] == 2 and result["inventory_pending"] is False
-    assert result["handoff_history"] == [{"origen": "almacen", "destino": "ventas"}]
+    assert result["handoff_history"] == [{"origin": "almacen", "destination": "ventas"}]
     queries = [m for m in result["messages"] if isinstance(m, ToolMessage) and m.name == "consultar_inventario"]
     assert len(queries) == (0 if complete else 1)
 

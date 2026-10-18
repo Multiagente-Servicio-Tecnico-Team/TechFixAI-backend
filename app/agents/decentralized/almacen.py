@@ -8,8 +8,8 @@ from langchain_core.messages import (
 )
 
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import handoff, ultimo_usuario, nombre_inventario, es_marcador
-from app.agents.decentralized.policy import preparar_inventario, evaluar_abastecimiento, salida_abastecimiento
+from app.agents.decentralized.policy import handoff, latest_user_message, extract_inventory_reference, contains_placeholder
+from app.agents.decentralized.policy import prepare_inventory_request, evaluate_supply, build_supply_handoff
 from app.agents.decentralized.tools.almacen_tools import (
     consultar_inventario,
     transferir_a_ventas,
@@ -91,7 +91,7 @@ TRANSFERENCIA A VENTAS:
 # CONSTRUCCIÓN DEL CONTEXTO
 # =========================================================
 
-def construir_contexto_almacen(state: AgentState):
+def build_warehouse_context(state: AgentState):
     """
     Construye el historial relevante para Almacén.
 
@@ -104,69 +104,69 @@ def construir_contexto_almacen(state: AgentState):
     Evita incluir herramientas internas innecesarias.
     """
 
-    contexto = []
-    llamadas_almacen = set()
+    context = []
+    inventory_calls = set()
 
-    nombres_tools = {
+    tool_names = {
         "consultar_inventario",
         "transferir_a_ventas",
     }
 
     # Identificar llamadas realizadas por Almacén.
-    for mensaje in state["messages"]:
-        if isinstance(mensaje, AIMessage):
-            for llamada in mensaje.tool_calls:
-                if llamada["name"] in nombres_tools:
-                    llamadas_almacen.add(llamada["id"])
+    for message in state["messages"]:
+        if isinstance(message, AIMessage):
+            for tool_call in message.tool_calls:
+                if tool_call["name"] in tool_names:
+                    inventory_calls.add(tool_call["id"])
 
     # Construir el contexto.
-    for mensaje in state["messages"]:
+    for message in state["messages"]:
 
-        if isinstance(mensaje, HumanMessage):
-            contexto.append(mensaje)
+        if isinstance(message, HumanMessage):
+            context.append(message)
 
-        elif isinstance(mensaje, AIMessage):
-            if mensaje.tool_calls and all(
-                llamada["id"] in llamadas_almacen
-                for llamada in mensaje.tool_calls
+        elif isinstance(message, AIMessage):
+            if message.tool_calls and all(
+                tool_call["id"] in inventory_calls
+                for tool_call in message.tool_calls
             ):
-                contexto.append(mensaje)
+                context.append(message)
 
-        elif isinstance(mensaje, ToolMessage):
+        elif isinstance(message, ToolMessage):
 
             # Resultados de las herramientas de Almacén.
-            if mensaje.tool_call_id in llamadas_almacen:
-                contexto.append(mensaje)
+            if message.tool_call_id in inventory_calls:
+                context.append(message)
 
             # Diagnósticos realizados por Técnico.
             elif (
-                mensaje.name == "diagnosticar_problema"
-                and mensaje.status != "error"
+                message.name == "diagnosticar_problema"
+                and message.status != "error"
             ):
-                contexto.append(
+                context.append(
                     HumanMessage(
                         content=(
                             "Diagnóstico técnico previo:\n"
-                            f"{mensaje.content}"
+                            f"{message.content}"
                         )
                     )
                 )
 
             # Solicitud de Técnico hacia Almacén.
             elif (
-                mensaje.name == "transferir_a_almacen"
-                and mensaje.status != "error"
+                message.name == "transferir_a_almacen"
+                and message.status != "error"
             ):
-                contexto.append(
+                context.append(
                     HumanMessage(
                         content=(
                             "Solicitud recibida del agente Técnico:\n"
-                            f"{mensaje.content}"
+                            f"{message.content}"
                         )
                     )
                 )
 
-    return contexto
+    return context
 
 
 # =========================================================
@@ -184,10 +184,10 @@ def almacen_node(state: AgentState):
     # Repuestos del estado: la herramienta consulta exactamente la solicitud,
     # sin dejar que el modelo sustituya un nombre genérico por otro producto.
     if state.get("inventory_query"):
-        user = ultimo_usuario(state)
-        name = nombre_inventario(user)
+        user = latest_user_message(state)
+        name = extract_inventory_reference(user)
         intake = state.get("intake") or {}
-        requested = nombre_inventario(str(intake.get("product_description", "")))
+        requested = extract_inventory_reference(str(intake.get("product_description", "")))
         if not name and state.get("request_type") == "SALE":
             name = requested
         quantity = 1
@@ -201,9 +201,9 @@ def almacen_node(state: AgentState):
                 "Indica su referencia real (capacidad e interfaz, si es un SSD), sin corchetes. "
                 "No seleccionaré una variante por ti."
             ))]}
-        prepared = preparar_inventario(state, [{"name": name, "quantity": quantity}])
+        prepared = prepare_inventory_request(state, [{"name": name, "quantity": quantity}])
         if not prepared["inventory_pending"]:
-            return salida_abastecimiento({**state, **prepared, "inventory_query": None})
+            return build_supply_handoff({**state, **prepared, "inventory_query": None})
         else:
             update = handoff("almacen", "consultar_inventario", nombre_repuesto=name, cantidad=quantity)
         update.update(prepared, inventory_query=None, quote_scope="repuestos")
@@ -212,18 +212,18 @@ def almacen_node(state: AgentState):
     if required:
         if any("inventario" in e.lower() for e in state.get("errors", [])):
             return {"current_agent": "almacen", "messages": [AIMessage(content="No se pudo verificar el inventario. No puedo confirmar una cotización.")]}
-        prepared = preparar_inventario(state, required)
+        prepared = prepare_inventory_request(state, required)
         results = prepared["inventory_results"]
         for part in required:
             if not any(r.get("requested_name") == part["name"] and r.get("quantity") == part["quantity"] for r in results):
                 update = handoff("almacen", "consultar_inventario", nombre_repuesto=part["name"], cantidad=part["quantity"])
                 update.update(prepared)
                 return update
-        return salida_abastecimiento({**state, **prepared})
+        return build_supply_handoff({**state, **prepared})
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        *construir_contexto_almacen(state),
+        *build_warehouse_context(state),
     ]
 
     try:
@@ -252,3 +252,5 @@ def almacen_node(state: AgentState):
             "current_agent": "almacen",
             "errors": state.get("errors", []) + [error],
         }
+
+construir_contexto_almacen = build_warehouse_context

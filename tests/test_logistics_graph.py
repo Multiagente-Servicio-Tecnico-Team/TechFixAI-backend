@@ -67,8 +67,8 @@ def test_incoming_handoffs_and_audit(network, logistics_db, monkeypatch, origin)
     result = graph.invoke({**state(db,text="Consulta operativa"),"current_agent":origin},
         {"configurable":{"thread_id":"logistics-"+origin}},context={"authenticated_customer_id":1},durability="sync")
     assert result["current_agent"] == "logistica"
-    assert result["handoff_history"][-1] == {"origen":origin,"destino":"logistica"}
-    assert result["handoff_records"][-1]["motivo"] == "Coordinar recepción"
+    assert result["handoff_history"][-1] == {"origin":origin,"destination":"logistica"}
+    assert result["handoff_records"][-1]["reason"] == "Coordinar recepción"
     pairs(result)
     assert "garantia" in module.AGENT_NODES
 
@@ -126,6 +126,6 @@ def test_real_financial_node_routes_only_persisted_payment(network, logistics_db
         "quote_id":db[6]["id"],"payment_id":payment["id"]},
         {"configurable":{"thread_id":"payment-to-logistics"}},context={"authenticated_customer_id":1},durability="sync")
     assert result["current_agent"] == "logistica"
-    assert result["handoff_history"] == [{"origen":"facturacion","destino":"logistica"}]
+    assert result["handoff_history"] == [{"origin":"facturacion","destination":"logistica"}]
     assert result["payment_id"] == payment["id"]
     assert "logistics_record_id" not in result

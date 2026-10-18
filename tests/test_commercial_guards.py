@@ -31,7 +31,7 @@ class ForbiddenModel:
 
 
 def test_contexto_ventas_datos_preliminares_y_par_handoff():
-    build = functions("app/agents/decentralized/ventas.py", {"construir_contexto_ventas"})["construir_contexto_ventas"]
+    build = functions("app/agents/decentralized/ventas.py", {"build_sales_context"})["build_sales_context"]
     call = AIMessage(content="", tool_calls=[dict(name="transferir_a_ventas", args={"motivo": "Evaluar editor", "alcance": "solo_servicio"}, id="a")])
     output = ToolMessage(content='{"motivo":"Evaluar editor","alcance":"solo_servicio"}', name="transferir_a_ventas", tool_call_id="a")
     context = build({"messages": [call, output], "request_revision": 2,
@@ -45,7 +45,7 @@ def test_contexto_ventas_datos_preliminares_y_par_handoff():
 
 def sales():
     return functions("app/agents/decentralized/ventas.py", {
-        "ventas_node", "validar_inventario", "construir_contexto_ventas", "construir_contexto_inventario",
+        "ventas_node", "validate_inventory", "build_sales_context", "build_inventory_context",
     }, {"ventas_llm": ForbiddenModel()})["ventas_node"]
 
 

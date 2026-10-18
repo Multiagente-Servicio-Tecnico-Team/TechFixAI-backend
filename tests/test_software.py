@@ -328,3 +328,111 @@ def test_estado_incorrecto_error_controlado(agent):
     module, _, _, _ = agent
     result = module.software_node(state("Sigue lento", intake=None))
     assert result["errors"] == ["Error en el agente Software: AttributeError"]
+
+
+@pytest.mark.parametrize("style", ["legacy", "mixed"])
+@pytest.mark.parametrize("target", ["transferir_a_tecnico", "transferir_a_ventas"])
+def test_internal_handoff_view_does_not_rewrite_public_call(agent, monkeypatch, style, target):
+    module, regular, _, _ = agent
+    args = {"motivo": "Evaluar"}
+    if target == "transferir_a_ventas":
+        args["alcance"] = "solo_servicio"
+    if style == "mixed":
+        args["reason"] = "Evaluar"
+        if target == "transferir_a_ventas":
+            args["scope"] = "solo_servicio"
+    regular.response = AIMessage(content="", tool_calls=[dict(name=target, args=args, id="public-call")])
+    value = state("Confirmo Servicio definido. Cotiza solo servicio sin repuestos",
+                  request_revision=1, technical_assessment={"software_diagnosis": "Servicio definido"})
+    original_state, original_response = deepcopy(value), deepcopy(regular.response)
+    normalize = module.normalize_handoff_payload
+    views = []
+
+    def capture(payload):
+        normalized = normalize(payload)
+        views.append(normalized)
+        return normalized
+
+    monkeypatch.setattr(module, "normalize_handoff_payload", capture)
+    result = module.software_node(value)
+    assert result["messages"][0] is regular.response
+    assert regular.response == original_response and value == original_state
+    assert views == [{"reason": "Evaluar", **({"scope": "solo_servicio"} if target == "transferir_a_ventas" else {})}]
+
+
+@pytest.mark.parametrize("legacy,canonical,left,right", [
+    ("accion", "action", "TRANSFERIR_ALMACEN", "SOLICITAR_COTIZACION"),
+    ("motivo", "reason", "Evaluar", "private-conflict"),
+    ("alcance", "scope", "solo_servicio", "repuestos"),
+    ("nombre_repuesto", "part_name", "SSD", None),
+    ("cantidad", "quantity", True, 1),
+    ("consulta", "query", "SSD", "RAM"),
+])
+def test_contradictory_internal_aliases_block_the_model_handoff(agent, legacy, canonical, left, right):
+    module, regular, _, _ = agent
+    args = {"motivo": "Evaluar", legacy: left, canonical: right}
+    regular.response = AIMessage(content="", tool_calls=[dict(name="transferir_a_tecnico", args=args, id="blocked")])
+    value = state()
+    original_state, original_response = deepcopy(value), deepcopy(regular.response)
+    result = module.software_node(value)
+    assert not result["messages"][0].tool_calls
+    assert result["errors"] == ["Error en el agente Software: DataCompatibilityError"]
+    assert "private-conflict" not in str(result)
+    assert regular.response == original_response and value == original_state
+
+
+@pytest.mark.parametrize("target,args", [
+    ("transferir_a_soporte", {"reason": "Evaluar"}),
+    ("transferir_a_tecnico", {"reason": "Evaluar"}),
+    ("transferir_a_ventas", {"reason": "Evaluar", "scope": "solo_servicio"}),
+    ("consultar_base_conocimiento", {"query": "Documento"}),
+])
+def test_english_only_live_arguments_keep_public_validation(agent, monkeypatch, target, args):
+    module, regular, _, _ = agent
+
+    def forbidden(payload):
+        pytest.fail("Public argument validation must precede internal normalization")
+
+    monkeypatch.setattr(module, "normalize_handoff_payload", forbidden)
+    regular.response = AIMessage(content="", tool_calls=[dict(name=target, args=args, id="invalid-public")])
+    before = deepcopy(regular.response)
+    result = module.software_node(state())
+    assert not result["messages"][0].tool_calls
+    assert result["errors"] == ["Error en el agente Software: ValidationError"]
+    assert regular.response == before
+
+
+@pytest.mark.parametrize("second", ["transferir_a_tecnico", "transferir_a_soporte", "consultar_base_conocimiento"])
+def test_multiple_calls_are_rejected_before_normalizing_any_payload(agent, monkeypatch, second):
+    module, regular, _, _ = agent
+
+    def forbidden(payload):
+        pytest.fail("The complete batch must be rejected before reading a handoff")
+
+    monkeypatch.setattr(module, "normalize_handoff_payload", forbidden)
+    args = {"motivo": "Evaluar", "reason": "Evaluar"}
+    regular.response = AIMessage(content="", tool_calls=[
+        dict(name="transferir_a_tecnico", args=args, id="first"),
+        dict(name=second, args={"consulta": "Documento"} if second == "consultar_base_conocimiento" else args,
+             id="second"),
+    ])
+    before = deepcopy(regular.response)
+    result = module.software_node(state())
+    assert not result["messages"][0].tool_calls and "errors" not in result
+    assert "Solo puedo proponer" in result["messages"][0].content
+    assert regular.response == before
+
+
+def test_rag_arguments_stay_outside_handoff_normalization(agent, monkeypatch):
+    module, regular, _, _ = agent
+
+    def forbidden(payload):
+        pytest.fail("RAG uses its own public schema")
+
+    monkeypatch.setattr(module, "normalize_handoff_payload", forbidden)
+    regular.response = AIMessage(content="", tool_calls=[
+        dict(name="consultar_base_conocimiento", args={"consulta": "Documento"}, id="rag-public"),
+    ])
+    before = deepcopy(regular.response)
+    assert module.software_node(state())["messages"][0] is regular.response
+    assert regular.response == before

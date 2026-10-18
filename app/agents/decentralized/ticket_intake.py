@@ -2,7 +2,7 @@
 import re
 from decimal import Decimal, InvalidOperation
 from langchain_core.messages import AIMessage
-from app.agents.decentralized.policy import normalizar, ultimo_usuario, triaje_soporte
+from app.agents.decentralized.policy import normalize_text, latest_user_message, classify_support_triage
 from app.agents.decentralized.state import invalidate_request
 from app.agents.decentralized.ticket_operations import generate_ticket_code, prepare_pending_ticket_operation
 from app.database.decentralized_repository import _id, RetryConflict
@@ -22,7 +22,7 @@ SYMPTOMS = ("no enciende", "no arranca", "se apaga", "error", "pantalla azul", "
 def natural_fields(text, intent):
     """Extract reported text only; no catalog, compatibility or price inference."""
     fields = {}
-    normalized = normalizar(text)
+    normalized = normalize_text(text)
     if intent in {"REPAIR", "SUPPORT"}:
         equipment = re.search(r"\b(laptop|pc|computadora)\b", normalized)
         if equipment:
@@ -41,7 +41,7 @@ def natural_fields(text, intent):
 
 
 def classify_request(text):
-    value = normalizar(text)
+    value = normalize_text(text)
     if any(word in value for word in ("reembolso", "devolver mi pago")):
         return "REFUND"
     if "garantia" in value and any(word in value for word in ("vigente", "vigencia", "vencimiento", "hasta cuando")):
@@ -78,7 +78,7 @@ def capture_ticket_request(state, *, authenticated_customer_id):
     Existing prepared work remains immutable. Correction after preparation needs
     reconciliation, as required by invalidate_request(), not a new random code.
     """
-    text = ultimo_usuario(state)
+    text = latest_user_message(state)
     intent = classify_request(text)
     def reply(content, **patch):
         return {"current_agent": "soporte", "messages": [AIMessage(content=content)], **patch}
@@ -92,7 +92,7 @@ def capture_ticket_request(state, *, authenticated_customer_id):
         return None
     pending = state.get("pending_ticket_operation")
     if pending and (state.get("ticket_correction_required") or re.search(
-            r"\b(en lugar|cambia|cambiar|corrige|corregir|ahora|mejor|prefiero)\b", normalizar(text))):
+            r"\b(en lugar|cambia|cambiar|corrige|corregir|ahora|mejor|prefiero)\b", normalize_text(text))):
         return reply("Detecté una corrección. La operación anterior queda bloqueada, con su código intacto, hasta reconciliarla; no se creará otro ticket.", ticket_correction_required=True)
     previous = pending["payload"]["request_type"] if pending else state.get("intent")
     intent = intent or (previous if previous in TYPES else None)
@@ -112,7 +112,7 @@ def capture_ticket_request(state, *, authenticated_customer_id):
     # Answers to the last intake question are data, not new intentions. Never
     # reconcile an already prepared operation by reconstructing its payload.
     missing_before = intake.get("missing_fields", [])
-    value = normalizar(text).strip(" .!¿?¡")
+    value = normalize_text(text).strip(" .!¿?¡")
     if not pending and missing_before == ["quantity"]:
         quantity = int(value) if re.fullmatch(r"[1-9]\d*", value) else NUMBERS.get(value)
         if quantity is not None:
@@ -120,19 +120,19 @@ def capture_ticket_request(state, *, authenticated_customer_id):
                 raise ValueError("Cantidad inválida")
             fields["quantity"] = quantity
     if (not pending and "product_description" in missing_before
-            and normalizar(str(intake.get("product_description", ""))) == "ssd"
+            and normalize_text(str(intake.get("product_description", ""))) == "ssd"
             and re.search(r"\b(sata|nvme|\d+\s*(?:gb|tb))\b", value)
             and not re.search(r"\b(no|quizas|tal vez|podria)\b", value)):
         fields["product_description"] = "SSD " + text.strip()
     labelled = set()
     for segment in re.split(r"[;\n]", text):
         label, sep, value = segment.partition(":")
-        key = LABELS.get(normalizar(label.strip()))
+        key = LABELS.get(normalize_text(label.strip()))
         if sep and key:
             value = value.strip()
             if not value:
                 return reply("El dato indicado está vacío; precisa su valor antes de preparar la solicitud.")
-            if key in {"equipment", "product_description", "warranty_code"} and re.search(r"\b(quizas|tal vez|podria|no se)\b", normalizar(value)):
+            if key in {"equipment", "product_description", "warranty_code"} and re.search(r"\b(quizas|tal vez|podria|no se)\b", normalize_text(value)):
                 return reply("Ese dato no está confirmado. Precisa la referencia o el equipo sin asumir una hipótesis.")
             if key == "quantity":
                 if not re.fullmatch(r"[1-9]\d*", value) or int(value) > 2147483647:
@@ -152,14 +152,14 @@ def capture_ticket_request(state, *, authenticated_customer_id):
             fields[key] = value
             labelled.add(key)
     if not intake.get("equipment") and intent in {"REPAIR", "SUPPORT"}:
-        equipment = re.search(r"\b(laptop|pc|computadora)\b", normalizar(text))
+        equipment = re.search(r"\b(laptop|pc|computadora)\b", normalize_text(text))
         if equipment:
             fields.setdefault("equipment", equipment[0])
     if intent in {"REPAIR", "SUPPORT", "WARRANTY_CLAIM"} and not intake.get("failure_description"):
-        if any(term in normalizar(text) for term in ("no enciende", "no arranca", "se apaga", "error", "pantalla azul")):
+        if any(term in normalize_text(text) for term in ("no enciende", "no arranca", "se apaga", "error", "pantalla azul")):
             fields.setdefault("failure_description", text.strip())
     changed = any(key in intake and intake[key] != value for key, value in fields.items())
-    if pending and not fields and normalizar(text).strip(" .!¿?¡") not in {"continuar", "continua", "reintentar", "reintento", "si", "confirmo", "ok"}:
+    if pending and not fields and normalize_text(text).strip(" .!¿?¡") not in {"continuar", "continua", "reintentar", "reintento", "si", "confirmo", "ok"}:
         return reply("El mensaje puede cambiar la solicitud preparada. Necesito aclararlo y reconciliarla antes de continuar; su clave permanece intacta.", ticket_correction_required=True)
     if changed and not patch:
         patch = invalidate_request(state)
@@ -168,7 +168,7 @@ def capture_ticket_request(state, *, authenticated_customer_id):
                 "SALE": ["product_description", "quantity"], "PC_BUILD": ["intended_use", "budget"],
                 "WARRANTY_CLAIM": ["warranty_code", "failure_description"]}[intent]
     missing = [key for key in required if not intake.get(key)]
-    if intent == "SALE" and normalizar(str(intake.get("product_description", ""))).strip() == "ssd":
+    if intent == "SALE" and normalize_text(str(intake.get("product_description", ""))).strip() == "ssd":
         if "product_description" not in missing:
             missing.insert(0, "product_description")
     intake["missing_fields"] = missing
@@ -189,5 +189,5 @@ def capture_ticket_request(state, *, authenticated_customer_id):
     update.update(prepare_pending_ticket_operation({**state, **update}, authenticated_customer_id=customer,
         intent=intent, title=title, failure_description=description, code=code))
     update["next_agent"] = {"SALE":"ventas", "PC_BUILD":"ventas", "WARRANTY_CLAIM":"garantia",
-                            "SUPPORT":"software", "REPAIR":"software" if triaje_soporte(state)=="software" else "tecnico"}[intent]
+                            "SUPPORT":"software", "REPAIR":"software" if classify_support_triage(state)=="software" else "tecnico"}[intent]
     return reply("Solicitud preparada con código estable, pendiente de la futura creación en PostgreSQL. No se ha creado ningún ticket ni transferido una operación persistida.", **update)

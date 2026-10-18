@@ -57,7 +57,7 @@ def test_registrar_handoff():
     assert resultado["next_agent"] == "ventas"
     assert resultado["handoff_count"] == 1
     assert resultado["handoff_history"] == [
-        {"origen": "soporte", "destino": "ventas"}
+        {"origin": "soporte", "destination": "ventas"}
     ]
 
 
@@ -524,7 +524,7 @@ def test_handoff_almacen_registra_repuesto():
     assert resultado["inventory_pending"] is True
     assert resultado["handoff_count"] == 1
     assert resultado["handoff_history"] == [
-        {"origen": "tecnico", "destino": "almacen"}
+        {"origin": "tecnico", "destination": "almacen"}
     ]
     assert not resultado.get("errors")
 

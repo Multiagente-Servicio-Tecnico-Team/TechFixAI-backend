@@ -1,14 +1,14 @@
 """Compras consultivo determinista: declara las capacidades disponibles."""
 from langchain_core.messages import AIMessage, ToolMessage
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import evaluar_abastecimiento, handoff
+from app.agents.decentralized.policy import evaluate_supply, handoff
 from app.agents.decentralized.tools.compras_tools import consultar_fuentes_abastecimiento, transferir_a_ventas
 
 compras_tools = [consultar_fuentes_abastecimiento, transferir_a_ventas]
 
 
 def compras_node(state: AgentState):
-    evaluation = evaluar_abastecimiento(state)
+    evaluation = evaluate_supply(state)
     if evaluation["destination"] != "compras":
         return {"current_agent": "compras", "supplier_offers": [], "out_of_stock_items": [], "messages": [AIMessage(content=(
             "No hay un faltante vigente confirmado para evaluar. Es necesario aclarar o verificar el inventario."

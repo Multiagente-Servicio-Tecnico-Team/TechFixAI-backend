@@ -1,6 +1,6 @@
 """Deterministic warranty queries and checkpointable claims. No LLM authorizes writes."""
 from langchain_core.messages import AIMessage
-from app.agents.decentralized.policy import handoff, ultimo_usuario
+from app.agents.decentralized.policy import handoff, latest_user_message
 from app.agents.decentralized.warranty_operations import prepare_warranty_claim
 from app.agents.decentralized.tools.garantia_tools import garantia_tools
 from app.database.decentralized_repository import RetryConflict, _id
@@ -19,7 +19,7 @@ def garantia_node(state, *, repository=None, authenticated_customer_id=None):
             raise RetryConflict("Identidad incompatible")
         code = (state.get("intake") or {}).get("warranty_code") or state.get("warranty_code")
         # Explicit labelled user input, never fabricate or search by DNI.
-        text = ultimo_usuario({**state, "messages": state.get("messages", [])})
+        text = latest_user_message({**state, "messages": state.get("messages", [])})
         reported = re.findall(r"\bWAR-[A-Za-z0-9-]+\b", text, flags=re.I)
         if len(set(reported)) > 1:
             return response("Indica un único código de garantía para esta consulta.")

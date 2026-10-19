@@ -76,7 +76,7 @@ def test_servicio_sin_precio_no_bloqueado_por_repuesto_pendiente():
 def test_compatibilidad_es_tecnica_incluso_con_inventario():
     result = sales()({"messages": [HumanMessage(content="¿Es compatible con mi laptop?")],
                       "inventory_results": [item()]})
-    assert result["messages"][-1].tool_calls[0]["name"] == "transferir_a_tecnico"
+    assert result["messages"][-1].tool_calls[0]["name"] == "transfer_to_hardware"
 
 
 def test_soporte_no_inventa_canales_ni_promete_contacto():
@@ -92,7 +92,7 @@ def test_revision_comercial_transfiere_con_alcance_correcto():
     node = functions("app/agents/decentralized/tecnico.py", {"tecnico_node"})["tecnico_node"]
     result = node({"messages": [HumanMessage(content="¿Cuánto cuesta una revisión de diagnóstico?")]})
     call = result["messages"][-1].tool_calls[0]
-    assert call["name"] == "transferir_a_ventas" and call["args"]["alcance"] == "solo_servicio"
+    assert call["name"] == "transfer_to_sales" and call["args"]["scope"] == "solo_servicio"
 
 
 def test_repuesto_no_se_infiere_de_nombre_generico():
@@ -108,8 +108,8 @@ def test_almacen_pide_repuesto_exacto_sin_elegir_otro():
     result = node({"messages": [HumanMessage(content="Una unidad")],
                    "required_parts": [{"name": "SSD 500GB NVMe", "quantity": 1}]})
     call = result["messages"][-1].tool_calls[0]
-    assert call["name"] == "consultar_inventario"
-    assert call["args"] == {"nombre_repuesto": "SSD 500GB NVMe", "cantidad": 1}
+    assert call["name"] == "check_inventory"
+    assert call["args"] == {"part_name": "SSD 500GB NVMe", "quantity": 1}
 
 
 def test_subtotal_decimal_cantidad_y_stock_insuficiente():
@@ -148,7 +148,7 @@ def test_tecnico_no_insiste_si_usuario_no_sabe_hacer_pruebas():
 
 def test_stock_en_ventas_va_a_almacen_no_a_soporte():
     result = sales()({"messages": [HumanMessage(content="q ssd tienes disponboes")]})
-    assert result["messages"][-1].tool_calls[0]["name"] == "solicitar_inventario"
+    assert result["messages"][-1].tool_calls[0]["name"] == "request_inventory"
 
 
 def test_almacen_no_simula_un_listado_ni_elige_variante():
@@ -157,7 +157,7 @@ def test_almacen_no_simula_un_listado_ni_elige_variante():
     assert not result["messages"][-1].tool_calls
     assert "no listar" in result["messages"][-1].content
     result = node({"messages": [HumanMessage(content="SSD 500GB NVMe")], "inventory_query": "SSD"})
-    assert result["messages"][-1].tool_calls[0]["args"]["nombre_repuesto"] == "SSD 500GB NVMe"
+    assert result["messages"][-1].tool_calls[0]["args"]["part_name"] == "SSD 500GB NVMe"
     assert result["inventory_query"] is None
 
 
@@ -199,8 +199,8 @@ def test_corregir_5000_a_500_reconsulta_almacen():
              "required_parts": [{"name": "SSD 5000GB NVMe", "quantity": 1}]}
     result = sales()(state)
     call = result["messages"][-1].tool_calls[0]
-    assert call["name"] == "solicitar_inventario"
-    assert "500GB" in call["args"]["consulta"]
+    assert call["name"] == "request_inventory"
+    assert "500GB" in call["args"]["query"]
 
 
 def test_instalacion_sin_repuesto_encontrado_no_afirma_un_subtotal():

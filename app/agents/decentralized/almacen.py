@@ -11,10 +11,10 @@ from app.agents.decentralized.state import AgentState
 from app.agents.decentralized.policy import handoff, latest_user_message, extract_inventory_reference, contains_placeholder
 from app.agents.decentralized.policy import prepare_inventory_request, evaluate_supply, build_supply_handoff
 from app.agents.decentralized.tools.almacen_tools import (
-    consultar_inventario,
-    transferir_a_ventas,
-    transferir_a_compras,
+    check_inventory,
 )
+
+from app.agents.decentralized.tools.warehouse_handoff_tools import transfer_to_sales, transfer_to_purchasing
 
 # =========================================================
 # CONFIGURACIÓN DEL MODELO
@@ -36,9 +36,9 @@ llm = ChatGroq(
 # =========================================================
 
 almacen_tools = [
-    consultar_inventario,
-    transferir_a_ventas,
-    transferir_a_compras,
+    check_inventory,
+    transfer_to_sales,
+    transfer_to_purchasing,
 ]
 
 almacen_llm = llm.bind_tools(almacen_tools)
@@ -59,7 +59,7 @@ RESPONSABILIDADES:
 - Informar si un repuesto no está disponible.
 
 REGLAS:
-- Utiliza consultar_inventario para verificar repuestos.
+- Utiliza check_inventory para verificar repuestos.
 - Nunca inventes precios, existencias o disponibilidad.
 - No consideres disponible un repuesto si la herramienta
   indica available=False.
@@ -74,11 +74,11 @@ REGLAS:
   pudo verificar la disponibilidad.
 
 TRANSFERENCIA A VENTAS:
-- Con artículos identificados y faltantes confirmados, utiliza transferir_a_compras.
-- Con stock suficiente utiliza transferir_a_ventas. Una consulta completada no
+- Con artículos identificados y faltantes confirmados, utiliza transfer_to_purchasing.
+- Con stock suficiente utiliza transfer_to_sales. Una consulta completada no
   significa stock suficiente. Referencias ambiguas/no encontradas y errores
   requieren aclaración; no son stock cero confirmado ni autorizan pedidos.
-- Primero verifica los repuestos con consultar_inventario.
+- Primero verifica los repuestos con check_inventory.
 - Con resultados completos, aplica la política de disponibilidad antes de transferir.
 - Incluye nombre, cantidad, stock, precio y disponibilidad.
 - Si algún repuesto no está disponible, indícalo.
@@ -109,7 +109,9 @@ def build_warehouse_context(state: AgentState):
 
     tool_names = {
         "consultar_inventario",
+        "check_inventory",
         "transferir_a_ventas",
+        "transfer_to_sales",
     }
 
     # Identificar llamadas realizadas por Almacén.
@@ -140,7 +142,7 @@ def build_warehouse_context(state: AgentState):
 
             # Diagnósticos realizados por Técnico.
             elif (
-                message.name == "diagnosticar_problema"
+                message.name in {"diagnosticar_problema", "diagnose_issue"}
                 and message.status != "error"
             ):
                 context.append(
@@ -154,7 +156,7 @@ def build_warehouse_context(state: AgentState):
 
             # Solicitud de Técnico hacia Almacén.
             elif (
-                message.name == "transferir_a_almacen"
+                message.name in {"transferir_a_almacen", "transfer_to_warehouse"}
                 and message.status != "error"
             ):
                 context.append(
@@ -205,7 +207,7 @@ def almacen_node(state: AgentState):
         if not prepared["inventory_pending"]:
             return build_supply_handoff({**state, **prepared, "inventory_query": None})
         else:
-            update = handoff("almacen", "consultar_inventario", nombre_repuesto=name, cantidad=quantity)
+            update = handoff("almacen", "check_inventory", part_name=name, quantity=quantity)
         update.update(prepared, inventory_query=None, quote_scope="repuestos")
         return update
     required = state.get("required_parts", [])
@@ -216,7 +218,7 @@ def almacen_node(state: AgentState):
         results = prepared["inventory_results"]
         for part in required:
             if not any(r.get("requested_name") == part["name"] and r.get("quantity") == part["quantity"] for r in results):
-                update = handoff("almacen", "consultar_inventario", nombre_repuesto=part["name"], cantidad=part["quantity"])
+                update = handoff("almacen", "check_inventory", part_name=part["name"], quantity=part["quantity"])
                 update.update(prepared)
                 return update
         return build_supply_handoff({**state, **prepared})

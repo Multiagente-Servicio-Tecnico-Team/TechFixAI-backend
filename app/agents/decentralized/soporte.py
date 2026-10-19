@@ -5,11 +5,10 @@ from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, Human
 from app.agents.decentralized.state import AgentState
 from app.agents.decentralized.policy import latest_user_message, is_customer_service_query, is_compatibility_query, handoff, ATENCION_NO_CONFIGURADA, is_inventory_query, contains_placeholder
 from app.agents.decentralized.policy import classify_support_triage
-from app.agents.decentralized.tools.soporte_tools import (
-    consultar_estado_ticket,
-    transferir_a_tecnico,
-    transferir_a_ventas,
-    transferir_a_software,
+from app.agents.decentralized.tools.soporte_tools import get_ticket_status
+from app.agents.decentralized.tools.support_handoff_tools import (
+    transfer_to_hardware, transfer_to_sales, transfer_to_software,
+    transfer_to_billing, transfer_to_logistics, transfer_to_warranty,
 )
 
 # Carga las variables del archivo .env
@@ -26,19 +25,14 @@ llm = ChatGroq(
 )
 
 # Herramientas disponibles para el agente de Soporte
-from app.agents.decentralized.tools.facturacion_tools import transferir_a_facturacion
-from app.agents.decentralized.tools.logistica_tools import transferir_a_logistica
-
-from app.agents.decentralized.tools.garantia_tools import transferir_a_garantia
-
 soporte_tools = [
-    transferir_a_garantia,
-    transferir_a_logistica,
-    transferir_a_facturacion,
-    consultar_estado_ticket,
-    transferir_a_tecnico,
-    transferir_a_ventas,
-    transferir_a_software,
+    transfer_to_warranty,
+    transfer_to_logistics,
+    transfer_to_billing,
+    get_ticket_status,
+    transfer_to_hardware,
+    transfer_to_sales,
+    transfer_to_software,
     consultar_base_conocimiento,
 ]
 
@@ -77,19 +71,19 @@ CONTINUIDAD Y ATENCIÓN:
 
 TICKETS:
 - Si el usuario pregunta por un ticket,
-  utiliza consultar_estado_ticket.
+  utiliza get_ticket_status.
 
 SOLICITUDES TÉCNICAS:
 - Para aplicaciones, sistemas operativos, controladores o configuración con
-  evidencia lógica suficiente, utiliza transferir_a_software con motivo explícito.
-- Para fallas físicas o componentes utiliza transferir_a_tecnico.
+  evidencia lógica suficiente, utiliza transfer_to_software con motivo explícito.
+- Para fallas físicas o componentes utiliza transfer_to_hardware.
 - Lentitud y pantalla azul pueden ser físicas o lógicas: pide aclaraciones.
   No clasifiques por mencionar Windows ni conviertas hipótesis en diagnósticos.
   Considera negaciones y respuestas previas, sin rescatar fallas antiguas cuando
   cambia la consulta. Ninguna transferencia instala ni configura el dispositivo.
 - Si el usuario indica que un componente ya fue
   diagnosticado y necesita reemplazo, también
-  utiliza transferir_a_tecnico.
+  utiliza transfer_to_hardware.
 - No necesitas repetir el diagnóstico si ya
   existe información técnica suficiente.
 
@@ -107,7 +101,7 @@ SOLICITUDES COMERCIALES:
 - Si el usuario solicita únicamente información
   comercial, precios de servicios o compras sin
   reparación técnica pendiente, utiliza
-  transferir_a_ventas.
+  transfer_to_sales.
 
 BASE DE CONOCIMIENTO:
 - Utiliza consultar_base_conocimiento para
@@ -167,17 +161,17 @@ def soporte_node(state: AgentState, *, authenticated_customer_id=None):
     from app.agents.decentralized.ticket_intake import classify_request
     request = classify_request(user)
     if request in {"SALE", "PC_BUILD"}:
-        return handoff("soporte", "transferir_a_ventas", motivo="Consulta comercial; faltan especificaciones si la referencia es genérica")
+        return handoff("soporte", "transfer_to_sales", reason="Consulta comercial; faltan especificaciones si la referencia es genérica")
     if request in {"WARRANTY_STATUS_CHECK", "WARRANTY_CLAIM"}:
-        return handoff("soporte", "transferir_a_garantia", motivo="Consultar garantía o revisar reclamo sin asumir cobertura")
+        return handoff("soporte", "transfer_to_warranty", reason="Consultar garantía o revisar reclamo sin asumir cobertura")
     if contains_placeholder(user):
         return {"current_agent": "soporte", "messages": [AIMessage(content="Indica el nombre real del repuesto, sustituyendo el texto entre corchetes.")]}
     if is_inventory_query(user):
-        return handoff("soporte", "transferir_a_ventas", motivo="Consultar disponibilidad de repuestos")
+        return handoff("soporte", "transfer_to_sales", reason="Consultar disponibilidad de repuestos")
     if is_compatibility_query(user):
-        return handoff("soporte", "transferir_a_tecnico", motivo="Verificar compatibilidad con evidencia técnica")
+        return handoff("soporte", "transfer_to_hardware", reason="Verificar compatibilidad con evidencia técnica")
     handling_return_handoff = any(
-        isinstance(m, ToolMessage) and m.name == "transferir_a_soporte" and m.status != "error"
+        isinstance(m, ToolMessage) and m.name in {"transferir_a_soporte", "transfer_to_support"} and m.status != "error"
         for m in state["messages"][state.get("turn_start_index", 0):]
     )
     if is_customer_service_query(user):
@@ -189,8 +183,8 @@ def soporte_node(state: AgentState, *, authenticated_customer_id=None):
     if "ticket" not in user.lower():
         destination = classify_support_triage(state)
         if destination in {"software", "tecnico"}:
-            return handoff("soporte", f"transferir_a_{destination}",
-                           motivo="Evaluar consulta lógica reportada, sin causa confirmada" if destination == "software"
+            return handoff("soporte", {"software": "transfer_to_software", "tecnico": "transfer_to_hardware"}[destination],
+                           reason="Evaluar consulta lógica reportada, sin causa confirmada" if destination == "software"
                            else "Evaluar indicios físicos o componentes reportados, sin causa confirmada")
         if destination == "aclarar":
             return {"current_agent": "soporte", "messages": [AIMessage(content=(

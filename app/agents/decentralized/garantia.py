@@ -2,7 +2,7 @@
 from langchain_core.messages import AIMessage
 from app.agents.decentralized.policy import handoff, latest_user_message
 from app.agents.decentralized.warranty_operations import prepare_warranty_claim
-from app.agents.decentralized.tools.garantia_tools import garantia_tools
+from app.agents.decentralized.tools.warranty_handoff_tools import warranty_handoff_tools as garantia_tools
 from app.database.decentralized_repository import RetryConflict, _id
 import re
 
@@ -43,7 +43,7 @@ def garantia_node(state, *, repository=None, authenticated_customer_id=None):
             if claim["ticket_id"] != state.get("ticket_id") or claim["warranty_id"] != warranty["id"]:
                 raise RetryConflict("Reclamo incompatible")
             repository.get_logistics_context(customer_id=customer, ticket_id=claim["ticket_id"])
-            return {**patch, **handoff("garantia", "transferir_a_logistica", motivo="Coordinar ingreso de reclamo persistido IN_REVIEW")}
+            return {**patch, **handoff("garantia", "transfer_to_logistics", reason="Coordinar ingreso de reclamo persistido IN_REVIEW")}
         if warranty["effective_status"] != "ACTIVE":
             return response("La garantía no está vigente para registrar un reclamo. Una reparación pagada requiere una solicitud explícita independiente.", **patch)
         ticket = repository.get_ticket(customer_id=customer, ticket_id=state.get("ticket_id"))

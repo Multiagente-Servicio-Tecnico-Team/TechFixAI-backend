@@ -21,8 +21,8 @@ EXPECTED = dict(payment_write_enabled=False, fiscal_integration_available=False,
 
 def test_active_registry_has_only_new_capability_name():
     assert [item.name for item in facturacion_tools] == [
-        "transferir_a_soporte", "transferir_a_ventas", "get_financial_capabilities",
-        "transferir_a_logistica",
+        "transfer_to_support", "transfer_to_sales", "get_financial_capabilities",
+        "transfer_to_logistics",
     ]
 
 
@@ -49,7 +49,7 @@ def test_alias_preserves_implementation_description_and_legacy_name():
 def test_compiled_registry_contains_each_variant_once(network):
     module, _ = network
     node = module.build_graph().get_graph().nodes["facturacion_tools"].data
-    assert set(node.tools_by_name) == {item.name for item in facturacion_tools} | {NAMES[1]}
+    assert set(node.tools_by_name) == {item.name for item in facturacion_tools} | {NAMES[1], "transferir_a_soporte", "transferir_a_ventas", "transferir_a_logistica"}
 
 
 @pytest.mark.parametrize("names", [[NAMES[0]], [NAMES[1]], NAMES, [NAMES[1], NAMES[1]]])

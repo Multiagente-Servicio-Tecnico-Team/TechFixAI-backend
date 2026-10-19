@@ -549,8 +549,8 @@ def test_soporte_triaje_conservador_real(text, target):
     result = node({"messages": [HumanMessage(content=text)]})
     calls = result["messages"][0].tool_calls
     if target:
-        assert calls[0]["name"] == f"transferir_a_{target}"
-        assert calls[0]["args"]["motivo"].strip()
+        assert calls[0]["name"] == {"software": "transfer_to_software", "tecnico": "transfer_to_hardware"}[target]
+        assert calls[0]["args"]["reason"].strip()
     else:
         assert not calls and "No puedo determinar" in result["messages"][0].content
 
@@ -567,13 +567,13 @@ def test_soporte_historial_respuesta_breve_y_cambio_consulta():
 @pytest.mark.parametrize("text,target", [("La aplicación se cierra", "software"), ("Mi PC no enciende", "tecnico")])
 def test_soporte_real_integrado_transfiere_y_conserva_contexto(graph_module, text, target):
     from app.agents.decentralized import policy
-    from app.agents.decentralized.tools.soporte_tools import transferir_a_software, transferir_a_tecnico
+    from app.agents.decentralized.tools.support_handoff_tools import transfer_to_software, transfer_to_hardware
     node = isolated_function("app/agents/decentralized/soporte.py", "soporte_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage,
     })
     graph_module.AGENT_NODES["soporte"] = node
-    graph_module.soporte_tools = [transferir_a_software, transferir_a_tecnico]
+    graph_module.soporte_tools = [transfer_to_software, transfer_to_hardware]
     graph = graph_module.build_graph()
     result = graph.invoke({"messages": [HumanMessage(content=text)], "ticket_id": 7})
     assert result["current_agent"] == target and result["ticket_id"] == 7
@@ -635,7 +635,7 @@ def test_tecnico_especializado_triaje(text, target):
     result = hardware_node()(value)
     calls = result["messages"][0].tool_calls
     if target:
-        assert calls[0]["name"] == "transferir_a_software" and calls[0]["args"]["motivo"].strip()
+        assert calls[0]["name"] == "transfer_to_software" and calls[0]["args"]["reason"].strip()
     else:
         assert not calls
     assert "technical_assessment" not in result
@@ -673,20 +673,20 @@ def test_tecnico_repeticion_token_y_evidencia_nueva(graph_module):
     assert not repeated["messages"][0].tool_calls
     assert "información nueva" in repeated["messages"][0].content
     value["messages"].append(ToolMessage(content="Nueva evidencia documental", name="consultar_base_conocimiento", tool_call_id="doc"))
-    assert hardware_node()(value)["messages"][0].tool_calls[0]["name"] == "transferir_a_software"
+    assert hardware_node()(value)["messages"][0].tool_calls[0]["name"] == "transfer_to_software"
 
 
 def test_tecnico_real_software_integracion_y_continuidad(graph_module):
-    from app.agents.decentralized.tools.soporte_tools import transferir_a_software
+    from app.agents.decentralized.tools.hardware_handoff_tools import transfer_to_software
     graph_module.AGENT_NODES["tecnico"] = hardware_node()
-    graph_module.tecnico_tools = [*graph_module.tecnico_tools, transferir_a_software]
+    graph_module.tecnico_tools = [*graph_module.tecnico_tools, transfer_to_software]
     graph = graph_module.build_graph()
     result = graph.invoke({"current_agent": "tecnico", "messages": [HumanMessage(content="La aplicación se cierra")], "ticket_id": 7})
     assert result["current_agent"] == "software" and result["ticket_id"] == 7
     assert result["handoff_history"] == [{"origin": "tecnico", "destination": "software"}]
     assert result["handoff_records"][0]["reason"].strip()
     output = next(m for m in result["messages"] if isinstance(m, ToolMessage))
-    assert output.name == "transferir_a_software" and output.status == "success"
+    assert output.name == "transfer_to_software" and output.status == "success"
     next_turn = graph.invoke({**result, "messages": [*result["messages"], HumanMessage(content="Uso Windows 11")]})
     assert next_turn["current_agent"] == "software" and next_turn["handoff_history"] == []
     back = graph.invoke({"current_agent": "software", "messages": [HumanMessage(content="hardware")]})
@@ -769,7 +769,15 @@ def test_cambio_cantidad_invalida_solo_coincidencias_afectadas():
 
 @pytest.mark.parametrize("complete", [False, True])
 def test_almacen_real_retorno_y_solicitante_obsoleto(graph_module, complete):
+    from app.agents.decentralized.tools.warehouse_handoff_tools import transfer_to_sales
+    graph_module.almacen_tools = [*graph_module.almacen_tools, transfer_to_sales]
     from app.agents.decentralized import policy
+    from langchain_core.tools import StructuredTool
+    legacy = next(item for item in graph_module.almacen_tools if item.name == "consultar_inventario")
+    def lookup(part_name: str, quantity: int = 1) -> str:
+        return legacy.invoke({"nombre_repuesto": part_name, "cantidad": quantity})
+    graph_module.almacen_tools = [*graph_module.almacen_tools, StructuredTool.from_function(
+        func=lookup, name="check_inventory", description=legacy.description)]
     node = isolated_function("app/agents/decentralized/almacen.py", "almacen_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
     })
@@ -782,7 +790,7 @@ def test_almacen_real_retorno_y_solicitante_obsoleto(graph_module, complete):
     assert result["current_agent"] == "ventas" and result["inventory_requested_by"] is None
     assert result["inventory_revision"] == 2 and result["inventory_pending"] is False
     assert result["handoff_history"] == [{"origin": "almacen", "destination": "ventas"}]
-    queries = [m for m in result["messages"] if isinstance(m, ToolMessage) and m.name == "consultar_inventario"]
+    queries = [m for m in result["messages"] if isinstance(m, ToolMessage) and m.name == "check_inventory"]
     assert len(queries) == (0 if complete else 1)
 
 

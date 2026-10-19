@@ -75,12 +75,12 @@ def test_no_trusted_identity_or_existing_payment_no_preparation():
 
 
 def test_tools_names_reasons_and_capabilities():
-    assert "transferir_a_logistica" in {tool.name for tool in facturacion_tools}
+    assert "transfer_to_logistics" in {tool.name for tool in facturacion_tools}
     for tool in facturacion_tools:
-        if tool.name.startswith("transferir_"):
+        if tool.name.startswith("transfer_to_"):
             assert tool.name in HANDOFF_TOOLS
             with pytest.raises(ValueError):
-                tool.invoke({"motivo": "  "})
-            assert "TRANSFERIR" in tool.invoke({"motivo": "Revisión requerida"})
+                tool.invoke({"reason": "  "})
+            assert "TRANSFERIR" in tool.invoke({"reason": "Revisión requerida"})
         else:
             assert all(value is False for value in tool.invoke({}).values())

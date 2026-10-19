@@ -83,8 +83,8 @@ def test_tools_contract_and_no_guarantee_agent():
     for tool in [transferir_a_logistica, *logistica_tools]:
         assert tool.name in HANDOFF_TOOLS
         with pytest.raises(ValueError):
-            tool.invoke({"motivo":" "})
-        assert "TRANSFERIR" in tool.invoke({"motivo":"Coordinación requerida"})
+            tool.invoke({("reason" if tool.name.startswith("transfer_to_") else "motivo"):" "})
+        assert "TRANSFERIR" in tool.invoke({("reason" if tool.name.startswith("transfer_to_") else "motivo"):"Coordinación requerida"})
     assert not any(tool.name == "transferir_a_garantia" for tool in logistica_tools)
 
 

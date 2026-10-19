@@ -64,7 +64,7 @@ def test_flujo_soporte_tecnico_ventas(network):
     # Comprobaciones básicas
     assert resultado.get("errors", []) == []
 
-    assert herramientas == ["transferir_a_tecnico", "transferir_a_ventas"]
+    assert herramientas == ["transfer_to_hardware", "transfer_to_sales"]
     assert resultado["handoff_history"] == [
         {"origin": "soporte", "destination": "tecnico"},
         {"origin": "tecnico", "destination": "ventas"},
@@ -76,9 +76,9 @@ def test_flujo_soporte_tecnico_ventas(network):
     assert not resultado.get("ticket_id") and not resultado.get("quote_id")
     assert resultado["quote"]["total"] is None
     transfers = [call for message in resultado["messages"] if isinstance(message, AIMessage)
-                 for call in message.tool_calls if call["name"] == "transferir_a_ventas"]
+                 for call in message.tool_calls if call["name"] == "transfer_to_sales"]
     assert len(transfers) == 1
-    assert transfers[0]["args"]["alcance"] == "solo_servicio"
+    assert transfers[0]["args"]["scope"] == "solo_servicio"
     pairs(resultado)
 
     respuesta_final = resultado["messages"][-1]

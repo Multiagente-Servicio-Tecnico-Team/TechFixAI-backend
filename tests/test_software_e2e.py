@@ -42,15 +42,15 @@ def network(monkeypatch):
 
         def bind_tools(self, tools, **kwargs):
             names = {tool.name for tool in tools}
-            if "consultar_estado_ticket" in names:
+            if "get_ticket_status" in names:
                 self.role = "soporte"
-            elif "diagnosticar_problema" in names:
+            elif "diagnose_issue" in names:
                 self.role = "tecnico"
             elif "generar_cotizacion" in names:
                 self.role = "ventas"
-            elif "consultar_inventario" in names:
+            elif "check_inventory" in names:
                 self.role = "almacen"
-            elif "transferir_a_tecnico" in names:
+            elif "transfer_to_hardware" in names:
                 self.role = "software"
             return BoundModel(self.role, kwargs.get("tool_choice") == "required")
 

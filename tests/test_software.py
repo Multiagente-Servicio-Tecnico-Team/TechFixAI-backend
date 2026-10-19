@@ -75,7 +75,7 @@ def test_contexto_completo_sin_mutacion_ni_diagnostico_inventado(agent):
     assert regular.calls[0][2:] == history
     assert "Hipótesis previa" in regular.calls[0][1].content
     assert "Pendiente" in regular.calls[0][1].content
-    assert bindings[0][0] == ["transferir_a_soporte", "transferir_a_tecnico", "transferir_a_ventas", "consultar_base_conocimiento", "transferir_a_logistica"]
+    assert bindings[0][0] == ["transfer_to_support", "transfer_to_hardware", "transfer_to_sales", "consultar_base_conocimiento", "transfer_to_logistics"]
 
 
 @pytest.mark.parametrize("text", ["Pantalla azul", "Mi equipo está lento"])
@@ -90,13 +90,13 @@ def test_ambiguedad_pide_datos(agent, text):
 def test_evidencia_fisica_transfiere_hardware(agent, text):
     module, regular, _, _ = agent
     call = module.software_node(state(text))["messages"][0].tool_calls[0]
-    assert call["name"] == "transferir_a_tecnico" and call["args"]["motivo"].strip()
+    assert call["name"] == "transfer_to_hardware" and call["args"]["reason"].strip()
     assert not regular.calls
 
 
 def test_atencion_transfiere_soporte(agent):
     module, _, _, _ = agent
-    assert module.software_node(state("Necesito revisión presencial"))["messages"][0].tool_calls[0]["name"] == "transferir_a_soporte"
+    assert module.software_node(state("Necesito revisión presencial"))["messages"][0].tool_calls[0]["name"] == "transfer_to_support"
 
 
 def test_rag_por_turno_y_reintento_sin_ejecutar_servicios(agent):
@@ -217,7 +217,7 @@ def test_negaciones_e_hipotesis_no_son_evidencia_fisica(agent, text):
 def test_peligro_afirmado_prioritario_a_atencion_y_negacion_distinta(agent):
     module, regular, _, _ = agent
     result = module.software_node(state("No tengo batería hinchada, pero sale humo. ¿Cuál es el horario presencial?"))
-    assert result["messages"][0].tool_calls[0]["name"] == "transferir_a_tecnico"
+    assert result["messages"][0].tool_calls[0]["name"] == "transfer_to_hardware"
     assert "suspende las pruebas" in result["messages"][0].content
     assert not regular.calls
 
@@ -226,7 +226,7 @@ def test_peligro_afirmado_prioritario_a_atencion_y_negacion_distinta(agent):
                                    "Tengo batería hinchada y no sale humo"])
 def test_negacion_de_otro_sintoma_no_oculta_peligro(agent, text):
     module, regular, _, _ = agent
-    assert module.software_node(state(text))["messages"][0].tool_calls[0]["name"] == "transferir_a_tecnico"
+    assert module.software_node(state(text))["messages"][0].tool_calls[0]["name"] == "transfer_to_hardware"
     assert not regular.calls
 
 

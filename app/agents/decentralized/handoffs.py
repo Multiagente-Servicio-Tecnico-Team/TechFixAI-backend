@@ -20,8 +20,18 @@ ALLOWED_HANDOFFS = {
     "logistica": frozenset({"garantia", "soporte"}),
     "garantia": frozenset({"logistica", "tecnico", "software", "facturacion", "soporte"}),
 }
-HANDOFF_TOOLS = {f"transferir_a_{agent}": agent for agent in ALLOWED_HANDOFFS}
-HANDOFF_TOOLS["solicitar_inventario"] = "almacen"
+HANDOFF_TOOLS = {
+    "transferir_a_soporte": "soporte", "transfer_to_support": "soporte",
+    "transferir_a_tecnico": "tecnico", "transfer_to_hardware": "tecnico",
+    "transferir_a_software": "software", "transfer_to_software": "software",
+    "transferir_a_ventas": "ventas", "transfer_to_sales": "ventas",
+    "transferir_a_almacen": "almacen", "transfer_to_warehouse": "almacen",
+    "transferir_a_compras": "compras", "transfer_to_purchasing": "compras",
+    "transferir_a_facturacion": "facturacion", "transfer_to_billing": "facturacion",
+    "transferir_a_logistica": "logistica", "transfer_to_logistics": "logistica",
+    "transferir_a_garantia": "garantia", "transfer_to_warranty": "garantia",
+    "solicitar_inventario": "almacen", "request_inventory": "almacen",
+}
 
 
 class HandoffRecord(TypedDict):
@@ -83,12 +93,12 @@ def handoff_reason(messages):
                         args = normalize_handoff_payload(call["args"])
                     except (ValueError, TypeError):
                         return None
-                    if result.name == "solicitar_inventario":
+                    if result.name in {"solicitar_inventario", "request_inventory"}:
                         query = args.get("query")
                         return "Consultar inventario" if isinstance(query, str) and query.strip() else None
                     return args.get("reason")
     if isinstance(data, dict):
-        return ("Consultar inventario" if result.name == "solicitar_inventario"
+        return ("Consultar inventario" if result.name in {"solicitar_inventario", "request_inventory"}
                 and isinstance(data.get("query"), str) and data["query"].strip()
                 else data.get("reason"))
     return legacy_reason

@@ -20,11 +20,9 @@ from app.agents.decentralized.policy import (
     normalize_text,
     extract_inventory_reference,
 )
-from app.agents.decentralized.tools.soporte_tools import transferir_a_soporte
+from app.agents.decentralized.tools.sales_handoff_tools import transfer_to_support, transfer_to_hardware, transfer_to_billing
 from app.agents.decentralized.tools.ventas_tools import (
     generar_cotizacion,
-    transferir_a_tecnico,
-    solicitar_inventario,
 )
 
 
@@ -49,14 +47,14 @@ llm = ChatGroq(
 # HERRAMIENTAS
 # =========================================================
 
-from app.agents.decentralized.tools.facturacion_tools import transferir_a_facturacion
+from app.agents.decentralized.tools.inventory_request_tools import request_inventory
 
 ventas_tools = [
-    transferir_a_facturacion,
-    solicitar_inventario,
-    transferir_a_soporte,
+    transfer_to_billing,
+    request_inventory,
+    transfer_to_support,
     generar_cotizacion,
-    transferir_a_tecnico,
+    transfer_to_hardware,
     consultar_base_conocimiento,
 ]
 
@@ -182,7 +180,7 @@ REGLAS:
 - No repitas herramientas ya ejecutadas.
 - Si se necesita diagnóstico, transfiere a Técnico.
 - Si la nueva pregunta es sobre un ticket, atención general o
-  revisión presencial, utiliza transferir_a_soporte.
+  revisión presencial, utiliza transfer_to_support.
 - No puedes reservar citas ni confirmar que se registró una visita.
 
 RAG:
@@ -266,8 +264,10 @@ def build_sales_context(state: AgentState):
 
     tool_names = {
         "transferir_a_soporte",
+        "transfer_to_support",
         "generar_cotizacion",
         "transferir_a_tecnico",
+        "transfer_to_hardware",
         "consultar_base_conocimiento",
     }
 
@@ -279,7 +279,7 @@ def build_sales_context(state: AgentState):
     incoming_id = None
     if records and records[-1].get("origin") == "software":
         incoming = next((message for message in reversed(messages)
-                         if isinstance(message, ToolMessage) and message.name == "transferir_a_ventas"
+                         if isinstance(message, ToolMessage) and message.name in {"transferir_a_ventas", "transfer_to_sales"}
                          and message.status != "error"), None)
         incoming_id = incoming.tool_call_id if incoming else None
 
@@ -312,7 +312,7 @@ def build_sales_context(state: AgentState):
             if message.tool_call_id in sales_calls:
                 context.append(message)
 
-            elif message.name == "diagnosticar_problema":
+            elif message.name in {"diagnosticar_problema", "diagnose_issue"}:
                 context.append(
                     HumanMessage(
                         content=(
@@ -377,13 +377,13 @@ def ventas_node(state: AgentState):
                 except RetryConflict:
                     return {"current_agent": "ventas", "messages": [AIMessage(content="Hay una operación pendiente que debe reconciliarse antes de cambiar la cantidad. No se modificó la operación.")]}
                 return {**patch, "intake": {**state["intake"], "quantity": quantity},
-                        **handoff("ventas", "solicitar_inventario", consulta=user)}
+                        **handoff("ventas", "request_inventory", query=user)}
     if contains_placeholder(user):
         return {"current_agent": "ventas", "messages": [AIMessage(content="Sustituye el texto entre corchetes por el nombre real del repuesto. No puedo consultar un marcador de ejemplo.")]}
     if is_compatibility_query(user):
-        return handoff("ventas", "transferir_a_tecnico", motivo="Verificar compatibilidad con evidencia técnica")
+        return handoff("ventas", "transfer_to_hardware", reason="Verificar compatibilidad con evidencia técnica")
     if is_customer_service_query(user):
-        return handoff("ventas", "transferir_a_soporte", motivo="Orientación de atención presencial")
+        return handoff("ventas", "transfer_to_support", reason="Orientación de atención presencial")
     reference = extract_inventory_reference(user)
     intake = state.get("intake") or {}
     intake_reference = extract_inventory_reference(str(intake.get("product_description", "")))
@@ -400,10 +400,10 @@ def ventas_node(state: AgentState):
         for name in previous_names
     )
     if (is_inventory_query(user) or corrected_reference or needs_intake_inventory) and not any(
-        isinstance(m, ToolMessage) and m.name == "consultar_inventario"
+        isinstance(m, ToolMessage) and m.name in {"consultar_inventario", "check_inventory"}
         for m in state["messages"][state.get("turn_start_index", 0):]
     ):
-        return handoff("ventas", "solicitar_inventario", consulta=user)
+        return handoff("ventas", "request_inventory", query=user)
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),

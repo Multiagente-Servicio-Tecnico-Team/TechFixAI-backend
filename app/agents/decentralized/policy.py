@@ -306,7 +306,7 @@ def build_supply_handoff(state):
     if destination is None:
         update = {"current_agent": "almacen", "messages": [AIMessage(content="Falta una identificación o consulta vigente fiable. Confirma la referencia exacta; no puedo interpretar ausencia o ambigüedad como stock agotado.")]}
     else:
-        update = handoff("almacen", f"transferir_a_{destination}", motivo="Faltantes confirmados" if destination == "compras" else "Inventario vigente verificado")
+        update = handoff("almacen", {"ventas": "transfer_to_sales", "compras": "transfer_to_purchasing"}[destination], reason="Faltantes confirmados" if destination == "compras" else "Inventario vigente verificado")
     update.update(evaluation, inventory_query=None)
     return update
 

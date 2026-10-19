@@ -10,14 +10,14 @@ from app.agents.decentralized.policy import is_customer_service_query, handoff, 
 from app.agents.decentralized.policy import is_software_commercially_eligible
 from app.agents.decentralized.data_compat import normalize_handoff_payload
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.tools.software_tools import (
-    transferir_a_soporte, transferir_a_tecnico, transferir_a_ventas,
+from app.agents.decentralized.tools.software_handoff_tools import (
+    transfer_to_support, transfer_to_hardware, transfer_to_sales,
+    transfer_to_logistics, legacy_handoff_tools,
 )
 from app.rag.tools import consultar_base_conocimiento
-from app.agents.decentralized.tools.logistica_tools import transferir_a_logistica
 
-software_tools = [transferir_a_soporte, transferir_a_tecnico,
-                  transferir_a_ventas, consultar_base_conocimiento, transferir_a_logistica]
+software_tools = [transfer_to_support, transfer_to_hardware,
+                  transfer_to_sales, consultar_base_conocimiento, transfer_to_logistics]
 software_llm = software_llm_rag = None
 _initialization_error = None
 try:
@@ -39,12 +39,12 @@ Pantalla azul y lentitud pueden tener causas físicas o lógicas: pide sistema,
 mensaje de error, contexto y comprobaciones realizadas antes de atribuir una causa.
 Consulta consultar_base_conocimiento para documentación. Si no hay evidencia
 fiable, explica la incertidumbre. No afirmes malware sin evidencia.
-Ante evidencia física o necesidad de componentes usa transferir_a_tecnico con
+Ante evidencia física o necesidad de componentes usa transfer_to_hardware con
 motivo explícito, hechos conocidos y dudas. No diagnostiques Hardware ni elijas
 repuestos. Casos mixtos requieren evaluación directa de ambos especialistas;
 visitar ambos agentes no demuestra por sí solo un diagnóstico HYBRID.
-Para atención general o revisión presencial usa transferir_a_soporte.
-Solo usa transferir_a_ventas para un servicio definido, solicitado por el usuario,
+Para atención general o revisión presencial usa transfer_to_support.
+Solo usa transfer_to_sales para un servicio definido, solicitado por el usuario,
 sin repuestos pendientes y con alcance solo_servicio. Declarar ese alcance no
 prueba ausencia de repuestos. Si falta definir el servicio, pregunta primero.
 No cotices, registres quotes, inventes tarifas ni afirmes que S/ 35 sea vigente.
@@ -111,12 +111,12 @@ def _software_node(state: AgentState):
     """Conserva el estado de negocio; devuelve únicamente respuesta o handoff."""
     user = normalize_text(latest_user_message(state))
     if _physical_report(user):
-        update = handoff("software", "transferir_a_tecnico",
-                         motivo="Evaluar indicios físicos reportados; suspender pruebas ante peligro. No hay causa confirmada")
+        update = handoff("software", "transfer_to_hardware",
+                         reason="Evaluar indicios físicos reportados; suspender pruebas ante peligro. No hay causa confirmada")
         update["messages"][0].content = "Si hay humo, olor a quemado o batería hinchada, suspende las pruebas y no sigas encendiendo ni cargando el equipo."
         return update
     if is_customer_service_query(user):
-        return handoff("software", "transferir_a_soporte", motivo="Orientación de atención presencial")
+        return handoff("software", "transfer_to_support", reason="Orientación de atención presencial")
     if (any(term in user for term in ("pantalla azul", "lento", "lentitud"))
             and not _known_os(state)):
         return _respond("Ese síntoma puede tener causas físicas o de software. ¿Qué sistema operativo usas y qué mensaje de error aparece?")
@@ -150,18 +150,18 @@ def _software_node(state: AgentState):
         if len(response.tool_calls) > 1:
             return _respond("Solo puedo proponer una operación por ejecución. Aclaremos el siguiente paso antes de transferir o consultar documentación.")
         for call in response.tool_calls:
-            target = next((tool for tool in software_tools if tool.name == call["name"]), None)
+            target = next((tool for tool in [*software_tools, *legacy_handoff_tools] if tool.name == call["name"]), None)
             if target is None:
                 return _respond("No dispongo de una herramienta para realizar esa operación.")
             target.args_schema.model_validate(call["args"])
             if call["name"] == "consultar_base_conocimiento" and rag_attempted:
                 return _respond("La consulta documental ya se intentó en este turno. No repetiré la búsqueda; podemos aclarar la consulta en el siguiente mensaje.")
-            if call["name"].startswith("transferir_a_"):
+            if call["name"].startswith(("transferir_a_", "transfer_to_")):
                 payload = normalize_handoff_payload(call["args"])
                 reason = payload.get("reason")
                 if not isinstance(reason, str) or not reason.strip():
                     return _respond("Necesito aclarar el motivo antes de transferir la consulta.")
-            if call["name"] == "transferir_a_ventas" and not _has_defined_service(state):
+            if call["name"] in {"transferir_a_ventas", "transfer_to_sales"} and not _has_defined_service(state):
                 return _respond("Antes de cotizar, necesito definir el servicio de software y reconfirmarlo para esta solicitud. El estado no fecha los diagnósticos ni indica si un hallazgo Hardware está resuelto; necesitamos aclararlo sin reutilizar resultados antiguos.")
         return {"current_agent": "software", "messages": [response]}
     except Exception as error:

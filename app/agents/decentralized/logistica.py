@@ -9,9 +9,9 @@ from app.agents.decentralized.policy import latest_user_message, normalize_text
 from app.agents.decentralized.logistics_operations import logistics_payload, validate_pending_logistics_operation
 from app.agents.decentralized.ticket_operations import _revision
 from app.database.decentralized_repository import _id, RetryConflict
-from app.agents.decentralized.tools.logistica_tools import transferir_a_soporte
+from app.agents.decentralized.tools.logistics_handoff_tools import transfer_to_support
 
-logistica_tools = [transferir_a_soporte]
+logistica_tools = [transfer_to_support]
 
 
 def collect_logistics(state):

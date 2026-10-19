@@ -1,4 +1,4 @@
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool, tool
 
 from app.database.repository import lookup_inventory
 
@@ -33,6 +33,17 @@ def consultar_inventario(
         **result,
         "unit_price": str(result["unit_price"]),
     }
+
+def _check_inventory(part_name: str, quantity: int = 1) -> dict[str, object]:
+    return consultar_inventario.func(nombre_repuesto=part_name, cantidad=quantity)
+
+
+check_inventory = StructuredTool.from_function(
+    func=_check_inventory,
+    name="check_inventory",
+    description=consultar_inventario.description,
+)
+
 
 @tool
 def transferir_a_ventas(motivo: str) -> str:

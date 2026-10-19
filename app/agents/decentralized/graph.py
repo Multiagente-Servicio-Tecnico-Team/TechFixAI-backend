@@ -21,8 +21,11 @@ from app.agents.decentralized.soporte import soporte_node, soporte_tools
 from app.agents.decentralized.tecnico import tecnico_node, tecnico_tools
 from app.agents.decentralized.ventas import ventas_node, ventas_tools
 from app.agents.decentralized.almacen import almacen_node, almacen_tools
+from app.agents.decentralized.tools.almacen_tools import consultar_inventario
 from app.agents.decentralized.software import software_node, software_tools
 from app.agents.decentralized.compras import compras_node, compras_tools
+from app.agents.decentralized.tools.compras_tools import consultar_fuentes_abastecimiento
+from app.agents.decentralized.tools.tecnico_tools import diagnosticar_problema
 from app.agents.decentralized.facturacion import facturacion_node, facturacion_tools
 from app.agents.decentralized.tools.facturacion_tools import consultar_capacidades_financieras
 from app.agents.decentralized.logistica import logistica_node, logistica_tools
@@ -58,7 +61,7 @@ def detect_handoff(messages):
 def extract_part_handoff(messages):
     """Valida los datos estructurados de transferir_a_almacen."""
     for message in [selected_handoff(messages)]:
-        if message is None or message.name != "transferir_a_almacen":
+        if message is None or message.name not in {"transferir_a_almacen", "transfer_to_warehouse"}:
             return None
         if message.status == "error":
             return None
@@ -93,7 +96,7 @@ def record_handoff(state: AgentState, origen: str):
             break
         batch.append(message)
     current_inventory = any(
-        message.name == "consultar_inventario" and message.status != "error"
+        message.name in {"consultar_inventario", "check_inventory"} and message.status != "error"
         and any(item.get("tool_call_id") == message.tool_call_id
                 for item in state.get("inventory_results", []))
         for message in batch
@@ -149,7 +152,7 @@ def record_handoff(state: AgentState, origen: str):
             except (ValueError, TypeError) as error:
                 return _reject_handoff(error)
     inventory_query = None
-    if selected is not None and selected.name == "solicitar_inventario":
+    if selected is not None and selected.name in {"solicitar_inventario", "request_inventory"}:
         if isinstance(data, dict) and isinstance(data.get("query"), str):
             inventory_query = data["query"]
 
@@ -298,7 +301,7 @@ def guardar_inventario(state: AgentState):
         if not isinstance(message, ToolMessage):
             break
 
-        if message.name != "consultar_inventario":
+        if message.name not in {"consultar_inventario", "check_inventory"}:
             continue
 
         if message.status == "error":
@@ -524,8 +527,9 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                        "WARRANTY_CLAIM": "garantia", "REPAIR": "tecnico"}[kind]
         if kind == "REPAIR" and classify_support_triage({"messages": [HumanMessage(content=operation["payload"]["failure_description"])]}) == "software":
             destination = "software"
-        transfer = handoff("soporte", "transferir_a_" + destination,
-                           motivo="Continuar solicitud con ticket persistido y cliente autenticado")
+        transfer = handoff("soporte", {"ventas": "transfer_to_sales", "software": "transfer_to_software",
+                           "garantia": "transfer_to_warranty", "tecnico": "transfer_to_hardware"}[destination],
+                           reason="Continuar solicitud con ticket persistido y cliente autenticado")
         transfer["messages"].insert(0, AIMessage(content="Tu solicitud quedó registrada con el código " + row["code"] + "."))
         return {**transfer, "ticket_id": ticket_id, "ticket_code": row["code"],
                 "ticket_status": row["status"], "request_type": kind,
@@ -559,7 +563,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
             financial_repository.get_logistics_context(customer_id=operation["payload"]["customer_id"], ticket_id=row["ticket_id"])
         except (ValueError, LookupError):
             return {**patch, "messages": [AIMessage(content="Reclamo persistido; sus condiciones actuales no permiten coordinar ingreso. No hay reparación aprobada.")]}
-        return {**patch, **handoff("garantia", "transferir_a_logistica", motivo="Coordinar ingreso de reclamo persistido IN_REVIEW")}
+        return {**patch, **handoff("garantia", "transfer_to_logistics", reason="Coordinar ingreso de reclamo persistido IN_REVIEW")}
 
     builder.add_node("preparar_garantia", preparar_garantia)
     builder.add_node("ejecutar_garantia", ejecutar_garantia)
@@ -636,12 +640,49 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         ("logistica", logistica_tools),
         ("garantia", garantia_tools),
     ):
+        if name in {"soporte", "software", "tecnico", "compras", "facturacion", "logistica", "garantia", "almacen", "ventas"}:
+            if name == "soporte":
+                from app.agents.decentralized.tools.support_handoff_tools import legacy_handoff_tools
+            elif name == "software":
+                from app.agents.decentralized.tools.software_handoff_tools import legacy_handoff_tools
+            elif name == "tecnico":
+                from app.agents.decentralized.tools.hardware_handoff_tools import legacy_handoff_tools
+            elif name == "compras":
+                from app.agents.decentralized.tools.purchasing_handoff_tools import legacy_handoff_tools
+            elif name == "facturacion":
+                from app.agents.decentralized.tools.billing_handoff_tools import legacy_handoff_tools
+            elif name == "logistica":
+                from app.agents.decentralized.tools.logistics_handoff_tools import legacy_handoff_tools
+            elif name == "garantia":
+                from app.agents.decentralized.tools.warranty_handoff_tools import legacy_handoff_tools
+            elif name == "almacen":
+                from app.agents.decentralized.tools.warehouse_handoff_tools import legacy_handoff_tools
+            else:
+                from app.agents.decentralized.tools.sales_handoff_tools import legacy_handoff_tools
+            registered = {item.name for item in tools}
+            tools = [*tools, *(item for item in legacy_handoff_tools if item.name not in registered)]
+        if name == "ventas":
+            from app.agents.decentralized.tools.inventory_request_tools import legacy_inventory_request_tools
+            registered = {item.name for item in tools}
+            tools = [*tools, *(item for item in legacy_inventory_request_tools if item.name not in registered)]
         if name == "facturacion":
             tools = [*tools, consultar_capacidades_financieras]
-        if name == "soporte" and financial_repository is not None:
-            from app.agents.decentralized.tools.soporte_tools import authenticated_ticket_tool
-            tools = [authenticated_ticket_tool(financial_repository)
-                     if item.name == "consultar_estado_ticket" else item for item in tools]
+        if name == "tecnico":
+            tools = [*tools, diagnosticar_problema]
+        if name == "compras":
+            tools = [*tools, consultar_fuentes_abastecimiento]
+        if name == "almacen" and not any(item.name == "consultar_inventario" for item in tools):
+            tools = [*tools, consultar_inventario]
+        if name == "soporte":
+            from app.agents.decentralized.tools.soporte_tools import (
+                authenticated_ticket_tool, authenticated_ticket_status_tool, consultar_estado_ticket,
+            )
+            if financial_repository is not None:
+                tools = [item for item in tools if item.name not in {"get_ticket_status", "consultar_estado_ticket"}]
+                tools = [*tools, authenticated_ticket_status_tool(financial_repository),
+                         authenticated_ticket_tool(financial_repository)]
+            elif not any(item.name == "consultar_estado_ticket" for item in tools):
+                tools = [*tools, consultar_estado_ticket]
         builder.add_node(f"{name}_tools", ToolNode(tools, handle_tool_errors=True))
 
     builder.add_node("guardar_inventario", guardar_inventario)

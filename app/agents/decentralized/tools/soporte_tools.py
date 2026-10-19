@@ -1,4 +1,4 @@
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool, tool
 from langgraph.prebuilt import ToolRuntime
 
 
@@ -17,6 +17,16 @@ def authenticated_ticket_tool(repository):
             return {"verified": False, "detail": "No se encontró un ticket autorizado."}
         except Exception:
             return {"verified": False, "detail": "No fue posible verificar el ticket en el almacenamiento."}
+    return lookup
+
+
+def authenticated_ticket_status_tool(repository):
+    legacy = authenticated_ticket_tool(repository)
+
+    @tool("get_ticket_status", description=legacy.description)
+    def lookup(ticket_id: int, runtime: ToolRuntime[dict]) -> dict:
+        return legacy.func(numero_ticket=ticket_id, runtime=runtime)
+
     return lookup
 
 
@@ -56,6 +66,17 @@ def consultar_estado_ticket(numero_ticket: int) -> str:
         return f"El ticket {numero_ticket} se encuentra: {status}"
 
     return f"No se encontró el ticket {numero_ticket}"
+
+def _get_ticket_status(ticket_id: int) -> str:
+    return consultar_estado_ticket.func(numero_ticket=ticket_id)
+
+
+get_ticket_status = StructuredTool.from_function(
+    func=_get_ticket_status,
+    name="get_ticket_status",
+    description=consultar_estado_ticket.description,
+)
+
 
 @tool
 def transferir_a_tecnico(motivo: str) -> str:

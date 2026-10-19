@@ -11,12 +11,14 @@ from app.agents.decentralized.payment_operations import (
 from app.database.decentralized_repository import _id, _money, RetryConflict
 from app.agents.decentralized.policy import handoff
 from app.agents.decentralized.tools.facturacion_tools import (
-    transferir_a_soporte, transferir_a_ventas, get_financial_capabilities,
+    get_financial_capabilities,
 )
 
-from app.agents.decentralized.tools.logistica_tools import transferir_a_logistica
+from app.agents.decentralized.tools.billing_handoff_tools import (
+    transfer_to_support, transfer_to_sales, transfer_to_logistics,
+)
 
-facturacion_tools = [transferir_a_soporte, transferir_a_ventas, get_financial_capabilities, transferir_a_logistica]
+facturacion_tools = [transfer_to_support, transfer_to_sales, get_financial_capabilities, transfer_to_logistics]
 
 SYSTEM_PROMPT = """Eres Facturación y Pagos de la red descentralizada.
 Ventas conserva los precios y la cotización. Solo una cotización SQL ACCEPTED,
@@ -47,8 +49,8 @@ def facturacion_node(state: AgentState, *, repository=None, authenticated_custom
                     raise ValueError("Pago incompatible")
                 repository.get_logistics_context(customer_id=customer,ticket_id=_id(state["ticket_id"]))
                 # Read-only verified transition; never creates or confirms a payment.
-                return handoff("facturacion", "transferir_a_logistica",
-                               motivo="Coordinar logística con pago persistido verificado; pendiente no significa cobro recibido")
+                return handoff("facturacion", "transfer_to_logistics",
+                               reason="Coordinar logística con pago persistido verificado; pendiente no significa cobro recibido")
             except Exception:
                 return response("No fue posible verificar el pago y las precondiciones logísticas. No se ha creado otra orden ni confirmado un cobro.")
         return response("Para informar el estado del pago necesitamos una consulta autorizada al registro financiero. Un mensaje o una captura no confirma el cobro. No se ha creado otra orden ni emitido una factura fiscal.")

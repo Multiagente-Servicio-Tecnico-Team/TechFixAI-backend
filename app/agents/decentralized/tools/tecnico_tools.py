@@ -1,4 +1,4 @@
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool, tool
 from typing import Literal
 
 
@@ -40,6 +40,17 @@ def diagnosticar_problema(sintoma: str) -> str:
         "No se encontró un diagnóstico preliminar para el síntoma indicado. "
         "Se requiere una revisión técnica más detallada."
     )
+
+def _diagnose_issue(symptom: str) -> str:
+    return diagnosticar_problema.func(sintoma=symptom)
+
+
+diagnose_issue = StructuredTool.from_function(
+    func=_diagnose_issue,
+    name="diagnose_issue",
+    description=diagnosticar_problema.description,
+)
+
 
 @tool
 def transferir_a_ventas(

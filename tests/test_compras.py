@@ -47,10 +47,10 @@ def test_capacidades_y_ofertas_sin_inventar_datos():
     assert consultar_fuentes_abastecimiento.invoke({})["integration_available"] is False
     state = value()
     first = compras_node(state)
-    assert first["messages"][0].tool_calls[0]["name"] == "consultar_fuentes_abastecimiento"
+    assert first["messages"][0].tool_calls[0]["name"] == "get_sourcing_capabilities"
     state["messages"].append(ToolMessage(content='{"integration_available":false}', name="consultar_fuentes_abastecimiento", tool_call_id="a"))
     result = compras_node(state)
-    assert result["messages"][0].tool_calls[0]["name"] == "transferir_a_ventas"
+    assert result["messages"][0].tool_calls[0]["name"] == "transfer_to_sales"
     offer = result["supplier_offers"][0]
     assert offer["status"] == "PRICE_UNAVAILABLE" and offer["request"]["quantity"] == 1
     assert not {"supplier_id", "unit_cost", "delivery_lead_days", "purchase_order_id"} & offer.keys()

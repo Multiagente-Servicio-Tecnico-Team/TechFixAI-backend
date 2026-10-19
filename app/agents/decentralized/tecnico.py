@@ -5,11 +5,11 @@ from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from app.agents.decentralized.state import AgentState
 from app.agents.decentralized.policy import is_diagnostic_pricing_query, latest_user_message, handoff, cannot_perform_checks, is_customer_service_query
 from app.agents.decentralized.policy import classify_support_triage, is_handoff_without_progress, has_reported_physical_hazard
-from app.agents.decentralized.tools.soporte_tools import transferir_a_soporte, transferir_a_software
+from app.agents.decentralized.tools.hardware_handoff_tools import (
+    transfer_to_support, transfer_to_software, transfer_to_sales, transfer_to_warehouse, transfer_to_logistics,
+)
 from app.agents.decentralized.tools.tecnico_tools import (
-    diagnosticar_problema,
-    transferir_a_ventas,
-    transferir_a_almacen,
+    diagnose_issue,
 )
 
 load_dotenv()
@@ -23,15 +23,14 @@ llm = ChatGroq(
     },
 )
 
-from app.agents.decentralized.tools.logistica_tools import transferir_a_logistica
 
 tecnico_tools = [
-    transferir_a_logistica,
-    transferir_a_soporte,
-    transferir_a_software,
-    diagnosticar_problema,
-    transferir_a_ventas,
-    transferir_a_almacen,
+    transfer_to_logistics,
+    transfer_to_support,
+    transfer_to_software,
+    diagnose_issue,
+    transfer_to_sales,
+    transfer_to_warehouse,
     consultar_base_conocimiento,
 ]
 
@@ -51,15 +50,15 @@ RESPONSABILIDADES:
 - Eres el especialista Hardware: componentes, energía, temperatura,
   periféricos y compatibilidad física documentada. Conservas el nombre tecnico.
 - Deriva problemas claramente lógicos de aplicaciones, sistemas operativos,
-  controladores o configuración mediante transferir_a_software, con motivo.
+  controladores o configuración mediante transfer_to_software, con motivo.
 - Ante síntomas mixtos o ambiguos, pide evidencia adicional; no atribuyas
   causas ni registres HYBRID solo porque ambos especialistas fueron visitados.
-- La herramienta diagnosticar_problema mantiene hipótesis legacy mixtas;
+- La herramienta diagnose_issue mantiene hipótesis legacy mixtas;
   no confirma una causa física ni autoriza elegir repuestos. Software evalúa
   hipótesis lógicas. No realices instalaciones ni configuraciones.
 - Analizar los síntomas reportados por el usuario.
 - Realizar diagnósticos preliminares.
-- Utilizar diagnosticar_problema cuando corresponda.
+- Utilizar diagnose_issue cuando corresponda.
 - Consultar RAG cuando necesites documentación técnica.
 - No inventar diagnósticos, repuestos ni precios.
 - Para compatibilidad necesitas modelo y generación exactos y evidencia
@@ -109,7 +108,7 @@ ATENCIÓN GENERAL Y REVISIÓN PRESENCIAL:
   Puedes recomendar revisión presencial sin prometer una reserva.
 - Si el usuario pide información de atención, seguimiento de un
   ticket o cómo solicitar revisión presencial, utiliza
-  transferir_a_soporte. Incluye el síntoma conocido y lo que falta
+  transfer_to_support. Incluye el síntoma conocido y lo que falta
   confirmar. La transferencia no registra una cita.
 - Si responde "sí" a una oferta anterior de cita, aclara que no
   se puede reservar desde este chat y transfiere a Soporte para
@@ -117,7 +116,7 @@ ATENCIÓN GENERAL Y REVISIÓN PRESENCIAL:
 
 REGLAS DE DIAGNÓSTICO:
 - Si todavía no existe un diagnóstico, utiliza
-  diagnosticar_problema cuando corresponda.
+  diagnose_issue cuando corresponda.
 - Si el diagnóstico ya existe, no lo repitas.
 - Un diagnóstico preliminar no equivale a una causa confirmada.
   Si el usuario corrige el síntoma, reevalúa las conclusiones
@@ -129,14 +128,14 @@ REGLAS DE DIAGNÓSTICO:
 
 REGLAS DE INVENTARIO:
 - Cuando una reparación requiera repuestos identificados,
-  utiliza transferir_a_almacen.
+  utiliza transfer_to_warehouse.
 - Indica el nombre y la cantidad de cada repuesto.
 - Nunca inventes componentes ni cantidades.
 - No transfieras directamente a Ventas una solicitud
   que todavía necesite consultar repuestos identificados.
 
 REGLAS COMERCIALES:
-- En transferir_a_ventas declara siempre el alcance:
+- En transfer_to_sales declara siempre el alcance:
   solo_servicio para una revisión/diagnóstico o trabajo sin repuestos;
   repuestos para reemplazar un componente; sin_determinar si falta definirlo.
 - "Reemplazar el SSD" requiere repuestos, aunque no se conozca su modelo.
@@ -144,7 +143,7 @@ REGLAS COMERCIALES:
 - Para repuestos, pide el tipo/modelo si no está identificado. No inventes
   compatibilidad por saber únicamente que el equipo es una laptop.
 - Si la solicitud requiere únicamente mano de obra,
-  puedes utilizar transferir_a_ventas.
+  puedes utilizar transfer_to_sales.
 - Si la solicitud no necesita repuestos, puedes
   transferir directamente a Ventas.
 - Si el usuario solicita diagnóstico y cotización,
@@ -181,7 +180,7 @@ def tecnico_node(state: AgentState):
             "Necesitas revisión presencial; no puedo confirmar la causa ni reservar una cita."
         ))]}
     if is_customer_service_query(user):
-        return handoff("tecnico", "transferir_a_soporte", motivo="Orientación presencial")
+        return handoff("tecnico", "transfer_to_support", reason="Orientación presencial")
     if classification == "software":
         if state.get("required_parts") or state.get("requested_items") or state.get("technical_assessment", {}).get("hardware_diagnosis"):
             return {"current_agent": "tecnico", "messages": [AIMessage(content=(
@@ -192,15 +191,15 @@ def tecnico_node(state: AgentState):
             return {"current_agent": "tecnico", "messages": [AIMessage(content=(
                 "Ya derivamos esta consulta a Software. ¿Qué información nueva tienes para continuar la evaluación?"
             ))]}
-        return handoff("tecnico", "transferir_a_software",
-                       motivo="Evaluar evidencia lógica reportada; Hardware no confirma una causa de software")
+        return handoff("tecnico", "transfer_to_software",
+                       reason="Evaluar evidencia lógica reportada; Hardware no confirma una causa de software")
     if classification == "aclarar" and not is_diagnostic_pricing_query(user):
         return {"current_agent": "tecnico", "messages": [AIMessage(content=(
             "Ese síntoma no permite distinguir Hardware de Software. ¿Qué ocurre exactamente y qué mensaje de error aparece?"
         ))]}
     if is_diagnostic_pricing_query(user):
-        return handoff("tecnico", "transferir_a_ventas", motivo="Cotizar únicamente revisión de diagnóstico",
-                       alcance="solo_servicio")
+        return handoff("tecnico", "transfer_to_sales", reason="Cotizar únicamente revisión de diagnóstico",
+                       scope="solo_servicio")
     if cannot_perform_checks(latest_user_message(state)):
         return {"current_agent": "tecnico", "messages": [AIMessage(content=(
             "Entiendo que no puedes realizar esas pruebas. No necesitas conectar otro equipo "

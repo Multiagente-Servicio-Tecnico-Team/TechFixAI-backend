@@ -114,4 +114,5 @@ Clean Architecture est谩 en revisi贸n (PR #32). Pendientes y responsables en `fe
   datos y 鷏tima cotizaci髇. UI conserva tarjetas/filtros/b鷖queda y elimina aprobar/
   revisar/admin para ser solo lectura. Build Vite aprobado. Sin consultas ni escrituras
   PostgreSQL. Evidencia: spec 15, docs 18.
+- Registro con sesi贸n (2026-10-13): `POST /auth/registro` emite la misma cookie `techfix_session` que `/login`; un 409/422 no la emite. Corrige que tras registrarse "Mis Tickets" mostrara "Tu sesi贸n termin贸" (caso CN-02 de la caja negra del frontend). 2 pruebas nuevas en `tests/test_accounts_api.py`; pruebas de cuentas, sesi贸n y chat aprobadas (72). Limitaci贸n: las pruebas RAG que llaman a Groq fallan sin red/clave y no dependen de este cambio.
 - Seed de inventario (2026-10-13): precios de referencia en PEN ajustados con cat?logos peruanos; RAM y almacenamiento compactados para retirar filas redundantes y SKU duplicados entre bloques. Filas: 438 ? 310; 310 c?digos ?nicos y sin duplicados exactos de nombre/categor?a. Limitaci?n: ambos `ON CONFLICT (code) DO NOTHING` no actualizan cat?logo ya sembrado; no se ejecut? SQL ni se toc? PostgreSQL. Evidencia: spec 16, docs 19.

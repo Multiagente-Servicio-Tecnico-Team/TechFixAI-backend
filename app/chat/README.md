@@ -1,6 +1,6 @@
 # Chat del portal — sesión del login y contrato común
 
-El chat del portal (`/portal/asistente` en `landing/`) habla con el patrón LangGraph del equipo mediante
+El chat del portal (`/portal/asistente` en [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend)) habla con el patrón LangGraph del equipo mediante
 `POST /api/chat`. El cliente se identifica con la cookie de sesión de la API de cuentas, nunca con un correo
 escrito en el chat.
 
@@ -82,7 +82,7 @@ La API de referencia es independiente y no es el punto de entrada usado por el
 selector de patrones.
 
 En el frontend, definir `VITE_API_URL=http://localhost:8000/auth` y
-`VITE_CHAT_URL=http://localhost:8000` en `landing/.env`.
+`VITE_CHAT_URL=http://localhost:8000` en el `.env` del frontend.
 
 ## Pruebas
 

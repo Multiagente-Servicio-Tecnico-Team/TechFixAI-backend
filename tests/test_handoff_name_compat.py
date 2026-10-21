@@ -309,7 +309,7 @@ def test_pending_legacy_checkpoint_resumes_without_turn_preparation(network, mon
     module, controls = network
     def forbidden(state):
         pytest.fail("Turn preparation must not run on this resume")
-    monkeypatch.setattr(module, "preparar_turno", forbidden)
+    monkeypatch.setattr(module, "prepare_turn", forbidden)
     saver = MemorySaver()
     config = {"configurable": {"thread_id": "pending-legacy"}}
     event = AIMessage(content="", tool_calls=[dict(name=name, args=args, id="pending")], id="event")

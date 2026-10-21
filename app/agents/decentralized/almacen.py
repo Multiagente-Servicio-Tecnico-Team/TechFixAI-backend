@@ -175,7 +175,7 @@ def build_warehouse_context(state: AgentState):
 # NODO DEL AGENTE ALMACÉN
 # =========================================================
 
-def almacen_node(state: AgentState):
+def warehouse_node(state: AgentState):
     """
     Procesa solicitudes de inventario.
 
@@ -256,3 +256,6 @@ def almacen_node(state: AgentState):
         }
 
 construir_contexto_almacen = build_warehouse_context
+
+
+almacen_node = warehouse_node

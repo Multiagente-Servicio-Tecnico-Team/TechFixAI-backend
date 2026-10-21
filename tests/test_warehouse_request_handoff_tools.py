@@ -45,7 +45,7 @@ def test_exact_active_and_legacy_registries(network,role):
         assert "request_inventory" in active and "solicitar_inventario" not in active
         assert {n for n in active if n.startswith("transfer_to_")}=={"transfer_to_billing","transfer_to_support","transfer_to_hardware"}
         assert not any(n.startswith("transferir_a_") for n in active)
-        legacy={"solicitar_inventario","transferir_a_facturacion","transferir_a_soporte","transferir_a_tecnico"}
+        legacy={"solicitar_inventario","transferir_a_facturacion","transferir_a_soporte","transferir_a_tecnico","generar_cotizacion"}
     assert len(active)==len(set(active))
     assert set(module.build_graph().get_graph().nodes[role+"_tools"].data.tools_by_name)==set(active)|legacy
 

@@ -1,7 +1,7 @@
 """Financial handoffs and actual capabilities; no commercial write tools enabled."""
 from langchain_core.tools import StructuredTool, tool
-from app.agents.decentralized.tools.software_tools import transferir_a_soporte as _soporte
-from app.agents.decentralized.tools.soporte_tools import transferir_a_ventas as _ventas
+from app.agents.decentralized.tools.software_tools import transferir_a_soporte as _support
+from app.agents.decentralized.tools.soporte_tools import transferir_a_ventas as _sales
 
 
 @tool
@@ -17,7 +17,7 @@ def transferir_a_soporte(motivo: str) -> str:
     """Solicita atención administrativa sin confirmar un pago ni emitir factura."""
     if not isinstance(motivo, str) or not motivo.strip():
         raise ValueError("Motivo obligatorio")
-    return _soporte.invoke({"motivo": motivo.strip()})
+    return _support.invoke({"motivo": motivo.strip()})
 
 
 @tool
@@ -25,7 +25,7 @@ def transferir_a_ventas(motivo: str) -> str:
     """Devuelve una propuesta pendiente o incompatible a Ventas."""
     if not isinstance(motivo, str) or not motivo.strip():
         raise ValueError("Motivo obligatorio")
-    return _ventas.invoke({"motivo": motivo.strip()})
+    return _sales.invoke({"motivo": motivo.strip()})
 
 
 @tool

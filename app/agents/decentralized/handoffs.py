@@ -123,7 +123,8 @@ def progress_token(state):
         if isinstance(message, HumanMessage):
             evidence.append(("human", message.content))
         elif isinstance(message, ToolMessage) and message.name not in HANDOFF_TOOLS and message.status != "error":
-            evidence.append((message.name, canonical_content(message.content)))
+            name = "generar_cotizacion" if message.name == "identify_quote_service" else message.name
+            evidence.append((name, canonical_content(message.content)))
     business = {key: state.get(key) for key in (
         "required_parts", "requested_items", "selected_items", "technical_assessment",
         "inventory_pending", "quote_scope", "proposal", "ticket_id", "quote_id",

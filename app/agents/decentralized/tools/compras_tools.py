@@ -1,6 +1,6 @@
 """Abastecimiento consultivo sin integraciones externas ni escrituras SQL."""
 from langchain_core.tools import StructuredTool, tool
-from app.agents.decentralized.tools.soporte_tools import transferir_a_ventas as _ventas
+from app.agents.decentralized.tools.soporte_tools import transferir_a_ventas as _sales
 
 
 @tool
@@ -23,4 +23,4 @@ def transferir_a_ventas(motivo: str) -> str:
     """Entrega limitaciones de abastecimiento a Ventas; no confirma compras."""
     if not isinstance(motivo, str) or not motivo.strip():
         raise ValueError("Motivo de transferencia obligatorio")
-    return _ventas.invoke({"motivo": motivo.strip()})
+    return _sales.invoke({"motivo": motivo.strip()})

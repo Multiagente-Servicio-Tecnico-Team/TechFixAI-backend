@@ -69,7 +69,7 @@ def test_real_toolnode_and_checkpoint_preserve_calls(network, monkeypatch, names
         return {"current_agent": "facturacion", "messages": [original]}
 
     monkeypatch.setitem(module.AGENT_NODES, "facturacion", financial_node)
-    monkeypatch.setattr(module, "facturacion_node", financial_node)
+    monkeypatch.setattr(module, "billing_node", financial_node)
     saver = MemorySaver()
     graph = module.build_graph(checkpointer=saver, financial_repository=repo)
     config = {"configurable": {"thread_id": "capabilities"}}

@@ -30,7 +30,7 @@ La creación de pagos está deshabilitada hasta validar recuperación durable pr
 """
 
 
-def facturacion_node(state: AgentState, *, repository=None, authenticated_customer_id=None):
+def billing_node(state: AgentState, *, repository=None, authenticated_customer_id=None):
     def response(text):
         return {"current_agent": "facturacion", "messages": [AIMessage(content=text)]}
     # Capabilities, not keyword-derived commercial actions. User assertions and
@@ -82,3 +82,6 @@ def facturacion_node(state: AgentState, *, repository=None, authenticated_custom
         return response("No fue posible validar la identidad, la cotización o la operación pendiente. Se requiere revisión; no se ha creado una orden de pago.")
     except Exception:
         return response("No fue posible consultar los registros financieros. No se ha creado una orden de pago; intenta nuevamente cuando el almacenamiento esté disponible.")
+
+
+facturacion_node = billing_node

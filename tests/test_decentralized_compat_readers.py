@@ -383,7 +383,7 @@ def test_paused_checkpoint_resumes_through_readers_without_preparation(network, 
     module, _ = network
     saver, repo = MemorySaver(), MagicMock()
     original_compile = module.StateGraph.compile
-    original_prepare = module.preparar_turno
+    original_prepare = module.prepare_turn
     prepared = []
 
     def compile_with_audit_pause(builder, *args, **kwargs):
@@ -395,7 +395,7 @@ def test_paused_checkpoint_resumes_through_readers_without_preparation(network, 
         return original_prepare(state)
 
     monkeypatch.setattr(module.StateGraph, "compile", compile_with_audit_pause)
-    monkeypatch.setattr(module, "preparar_turno", prepare)
+    monkeypatch.setattr(module, "prepare_turn", prepare)
     graph = module.build_graph(checkpointer=saver, financial_repository=repo)
     config = {"configurable": {"thread_id": f"compat-{style}-{mode}"}}
     graph.invoke({"messages": [HumanMessage(content="Cotiza un diagnostico")],
@@ -471,7 +471,7 @@ def test_software_payload_checkpoint_fixture_resumes_without_rewriting_messages(
     def forbidden(*args, **kwargs):
         pytest.fail("A tools-completed checkpoint must resume at the auditor")
 
-    monkeypatch.setattr(module, "preparar_turno", forbidden)
+    monkeypatch.setattr(module, "prepare_turn", forbidden)
     controls["handlers"]["software"] = forbidden
     controls["handlers"]["ventas"] = forbidden
     graph = module.build_graph(checkpointer=saver, financial_repository=repo)

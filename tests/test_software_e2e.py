@@ -46,7 +46,7 @@ def network(monkeypatch):
                 self.role = "soporte"
             elif "diagnose_issue" in names:
                 self.role = "tecnico"
-            elif "generar_cotizacion" in names:
+            elif "identify_quote_service" in names:
                 self.role = "ventas"
             elif "check_inventory" in names:
                 self.role = "almacen"

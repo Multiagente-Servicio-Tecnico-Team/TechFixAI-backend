@@ -169,7 +169,7 @@ REGLAS GENERALES:
 """
 
 
-def tecnico_node(state: AgentState):
+def hardware_node(state: AgentState):
     """Nodo Técnico del grafo descentralizado."""
 
     user = latest_user_message(state)
@@ -273,3 +273,6 @@ def tecnico_node(state: AgentState):
             "current_agent": "tecnico",
             "errors": state.get("errors", []) + [error],
         }
+
+
+tecnico_node = hardware_node

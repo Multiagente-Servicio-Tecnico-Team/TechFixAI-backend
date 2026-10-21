@@ -8,12 +8,21 @@ def solicitar_inventario(consulta: str) -> dict:
     return {"accion": "CONSULTAR_DISPONIBILIDAD", "consulta": consulta}
 
 
-def normalize_service(servicio: str) -> str:
-    servicio = servicio.lower().strip()
+_MISSING_SERVICE = object()
+
+
+def normalize_service(service: str = _MISSING_SERVICE, *, servicio: str = _MISSING_SERVICE) -> str:
+    if service is _MISSING_SERVICE:
+        if servicio is _MISSING_SERVICE:
+            raise TypeError("Missing service")
+        service = servicio
+    elif servicio is not _MISSING_SERVICE:
+        raise TypeError("Specify either service or servicio, not both")
+    service = service.lower().strip()
 
     return "".join(
         character
-        for character in unicodedata.normalize("NFD", servicio)
+        for character in unicodedata.normalize("NFD", service)
         if unicodedata.category(character) != "Mn"
     )
 
@@ -48,6 +57,11 @@ def generar_cotizacion(servicio: str) -> str:
         "No se encontro una cotizacion para el servicio solicitado. "
         "Se requiere evaluacion comercial."
     )
+
+
+@tool(description=generar_cotizacion.description)
+def identify_quote_service(service: str) -> str:
+    return generar_cotizacion.invoke({"servicio": service})
 
 
 @tool

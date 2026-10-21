@@ -40,9 +40,9 @@ def test_wrappers_preserve_local_results_and_validation(target,destination,reaso
 def test_exact_active_registry_legacy_execution_and_prompt(network):
     module,_=network
     active=[t.name for t in module.ventas_tools]
-    assert active==["transfer_to_billing","request_inventory","transfer_to_support","generar_cotizacion","transfer_to_hardware","consultar_base_conocimiento"]
+    assert active==["transfer_to_billing","request_inventory","transfer_to_support","identify_quote_service","transfer_to_hardware","consultar_base_conocimiento"]
     assert len(active)==len(set(active))
-    legacy={"transferir_a_facturacion","transferir_a_soporte","transferir_a_tecnico","solicitar_inventario"}
+    legacy={"transferir_a_facturacion","transferir_a_soporte","transferir_a_tecnico","solicitar_inventario","generar_cotizacion"}
     registered=module.build_graph().get_graph().nodes["ventas_tools"].data.tools_by_name
     assert set(registered)==set(active)|legacy
     tree=ast.parse((Path(__file__).resolve().parents[1]/"app/agents/decentralized/ventas.py").read_text(encoding="utf-8"))

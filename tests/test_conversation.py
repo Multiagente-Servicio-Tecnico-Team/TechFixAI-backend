@@ -129,6 +129,8 @@ def graph_module(monkeypatch):
         fullname = f"app.agents.decentralized.{name}"
         module = ModuleType(fullname)
         setattr(module, f"{name}_node", node)
+        canonical = {"soporte":"support", "tecnico":"hardware", "ventas":"sales", "almacen":"warehouse", "software":"software"}[name]
+        setattr(module, f"{canonical}_node", node)
         setattr(module, f"{name}_tools", tools)
         monkeypatch.setitem(sys.modules, fullname, module)
     spec = importlib.util.spec_from_file_location("isolated_conversation_graph", ROOT / "app/agents/decentralized/graph.py")
@@ -328,7 +330,7 @@ def test_rag_tecnico_se_repite_en_otro_turno_y_reintenta_errores():
 
     rag, regular = Model(), Model()
     from app.agents.decentralized.policy import es_revision_comercial, ultimo_usuario, handoff, no_puede_probar, es_atencion, triaje_soporte, transferencia_sin_progreso, peligro_fisico_reportado
-    node = isolated_function("app/agents/decentralized/tecnico.py", "tecnico_node", {
+    node = isolated_function("app/agents/decentralized/tecnico.py", "hardware_node", {
         "AgentState": dict, "AIMessage": AIMessage, "SystemMessage": SystemMessage,
         "ToolMessage": ToolMessage, "SYSTEM_PROMPT": "Técnico", "tecnico_llm_rag": rag, "tecnico_llm": regular,
         "is_diagnostic_pricing_query": es_revision_comercial, "latest_user_message": ultimo_usuario, "handoff": handoff,
@@ -542,7 +544,7 @@ def test_soporte_triaje_conservador_real(text, target):
     class Forbidden:
         def invoke(self, messages):
             pytest.fail("El triaje local debe resolver este caso")
-    node = isolated_function("app/agents/decentralized/soporte.py", "soporte_node", {
+    node = isolated_function("app/agents/decentralized/soporte.py", "support_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage, "SYSTEM_PROMPT": "Soporte", "soporte_llm": Forbidden(),
     })
@@ -568,7 +570,7 @@ def test_soporte_historial_respuesta_breve_y_cambio_consulta():
 def test_soporte_real_integrado_transfiere_y_conserva_contexto(graph_module, text, target):
     from app.agents.decentralized import policy
     from app.agents.decentralized.tools.support_handoff_tools import transfer_to_software, transfer_to_hardware
-    node = isolated_function("app/agents/decentralized/soporte.py", "soporte_node", {
+    node = isolated_function("app/agents/decentralized/soporte.py", "support_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage,
     })
@@ -595,7 +597,7 @@ def test_soporte_consulta_general_no_reactiva_falla_antigua():
     class Model:
         def invoke(self, messages):
             return AIMessage(content="Consulta general atendida")
-    node = isolated_function("app/agents/decentralized/soporte.py", "soporte_node", {
+    node = isolated_function("app/agents/decentralized/soporte.py", "support_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage, "SYSTEM_PROMPT": "Soporte", "soporte_llm": Model(),
     })
@@ -609,7 +611,7 @@ def hardware_node(model=None):
     class Model:
         def invoke(self, messages):
             return AIMessage(content="Evaluación Hardware preliminar")
-    return isolated_function("app/agents/decentralized/tecnico.py", "tecnico_node", {
+    return isolated_function("app/agents/decentralized/tecnico.py", "hardware_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage, "SYSTEM_PROMPT": "Hardware",
         "tecnico_llm": model or Model(), "tecnico_llm_rag": model or Model(),
@@ -724,11 +726,11 @@ def test_auditoria_comercial_valida_y_ventas_real_tarifa_pendiente(graph_module)
                  "SystemMessage": SystemMessage, "json": json,
                  "SYSTEM_PROMPT": "Ventas", "Decimal": __import__("decimal").Decimal,
                  "InvalidOperation": __import__("decimal").InvalidOperation}
-    for name in ("validate_inventory", "build_sales_context", "build_inventory_context", "ventas_node"):
+    for name in ("validate_inventory", "build_sales_context", "build_inventory_context", "sales_node"):
         namespace[name] = isolated_function("app/agents/decentralized/ventas.py", name, namespace)
     # Las funciones extraídas necesitan compartir sus dependencias.
-    namespace["ventas_node"].__globals__.update(namespace)
-    graph_module.AGENT_NODES["ventas"] = namespace["ventas_node"]
+    namespace["sales_node"].__globals__.update(namespace)
+    graph_module.AGENT_NODES["ventas"] = namespace["sales_node"]
     result = graph_module.build_graph().invoke({
         "messages": [HumanMessage(content="Confirmo Servicio definido. Cotiza solo servicio")],
         "current_agent": "software", "request_revision": 1,
@@ -778,7 +780,7 @@ def test_almacen_real_retorno_y_solicitante_obsoleto(graph_module, complete):
         return legacy.invoke({"nombre_repuesto": part_name, "cantidad": quantity})
     graph_module.almacen_tools = [*graph_module.almacen_tools, StructuredTool.from_function(
         func=lookup, name="check_inventory", description=legacy.description)]
-    node = isolated_function("app/agents/decentralized/almacen.py", "almacen_node", {
+    node = isolated_function("app/agents/decentralized/almacen.py", "warehouse_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
     })
     graph_module.AGENT_NODES["almacen"] = node

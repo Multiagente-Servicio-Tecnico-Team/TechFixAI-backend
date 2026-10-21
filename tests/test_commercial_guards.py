@@ -45,8 +45,8 @@ def test_contexto_ventas_datos_preliminares_y_par_handoff():
 
 def sales():
     return functions("app/agents/decentralized/ventas.py", {
-        "ventas_node", "validate_inventory", "build_sales_context", "build_inventory_context",
-    }, {"ventas_llm": ForbiddenModel()})["ventas_node"]
+        "sales_node", "validate_inventory", "build_sales_context", "build_inventory_context",
+    }, {"ventas_llm": ForbiddenModel()})["sales_node"]
 
 
 def item(stock=10, quantity=1):
@@ -80,7 +80,7 @@ def test_compatibilidad_es_tecnica_incluso_con_inventario():
 
 
 def test_soporte_no_inventa_canales_ni_promete_contacto():
-    node = functions("app/agents/decentralized/soporte.py", {"soporte_node"}, {"soporte_llm": ForbiddenModel()})["soporte_node"]
+    node = functions("app/agents/decentralized/soporte.py", {"support_node"}, {"soporte_llm": ForbiddenModel()})["support_node"]
     for text in ("¿Cómo solicito una revisión presencial?", "¿Puedes reservarme una cita?"):
         result = node({"messages": [HumanMessage(content=text)]})
         reply = result["messages"][-1].content
@@ -89,7 +89,7 @@ def test_soporte_no_inventa_canales_ni_promete_contacto():
 
 
 def test_revision_comercial_transfiere_con_alcance_correcto():
-    node = functions("app/agents/decentralized/tecnico.py", {"tecnico_node"})["tecnico_node"]
+    node = functions("app/agents/decentralized/tecnico.py", {"hardware_node"})["hardware_node"]
     result = node({"messages": [HumanMessage(content="¿Cuánto cuesta una revisión de diagnóstico?")]})
     call = result["messages"][-1].tool_calls[0]
     assert call["name"] == "transfer_to_sales" and call["args"]["scope"] == "solo_servicio"
@@ -104,7 +104,7 @@ def test_repuesto_no_se_infiere_de_nombre_generico():
 
 
 def test_almacen_pide_repuesto_exacto_sin_elegir_otro():
-    node = functions("app/agents/decentralized/almacen.py", {"almacen_node"})["almacen_node"]
+    node = functions("app/agents/decentralized/almacen.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="Una unidad")],
                    "required_parts": [{"name": "SSD 500GB NVMe", "quantity": 1}]})
     call = result["messages"][-1].tool_calls[0]
@@ -130,7 +130,7 @@ def test_inventario_con_error_no_confirma_precios():
 
 
 def test_almacen_no_reintenta_indefinidamente_una_consulta_fallida():
-    node = functions("app/agents/decentralized/almacen.py", {"almacen_node"})["almacen_node"]
+    node = functions("app/agents/decentralized/almacen.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="Una unidad")],
                    "required_parts": [{"name": "SSD 500GB NVMe", "quantity": 1}],
                    "errors": ["Error al consultar inventario"]})
@@ -139,7 +139,7 @@ def test_almacen_no_reintenta_indefinidamente_una_consulta_fallida():
 
 
 def test_tecnico_no_insiste_si_usuario_no_sabe_hacer_pruebas():
-    node = functions("app/agents/decentralized/tecnico.py", {"tecnico_node"})["tecnico_node"]
+    node = functions("app/agents/decentralized/tecnico.py", {"hardware_node"})["hardware_node"]
     for text in ("Ni idea no se hacer prubeas tecnicas", "No sé conectar un monitor externo"):
         result = node({"messages": [HumanMessage(content=text)]})
         assert "revisión presencial" in result["messages"][-1].content
@@ -152,7 +152,7 @@ def test_stock_en_ventas_va_a_almacen_no_a_soporte():
 
 
 def test_almacen_no_simula_un_listado_ni_elige_variante():
-    node = functions("app/agents/decentralized/almacen.py", {"almacen_node"})["almacen_node"]
+    node = functions("app/agents/decentralized/almacen.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="q ssd tienes en stock")], "inventory_query": "SSD"})
     assert not result["messages"][-1].tool_calls
     assert "no listar" in result["messages"][-1].content
@@ -168,7 +168,7 @@ def test_marcador_se_pide_aclarar_sin_citas():
 
 
 def test_transferencia_generica_a_soporte_no_responde_sobre_citas():
-    node = functions("app/agents/decentralized/soporte.py", {"soporte_node"})["soporte_node"]
+    node = functions("app/agents/decentralized/soporte.py", {"support_node"})["support_node"]
     result = node({"messages": [HumanMessage(content="Tengo una consulta"),
                    ToolMessage(content="Atención general", name="transferir_a_soporte", tool_call_id="support")]})
     assert "ticket" in result["messages"][-1].content

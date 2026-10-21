@@ -8,7 +8,7 @@ from app.agents.decentralized.tools.purchasing_handoff_tools import transfer_to_
 compras_tools = [get_sourcing_capabilities, transfer_to_sales]
 
 
-def compras_node(state: AgentState):
+def purchasing_node(state: AgentState):
     evaluation = evaluate_supply(state)
     if evaluation["destination"] != "compras":
         return {"current_agent": "compras", "supplier_offers": [], "out_of_stock_items": [], "messages": [AIMessage(content=(
@@ -28,3 +28,6 @@ def compras_node(state: AgentState):
     update = handoff("compras", "transfer_to_sales", reason="Faltantes confirmados; no hay fuente verificable de ofertas, costos ni plazos")
     update.update(out_of_stock_items=evaluation["out_of_stock_items"], supplier_offers=offers)
     return update
+
+
+compras_node = purchasing_node

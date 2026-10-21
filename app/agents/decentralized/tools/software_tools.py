@@ -4,28 +4,28 @@ from typing import Literal
 from langchain_core.tools import tool
 
 from app.agents.decentralized.tools.soporte_tools import (
-    transferir_a_soporte as _a_soporte,
-    transferir_a_tecnico as _a_tecnico,
+    transferir_a_soporte as _support,
+    transferir_a_tecnico as _hardware,
 )
-from app.agents.decentralized.tools.tecnico_tools import transferir_a_ventas as _a_ventas
+from app.agents.decentralized.tools.tecnico_tools import transferir_a_ventas as _sales
 
 
-def _require_reason(motivo: str) -> str:
-    if not isinstance(motivo, str) or not motivo.strip():
+def _require_reason(reason: str) -> str:
+    if not isinstance(reason, str) or not reason.strip():
         raise ValueError("Motivo de transferencia obligatorio")
-    return motivo.strip()
+    return reason.strip()
 
 
 @tool
 def transferir_a_soporte(motivo: str) -> str:
     """Deriva a Atención una consulta general o presencial, sin registrar citas."""
-    return _a_soporte.invoke({"motivo": _require_reason(motivo)})
+    return _support.invoke({"motivo": _require_reason(motivo)})
 
 
 @tool
 def transferir_a_tecnico(motivo: str) -> str:
     """Deriva a Hardware una sospecha física indicando evidencia e incertidumbre."""
-    return _a_tecnico.invoke({"motivo": _require_reason(motivo)})
+    return _hardware.invoke({"motivo": _require_reason(motivo)})
 
 
 @tool
@@ -39,4 +39,4 @@ def transferir_a_ventas(motivo: str, alcance: Literal["solo_servicio"]) -> dict:
     motivo = _require_reason(motivo)
     if alcance != "solo_servicio":
         raise ValueError("Software solo deriva servicios sin repuestos a Ventas")
-    return _a_ventas.invoke({"motivo": motivo, "alcance": alcance})
+    return _sales.invoke({"motivo": motivo, "alcance": alcance})

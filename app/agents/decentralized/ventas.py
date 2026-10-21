@@ -23,6 +23,7 @@ from app.agents.decentralized.policy import (
 from app.agents.decentralized.tools.sales_handoff_tools import transfer_to_support, transfer_to_hardware, transfer_to_billing
 from app.agents.decentralized.tools.ventas_tools import (
     generar_cotizacion,
+    identify_quote_service,
 )
 
 
@@ -53,7 +54,7 @@ ventas_tools = [
     transfer_to_billing,
     request_inventory,
     transfer_to_support,
-    generar_cotizacion,
+    identify_quote_service,
     transfer_to_hardware,
     consultar_base_conocimiento,
 ]
@@ -172,7 +173,7 @@ REGLAS:
   no es posible confirmar la cotización.
 - Si un repuesto no está disponible, informa
   la falta de stock y no lo ofrezcas como disponible.
-- Los precios de servicios de generar_cotizacion
+- Los precios de servicios de identify_quote_service
   son estimaciones simuladas, no tarifas verificadas.
 - No presentes estimaciones como precios definitivos.
 - No sumes importes ni modifiques subtotales
@@ -266,6 +267,7 @@ def build_sales_context(state: AgentState):
         "transferir_a_soporte",
         "transfer_to_support",
         "generar_cotizacion",
+        "identify_quote_service",
         "transferir_a_tecnico",
         "transfer_to_hardware",
         "consultar_base_conocimiento",
@@ -340,7 +342,7 @@ def build_sales_context(state: AgentState):
 # NODO DEL AGENTE VENTAS
 # =========================================================
 
-def ventas_node(state: AgentState):
+def sales_node(state: AgentState):
     """
     Procesa solicitudes comerciales utilizando
     el contexto del inventario validado.
@@ -460,3 +462,6 @@ def ventas_node(state: AgentState):
 validar_inventario = validate_inventory
 construir_contexto_inventario = build_inventory_context
 construir_contexto_ventas = build_sales_context
+
+
+ventas_node = sales_node

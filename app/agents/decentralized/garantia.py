@@ -7,7 +7,7 @@ from app.database.decentralized_repository import RetryConflict, _id
 import re
 
 
-def garantia_node(state, *, repository=None, authenticated_customer_id=None):
+def warranty_node(state, *, repository=None, authenticated_customer_id=None):
     def response(text, **patch):
         return {"current_agent": "garantia", "warranty_preparation_ready": False,
                 "messages": [AIMessage(content=text)], **patch}
@@ -61,3 +61,6 @@ def garantia_node(state, *, repository=None, authenticated_customer_id=None):
         return response("Faltan datos o condiciones verificadas para esta operación de garantía.")
     except Exception:
         return response("No fue posible verificar la garantía en el almacenamiento. No se ha confirmado ninguna operación.")
+
+
+garantia_node = warranty_node

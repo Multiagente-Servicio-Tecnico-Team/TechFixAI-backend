@@ -38,7 +38,7 @@ def collect_logistics(state):
     return data
 
 
-def logistica_node(state: AgentState, *, repository=None, authenticated_customer_id=None):
+def logistics_node(state: AgentState, *, repository=None, authenticated_customer_id=None):
     def response(text):
         return {"current_agent": "logistica", "logistics_preparation_ready": False,
                 "messages": [AIMessage(content=text)]}
@@ -90,3 +90,6 @@ def logistica_node(state: AgentState, *, repository=None, authenticated_customer
         return response("No se cumplen los datos o precondiciones persistidas del flujo. Ventas y ensamblaje requieren cotización aceptada y pago registrado; garantía requiere póliza y reclamo verificables. No se registró logística.")
     except Exception:
         return response("No fue posible verificar logística en el almacenamiento. No se ha confirmado recepción, despacho ni entrega.")
+
+
+logistica_node = logistics_node

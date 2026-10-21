@@ -59,7 +59,7 @@ def test_incoming_handoffs_and_audit(network, logistics_db, monkeypatch, origin)
     repair(db)
     module, controls = network
     if origin == "facturacion":
-        monkeypatch.setattr(module,"facturacion_node",lambda state, **kwargs: {
+        monkeypatch.setattr(module,"billing_node",lambda state, **kwargs: {
             "current_agent":"facturacion","messages":[call("transferir_a_logistica",motivo="Coordinar recepción") ]})
     else:
         controls["handlers"][origin] = lambda messages: call("transferir_a_logistica",motivo="Coordinar recepción")

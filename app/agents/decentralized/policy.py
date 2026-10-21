@@ -135,11 +135,14 @@ def is_part_reference_confirmed(state, name):
     )
 
 
-ATENCION_NO_CONFIGURADA = (
+CUSTOMER_SERVICE_UNAVAILABLE = (
     "No puedo reservar citas, registrar visitas ni confirmar que alguien te contactará desde este chat. "
     "No tengo canales, dirección ni horarios de atención verificados para indicarte cómo solicitar una visita. "
     "La revisión presencial es una recomendación; todavía no hay una reserva ni una solicitud registrada."
 )
+
+
+ATENCION_NO_CONFIGURADA = CUSTOMER_SERVICE_UNAVAILABLE
 
 
 def build_verified_quote(inventory, errors, pending=False, scope=None):

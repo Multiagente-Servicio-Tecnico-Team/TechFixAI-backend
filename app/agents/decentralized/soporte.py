@@ -3,7 +3,7 @@ from langchain_groq import ChatGroq
 from app.rag.tools import consultar_base_conocimiento
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, HumanMessage
 from app.agents.decentralized.state import AgentState
-from app.agents.decentralized.policy import latest_user_message, is_customer_service_query, is_compatibility_query, handoff, ATENCION_NO_CONFIGURADA, is_inventory_query, contains_placeholder
+from app.agents.decentralized.policy import latest_user_message, is_customer_service_query, is_compatibility_query, handoff, CUSTOMER_SERVICE_UNAVAILABLE, is_inventory_query, contains_placeholder
 from app.agents.decentralized.policy import classify_support_triage
 from app.agents.decentralized.tools.soporte_tools import get_ticket_status
 from app.agents.decentralized.tools.support_handoff_tools import (
@@ -112,7 +112,7 @@ BASE DE CONOCIMIENTO:
 
 
 
-def soporte_node(state: AgentState, *, authenticated_customer_id=None):
+def support_node(state: AgentState, *, authenticated_customer_id=None):
     """
     Nodo del agente de Soporte dentro del grafo descentralizado.
     Incluye manejo de excepciones del modelo.
@@ -175,7 +175,7 @@ def soporte_node(state: AgentState, *, authenticated_customer_id=None):
         for m in state["messages"][state.get("turn_start_index", 0):]
     )
     if is_customer_service_query(user):
-        return {"current_agent": "soporte", "messages": [AIMessage(content=ATENCION_NO_CONFIGURADA)]}
+        return {"current_agent": "soporte", "messages": [AIMessage(content=CUSTOMER_SERVICE_UNAVAILABLE)]}
     if handling_return_handoff:
         return {"current_agent": "soporte", "messages": [AIMessage(content="¿Necesitas consultar un ticket, disponibilidad de un repuesto o información de atención? Indícame qué consulta quieres continuar.")]}
 
@@ -228,3 +228,6 @@ def soporte_node(state: AgentState, *, authenticated_customer_id=None):
             "current_agent": "soporte",
             "errors": state.get("errors", []) + [error]
         }
+
+
+soporte_node = support_node

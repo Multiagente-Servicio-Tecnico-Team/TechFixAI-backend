@@ -2,7 +2,7 @@ import json
 from app.agents.decentralized.data_compat import (
     normalize_handoff_history_entry, normalize_handoff_payload, normalize_inventory_result,
 )
-from app.agents.decentralized.garantia import garantia_node, garantia_tools
+from app.agents.decentralized.garantia import warranty_node, garantia_node, garantia_tools
 from app.agents.decentralized.warranty_operations import validate_pending_warranty_operation
 from app.agents.decentralized.policy import handoff
 
@@ -17,18 +17,18 @@ from app.agents.decentralized.policy import evaluate_supply
 from app.agents.decentralized.handoffs import (
     HANDOFF_TOOLS, handoff_reason, validate_handoff, make_handoff_record, selected_handoff,
 )
-from app.agents.decentralized.soporte import soporte_node, soporte_tools
-from app.agents.decentralized.tecnico import tecnico_node, tecnico_tools
-from app.agents.decentralized.ventas import ventas_node, ventas_tools
-from app.agents.decentralized.almacen import almacen_node, almacen_tools
+from app.agents.decentralized.soporte import support_node, soporte_node, soporte_tools
+from app.agents.decentralized.tecnico import hardware_node, tecnico_node, tecnico_tools
+from app.agents.decentralized.ventas import sales_node, ventas_node, ventas_tools
+from app.agents.decentralized.almacen import warehouse_node, almacen_node, almacen_tools
 from app.agents.decentralized.tools.almacen_tools import consultar_inventario
 from app.agents.decentralized.software import software_node, software_tools
-from app.agents.decentralized.compras import compras_node, compras_tools
+from app.agents.decentralized.compras import purchasing_node, compras_node, compras_tools
 from app.agents.decentralized.tools.compras_tools import consultar_fuentes_abastecimiento
 from app.agents.decentralized.tools.tecnico_tools import diagnosticar_problema
-from app.agents.decentralized.facturacion import facturacion_node, facturacion_tools
+from app.agents.decentralized.facturacion import billing_node, facturacion_node, facturacion_tools
 from app.agents.decentralized.tools.facturacion_tools import consultar_capacidades_financieras
-from app.agents.decentralized.logistica import logistica_node, logistica_tools
+from app.agents.decentralized.logistica import logistics_node, logistica_node, logistica_tools
 from app.agents.decentralized.logistics_operations import validate_pending_logistics_operation
 from app.agents.decentralized.payment_operations import validate_pending_payment_operation
 from langgraph.runtime import Runtime
@@ -42,13 +42,13 @@ MAX_HANDOFFS = 5
 MAX_TOOL_ITERATIONS = 6
 
 AGENT_NODES = {
-    "soporte": soporte_node, "tecnico": tecnico_node,
-    "ventas": ventas_node, "almacen": almacen_node,
+    "soporte": support_node, "tecnico": hardware_node,
+    "ventas": sales_node, "almacen": warehouse_node,
     "software": software_node,
-    "compras": compras_node,
-    "facturacion": facturacion_node,
-    "logistica": logistica_node,
-    "garantia": garantia_node,
+    "compras": purchasing_node,
+    "facturacion": billing_node,
+    "logistica": logistics_node,
+    "garantia": warranty_node,
 }
 
 
@@ -85,8 +85,17 @@ def extract_part_handoff(messages):
     return None
 
 
-def record_handoff(state: AgentState, origen: str):
+_MISSING_ORIGIN = object()
+
+
+def record_handoff(state: AgentState, origin: str = _MISSING_ORIGIN, *, origen: str = _MISSING_ORIGIN):
     """Audita herramientas y transferencias entre agentes."""
+    if origin is _MISSING_ORIGIN:
+        if origen is _MISSING_ORIGIN:
+            raise TypeError("Missing origin")
+        origin = origen
+    elif origen is not _MISSING_ORIGIN:
+        raise TypeError("Specify either origin or origen, not both")
     destination = detect_handoff(state["messages"])
     reason = handoff_reason(state["messages"]) if destination else None
     # Almacén entrega datos verificados a Ventas en la misma ejecución.
@@ -101,7 +110,7 @@ def record_handoff(state: AgentState, origen: str):
                 for item in state.get("inventory_results", []))
         for message in batch
     )
-    if (origen == "almacen" and destination is None and current_inventory
+    if (origin == "almacen" and destination is None and current_inventory
             and not any(message.status == "error" or message.name in HANDOFF_TOOLS for message in batch)
             and state.get("required_parts") and not state.get("inventory_pending", True)):
         destination = evaluate_supply(state)["destination"]
@@ -110,10 +119,10 @@ def record_handoff(state: AgentState, origen: str):
     count = state.get("handoff_count", 0)
     errors = list(state.get("errors", []))
     iterations = dict(state.get("tool_iterations", {}))
-    iterations[origen] = iterations.get(origen, 0) + 1
+    iterations[origin] = iterations.get(origin, 0) + 1
 
-    if iterations[origen] >= MAX_TOOL_ITERATIONS:
-        errors.append(f"Límite de herramientas alcanzado por {origen}")
+    if iterations[origin] >= MAX_TOOL_ITERATIONS:
+        errors.append(f"Límite de herramientas alcanzado por {origin}")
         return {
             "next_agent": "finalizar",
             "tool_iterations": iterations,
@@ -125,7 +134,7 @@ def record_handoff(state: AgentState, origen: str):
         }
 
     if destination is None:
-        return {"next_agent": origen, "tool_iterations": iterations}
+        return {"next_agent": origin, "tool_iterations": iterations}
 
     def _reject_handoff(error):
         return {"next_agent": "finalizar", "tool_iterations": iterations,
@@ -135,7 +144,7 @@ def record_handoff(state: AgentState, origen: str):
     try:
         for entry in history:
             normalize_handoff_history_entry(entry)
-        validate_handoff(origen, destination, reason, AGENT_NODES, state.get("request_revision"))
+        validate_handoff(origin, destination, reason, AGENT_NODES, state.get("request_revision"))
     except (ValueError, TypeError) as error:
         return _reject_handoff(error)
 
@@ -156,7 +165,7 @@ def record_handoff(state: AgentState, origen: str):
         if isinstance(data, dict) and isinstance(data.get("query"), str):
             inventory_query = data["query"]
 
-    if destination == origen:
+    if destination == origin:
         errors.append("Transferencia al mismo agente")
         return {
             "next_agent": "finalizar",
@@ -179,15 +188,15 @@ def record_handoff(state: AgentState, origen: str):
 
     pending_part = None
     supply_evaluation = evaluate_supply(state)
-    if origen == "almacen" and destination in {"compras", "ventas"} and supply_evaluation["destination"] != destination:
+    if origin == "almacen" and destination in {"compras", "ventas"} and supply_evaluation["destination"] != destination:
         return _reject_handoff(ValueError("Destino incompatible con la disponibilidad de inventario verificada"))
-    if origen == "compras" and destination == "ventas" and supply_evaluation["destination"] != "compras":
+    if origin == "compras" and destination == "ventas" and supply_evaluation["destination"] != "compras":
         return _reject_handoff(ValueError("Faltante de inventario sin vigencia confirmada"))
-    if origen == "software" and destination == "ventas":
+    if origin == "software" and destination == "ventas":
         scope = data.get("scope") if isinstance(data, dict) else None
         if scope != "solo_servicio" or not is_software_commercially_eligible(state):
             return _reject_handoff(ValueError("Software solo puede transferir a Ventas un servicio sin repuestos"))
-    if origen == "tecnico" and destination == "ventas":
+    if origin == "tecnico" and destination == "ventas":
         scope = data.get("scope") if isinstance(data, dict) else None
         if scope == "repuestos":
             name = data.get("part_name")
@@ -209,7 +218,7 @@ def record_handoff(state: AgentState, origen: str):
                         "una revisión de diagnóstico o una reparación con repuestos pendientes de verificar."
                     ))]}
 
-    if origen == "tecnico" and destination == "almacen" and pending_part is None:
+    if origin == "tecnico" and destination == "almacen" and pending_part is None:
         pending_part = extract_part_handoff(state["messages"])
         if pending_part is None:
             errors.append("Transferencia a Almacén sin repuesto válido")
@@ -231,7 +240,7 @@ def record_handoff(state: AgentState, origen: str):
 
     # Impedir cotizaciones mientras falte verificar inventario.
     if (
-        origen == "almacen"
+        origin == "almacen"
         and destination == "ventas"
         and (state.get("inventory_pending", False)
              or (state.get("required_parts") and not all(
@@ -250,10 +259,10 @@ def record_handoff(state: AgentState, origen: str):
         }
 
     try:
-        record = make_handoff_record(state, origen, destination, reason, AGENT_NODES)
+        record = make_handoff_record(state, origin, destination, reason, AGENT_NODES)
     except (ValueError, TypeError, KeyError) as error:
         return _reject_handoff(error)
-    history.append({"origin": origen, "destination": destination})
+    history.append({"origin": origin, "destination": destination})
     update = {
         "next_agent": destination,
         "handoff_count": count + 1,
@@ -273,25 +282,25 @@ def record_handoff(state: AgentState, origen: str):
         update.update(prepare_inventory_request(state, required))
         if inventory_query is not None:
             update["inventory_pending"] = True
-    if origen == "almacen" and destination == "ventas":
+    if origin == "almacen" and destination == "ventas":
         update["inventory_requested_by"] = None
-    if origen in {"almacen", "compras"} and destination in {"compras", "ventas"}:
+    if origin in {"almacen", "compras"} and destination in {"compras", "ventas"}:
         update.update(inventory_checks=supply_evaluation["inventory_checks"],
                              out_of_stock_items=supply_evaluation["out_of_stock_items"])
     if destination == "compras":
         update["supplier_offers"] = []
-    if origen == "compras" and destination == "ventas":
+    if origin == "compras" and destination == "ventas":
         update.update(inventory_requested_by=None, quote_scope="repuestos")
     if pending_part is not None:
         update["quote_scope"] = "repuestos"
-    elif origen in {"tecnico", "software"} and destination == "ventas":
+    elif origin in {"tecnico", "software"} and destination == "ventas":
         update["quote_scope"] = "solo_servicio"
-    elif origen == "almacen" and destination == "ventas":
+    elif origin == "almacen" and destination == "ventas":
         update["quote_scope"] = "repuestos"
     return update
 
 
-def guardar_inventario(state: AgentState):
+def record_inventory_results(state: AgentState):
     """Registra inventario y verifica los repuestos requeridos."""
     results = current_inventory_results(state)
     errors = list(state.get("errors", []))
@@ -369,11 +378,11 @@ def guardar_inventario(state: AgentState):
         except (ValueError, TypeError):
             errors.append("Resultado de inventario inválido")
 
-    def _matches_requirement(repuesto, resultado):
+    def _matches_requirement(part, result):
         return (
-            isinstance(resultado, dict)
-            and resultado.get("requested_name") == repuesto.get("name")
-            and resultado.get("quantity") == repuesto.get("quantity")
+            isinstance(result, dict)
+            and result.get("requested_name") == part.get("name")
+            and result.get("quantity") == part.get("quantity")
         )
 
     complete = bool(requirements) and all(
@@ -390,35 +399,35 @@ def guardar_inventario(state: AgentState):
     }
 
 
-def auditar_soporte(state: AgentState):
+def audit_support(state: AgentState):
     return record_handoff(state, "soporte")
 
 
-def auditar_tecnico(state: AgentState):
+def audit_hardware(state: AgentState):
     return record_handoff(state, "tecnico")
 
 
-def auditar_ventas(state: AgentState):
+def audit_sales(state: AgentState):
     return record_handoff(state, "ventas")
 
 
-def auditar_almacen(state: AgentState):
+def audit_warehouse(state: AgentState):
     return record_handoff(state, "almacen")
 
 
-def auditar_software(state: AgentState):
+def audit_software(state: AgentState):
     return record_handoff(state, "software")
 
 
-def auditar_compras(state: AgentState):
+def audit_purchasing(state: AgentState):
     return record_handoff(state, "compras")
 
 
-def auditar_facturacion(state: AgentState):
+def audit_billing(state: AgentState):
     return record_handoff(state, "facturacion")
 
 
-def auditar_logistica(state: AgentState):
+def audit_logistics(state: AgentState):
     return record_handoff(state, "logistica")
 
 
@@ -432,7 +441,7 @@ def route_entry(state: AgentState):
     return agent if agent in AGENT_NODES else "soporte"
 
 
-def preparar_turno(state: AgentState):
+def prepare_turn(state: AgentState):
     """Reinicia controles tras recuperar el historial, sin borrar datos de negocio."""
     messages = state.get("messages", [])
     start_index = next(
@@ -454,7 +463,20 @@ def preparar_turno(state: AgentState):
 
 detectar_handoff = detect_handoff
 extraer_repuesto_handoff = extract_part_handoff
-registrar_handoff = record_handoff
+guardar_inventario = record_inventory_results
+preparar_turno = prepare_turn
+auditar_soporte = audit_support
+auditar_tecnico = audit_hardware
+auditar_ventas = audit_sales
+auditar_almacen = audit_warehouse
+auditar_software = audit_software
+auditar_compras = audit_purchasing
+auditar_facturacion = audit_billing
+auditar_logistica = audit_logistics
+
+
+def registrar_handoff(state: AgentState, origen: str):
+    return record_handoff(state, origin=origen)
 
 
 def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=False):
@@ -470,22 +492,22 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         if name == "soporte" and financial_repository is not None:
             def support_entry(state: AgentState, runtime: Runtime[FinancialContext]):
                 customer = (runtime.context or {}).get("authenticated_customer_id")
-                return soporte_node(state, authenticated_customer_id=customer) if customer is not None else soporte_node(state)
+                return support_node(state, authenticated_customer_id=customer) if customer is not None else support_node(state)
             node = support_entry
         if name == "garantia" and financial_repository is not None:
             def warranty_entry(state: AgentState, runtime: Runtime[FinancialContext]):
-                return garantia_node(state, repository=financial_repository,
+                return warranty_node(state, repository=financial_repository,
                     authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"))
             node = warranty_entry
         if name == "logistica" and financial_repository is not None:
             def logistics_entry(state: AgentState, runtime: Runtime[FinancialContext]):
-                return logistica_node(state, repository=financial_repository,
+                return logistics_node(state, repository=financial_repository,
                     authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"))
             node = logistics_entry
         if name == "facturacion" and financial_repository is not None:
             # Trusted invocation context is not checkpointed or model-generated.
             def financial_entry(state: AgentState, runtime: Runtime[FinancialContext]):
-                return facturacion_node(state, repository=financial_repository,
+                return billing_node(state, repository=financial_repository,
                     authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"))
             node = financial_entry
         builder.add_node(name, node)
@@ -493,7 +515,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
     if ticket_writes and (financial_repository is None or checkpointer is None):
         raise ValueError("Creación de tickets requiere repositorio y checkpointer")
 
-    def preparar_ticket(state: AgentState, runtime: Runtime[FinancialContext]):
+    def prepare_ticket(state: AgentState, runtime: Runtime[FinancialContext]):
         from app.agents.decentralized.ticket_operations import validate_pending_ticket_operation
         if state.get("ticket_correction_required"):
             raise ValueError("La operación requiere reconciliación")
@@ -503,7 +525,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         return {"pending_ticket_operation": operation, "ticket_preparation_ready": False,
                 "messages": [AIMessage(content="La solicitud está preparada y todavía no se creó un ticket. Responde continuar para registrar esta misma solicitud y derivarla al especialista.")]}
 
-    def ejecutar_ticket(state: AgentState, config, runtime: Runtime[FinancialContext]):
+    def execute_ticket(state: AgentState, config, runtime: Runtime[FinancialContext]):
         from app.agents.decentralized.ticket_operations import validate_pending_ticket_operation
         from app.database.decentralized_repository import _id
         operation = validate_pending_ticket_operation(state.get("pending_ticket_operation"),
@@ -536,18 +558,18 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                 "pending_ticket_operation": None, "ticket_preparation_ready": False}
 
     if ticket_writes:
-        builder.add_node("preparar_ticket", preparar_ticket)
-        builder.add_node("ejecutar_ticket", ejecutar_ticket)
+        builder.add_node("preparar_ticket", prepare_ticket)
+        builder.add_node("ejecutar_ticket", execute_ticket)
         builder.add_edge("preparar_ticket", "ejecutar_ticket")
         builder.add_edge("ejecutar_ticket", "soporte_tools")
 
-    def preparar_garantia(state: AgentState, runtime: Runtime[FinancialContext]):
+    def prepare_warranty(state: AgentState, runtime: Runtime[FinancialContext]):
         operation = validate_pending_warranty_operation(state.get("pending_warranty_operation"),
             authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
             request_revision=state.get("request_revision"))
         return {"pending_warranty_operation": operation}
 
-    def ejecutar_garantia(state: AgentState, runtime: Runtime[FinancialContext]):
+    def execute_warranty(state: AgentState, runtime: Runtime[FinancialContext]):
         operation = validate_pending_warranty_operation(state.get("pending_warranty_operation"),
             authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
             request_revision=state.get("request_revision"))
@@ -565,8 +587,8 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
             return {**patch, "messages": [AIMessage(content="Reclamo persistido; sus condiciones actuales no permiten coordinar ingreso. No hay reparación aprobada.")]}
         return {**patch, **handoff("garantia", "transfer_to_logistics", reason="Coordinar ingreso de reclamo persistido IN_REVIEW")}
 
-    builder.add_node("preparar_garantia", preparar_garantia)
-    builder.add_node("ejecutar_garantia", ejecutar_garantia)
+    builder.add_node("preparar_garantia", prepare_warranty)
+    builder.add_node("ejecutar_garantia", execute_warranty)
     builder.add_edge("preparar_garantia", "ejecutar_garantia")
     builder.add_conditional_edges("ejecutar_garantia", tools_condition, {"tools": "garantia_tools", "__end__": END})
 
@@ -576,31 +598,31 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         return "prepare" if (financial_repository is not None and state.get("pending_warranty_operation")
                              and state.get("warranty_preparation_ready") is True) else "__end__"
 
-    def preparar_pago(state: AgentState, runtime: Runtime[FinancialContext]):
+    def prepare_payment(state: AgentState, runtime: Runtime[FinancialContext]):
         pending = validate_pending_payment_operation(state.get("pending_payment_operation"),
             authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
             request_revision=state.get("request_revision"))
         # A separate superstep records exactly the prepared operation. No LLM.
         return {"pending_payment_operation": pending}
 
-    def ejecutar_pago(state: AgentState, runtime: Runtime[FinancialContext]):
+    def execute_payment(state: AgentState, runtime: Runtime[FinancialContext]):
         validate_pending_payment_operation(state.get("pending_payment_operation"),
             authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
             request_revision=state.get("request_revision"))
         return {"messages": [AIMessage(content="La operación pendiente fue recuperada. La escritura financiera continúa deshabilitada; no se ha registrado ni confirmado un pago.")]}
 
-    builder.add_node("preparar_pago", preparar_pago)
-    builder.add_node("ejecutar_pago", ejecutar_pago)
+    builder.add_node("preparar_pago", prepare_payment)
+    builder.add_node("ejecutar_pago", execute_payment)
     builder.add_edge("preparar_pago", "ejecutar_pago")
     builder.add_edge("ejecutar_pago", END)
 
-    def preparar_logistica(state: AgentState, runtime: Runtime[FinancialContext]):
+    def prepare_logistics(state: AgentState, runtime: Runtime[FinancialContext]):
         operation = validate_pending_logistics_operation(state.get("pending_logistics_operation"),
             authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
             request_revision=state.get("request_revision"))
         return {"pending_logistics_operation": operation}
 
-    def ejecutar_logistica(state: AgentState, runtime: Runtime[FinancialContext]):
+    def execute_logistics(state: AgentState, runtime: Runtime[FinancialContext]):
         operation = validate_pending_logistics_operation(state.get("pending_logistics_operation"),
             authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
             request_revision=state.get("request_revision"))
@@ -613,8 +635,8 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                                "recipient_name", "recipient_phone", "tracking_number", "scheduled_date", "received_at", "delivered_at")},
                 "messages": [AIMessage(content="El registro logístico está confirmado en el sistema. Su estado es " + row["status"] + ". Este registro no confirma recepción física, preparación, despacho ni entrega.")]}
 
-    builder.add_node("preparar_logistica", preparar_logistica)
-    builder.add_node("ejecutar_logistica", ejecutar_logistica)
+    builder.add_node("preparar_logistica", prepare_logistics)
+    builder.add_node("ejecutar_logistica", execute_logistics)
     builder.add_edge("preparar_logistica", "ejecutar_logistica")
     builder.add_edge("ejecutar_logistica", END)
 
@@ -662,6 +684,9 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
             registered = {item.name for item in tools}
             tools = [*tools, *(item for item in legacy_handoff_tools if item.name not in registered)]
         if name == "ventas":
+            from app.agents.decentralized.tools.ventas_tools import generar_cotizacion
+            if not any(item.name == "generar_cotizacion" for item in tools):
+                tools = [*tools, generar_cotizacion]
             from app.agents.decentralized.tools.inventory_request_tools import legacy_inventory_request_tools
             registered = {item.name for item in tools}
             tools = [*tools, *(item for item in legacy_inventory_request_tools if item.name not in registered)]
@@ -685,18 +710,18 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                 tools = [*tools, consultar_estado_ticket]
         builder.add_node(f"{name}_tools", ToolNode(tools, handle_tool_errors=True))
 
-    builder.add_node("guardar_inventario", guardar_inventario)
-    builder.add_node("auditar_soporte", auditar_soporte)
-    builder.add_node("auditar_tecnico", auditar_tecnico)
-    builder.add_node("auditar_ventas", auditar_ventas)
-    builder.add_node("auditar_almacen", auditar_almacen)
-    builder.add_node("auditar_software", auditar_software)
-    builder.add_node("auditar_compras", auditar_compras)
-    builder.add_node("auditar_facturacion", auditar_facturacion)
-    builder.add_node("auditar_logistica", auditar_logistica)
+    builder.add_node("guardar_inventario", record_inventory_results)
+    builder.add_node("auditar_soporte", audit_support)
+    builder.add_node("auditar_tecnico", audit_hardware)
+    builder.add_node("auditar_ventas", audit_sales)
+    builder.add_node("auditar_almacen", audit_warehouse)
+    builder.add_node("auditar_software", audit_software)
+    builder.add_node("auditar_compras", audit_purchasing)
+    builder.add_node("auditar_facturacion", audit_billing)
+    builder.add_node("auditar_logistica", audit_logistics)
     builder.add_node("auditar_garantia", lambda state: record_handoff(state, "garantia"))
 
-    builder.add_node("preparar_turno", preparar_turno)
+    builder.add_node("preparar_turno", prepare_turn)
     builder.add_edge(START, "preparar_turno")
     builder.add_conditional_edges("preparar_turno", route_entry,
                                   {name: name for name in AGENT_NODES})

@@ -54,6 +54,27 @@ def test_register_creates_customer_with_bcrypt_hash(env):
     assert bcrypt.checkpw(PASSWORD.encode(), user.password_hash.encode())
 
 
+def test_register_opens_session_with_secure_cookie(env):
+    client, _ = env
+    res = client.post("/registro", json=VALID)
+
+    cookie = res.headers["set-cookie"]
+    assert cookie.startswith("techfix_session=")
+    assert "HttpOnly" in cookie and "SameSite=lax" in cookie and "Max-Age=28800" in cookie
+    assert client.get("/me").json()["usuario"]["email"] == "martin.gomez@gmail.com"
+
+
+def test_failed_register_does_not_open_session(env):
+    client, _ = env
+    client.post("/registro", json=VALID)
+    client.cookies.clear()
+    duplicate = client.post("/registro", json=VALID)
+    invalid = client.post("/registro", json={**VALID, "email": "otro@techfix.ai", "password": "Corta#1"})
+
+    assert "set-cookie" not in duplicate.headers and "set-cookie" not in invalid.headers
+    assert client.get("/me").status_code == 401
+
+
 def test_register_accepts_separate_last_name(env):
     client, _ = env
     res = client.post("/registro", json={**VALID, "nombre": "María José", "apellido": "Pérez Díaz"})

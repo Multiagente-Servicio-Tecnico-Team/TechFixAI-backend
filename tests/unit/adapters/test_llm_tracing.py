@@ -1,7 +1,7 @@
 from decimal import Decimal
 from unittest.mock import patch
 
-from app.main import get_trace_context, redact_trace_error
+from app.adapters.llm.tracing import get_trace_context, redact_trace_error
 from app.settings import Settings
 
 
@@ -34,8 +34,8 @@ def test_trace_error_redaction_does_not_preserve_provider_text():
 
 def test_trace_context_uses_langsmith_project_and_hides_inputs_and_outputs():
     with (
-        patch("app.main.Client") as client_factory,
-        patch("app.main.tracing_context", return_value="trace-context") as trace_factory,
+        patch("app.adapters.llm.tracing.Client") as client_factory,
+        patch("app.adapters.llm.tracing.tracing_context", return_value="trace-context") as trace_factory,
     ):
         result = get_trace_context(settings(tracing=True))
 
@@ -49,7 +49,7 @@ def test_trace_context_uses_langsmith_project_and_hides_inputs_and_outputs():
 
 
 def test_tracing_can_be_disabled():
-    with patch("app.main.tracing_context") as trace_factory:
+    with patch("app.adapters.llm.tracing.tracing_context") as trace_factory:
         context = get_trace_context(settings())
 
     assert context.__class__.__name__ == "nullcontext"

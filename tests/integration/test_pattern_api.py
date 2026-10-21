@@ -14,7 +14,8 @@ from app.accounts.config import Settings as AccountSettings
 from app.accounts.models import Base
 from app.accounts.session import SessionGuard
 from app.chat.contract import QuoteOut
-from app.main import PATTERN_NAMES, _ticket_for_result, create_app
+from app.adapters.patterns.hierarchical import HierarchicalPattern
+from app.main import PATTERN_NAMES, create_app
 from app.settings import Settings
 
 
@@ -28,8 +29,7 @@ ACCOUNT_SETTINGS = AccountSettings(
 
 
 def test_hierarchical_warranty_claim_returns_ticket_for_portal():
-    ticket = _ticket_for_result(
-        "hierarchical",
+    ticket = HierarchicalPattern.ticket(
         {
             "outcome": "warranty_claim_registered",
             "ticket_code": "TCK-ABC123",

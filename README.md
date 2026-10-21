@@ -1,4 +1,7 @@
-# Sistema Multiagente de Servicio Técnico, Ventas y Soporte
+# TechFix.AI — Backend
+
+Sistema multiagente de servicio técnico, ventas y soporte. El frontend (React + Vite) está en
+[TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend); en producción se publica en https://techfixai.vercel.app.
 
 TechFix.AI: plataforma para un taller de reparación de equipos. El cliente se registra, inicia sesión y conversa
 con agentes LangGraph que orientan sobre fallas y preparan propuestas; los patrones Jerárquico y Orquestador
@@ -12,7 +15,7 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 
 | Módulo | Carpeta | Estado |
 | --- | --- | --- |
-| Landing, portal del cliente y panel del taller (React) | [`landing/`](landing/README.md) | En `main` |
+| Landing, portal del cliente y panel del taller (React) | [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) | Repositorio propio |
 | Cuentas: registro, inicio de sesión, recuperación de contraseña | [`app/accounts/`](app/accounts/README.md) | En `main` |
 | API unificada de cuentas y chat | [`app/combined.py`](app/combined.py) | Integrada |
 | Sesión reutilizable y contrato común del chat (`POST /api/chat`) | [`app/chat/`](app/chat/README.md), [`app/main.py`](app/main.py) | Integrados |
@@ -49,7 +52,7 @@ decisiones, validación y limitaciones del bloque.
 ## Arquitectura
 
 ```text
- Navegador (React + Vite, landing/)
+ Navegador (React + Vite, repositorio TechFixAI-frontend)
    │ cuentas: /auth/*       │ chat: /api/chat
    ▼                        ▼
  API unificada (app/combined.py): cuentas + patrones LangGraph
@@ -58,6 +61,24 @@ decisiones, validación y limitaciones del bloque.
  PostgreSQL: users · recovery_tokens · tickets · quotes · spare_parts …   ◀── grafo LangGraph del patrón
                                                                              │ herramientas · LangSmith
 ```
+
+### Capas (Clean Architecture)
+
+```text
+ adapters/api (FastAPI) ──▶ application (casos de uso) ──▶ domain (entidades y reglas)
+ adapters/patterns ─┐            ▲ puertos (ports.py)
+ adapters/persistence ┼──────────┘ implementan los puertos
+ adapters/llm ──────┘
+ infrastructure/chat_app.py: raíz de composición (conecta todo)
+```
+
+- `domain` y `application` no importan FastAPI, SQLAlchemy, LangGraph ni Groq; lo comprueba
+  `tests/unit/architecture/test_layers.py`.
+- Cada patrón se consume como un servicio con el puerto `ChatPattern`: un adaptador por patrón
+  (`adapters/patterns/`) arma su estado inicial, invoca su grafo de `app/agents/` y convierte su estado final
+  en un `PatternReply` común (patrón Adaptador + método plantilla en `base.py` + registro en `registry.py`).
+- Reglas de la conversación (dueño, patrón fijo, presupuesto pendiente, 20 mensajes por minuto) en el caso de uso
+  `SendChatMessage`; los importes usan `Decimal` (`domain/money.py`).
 
 - La identidad del cliente sale siempre de la cookie firmada; el chat nunca pide el correo.
 - Cada patrón expone el mismo `POST /api/chat`, así el frontend funciona con cualquiera de ellos. La guía para
@@ -69,7 +90,15 @@ decisiones, validación y limitaciones del bloque.
 app/
 ├── accounts/        API de cuentas (FastAPI): /registro, /login, /logout, /me, /recuperar, /restablecer
 ├── combined.py      Punto de entrada unificado: monta cuentas en /auth junto al chat
-├── chat/            Contrato de /api/chat, patrón de referencia y modelo de tickets
+├── domain/          Entidades y reglas: presupuesto, ticket, respuesta del patrón, dinero (Decimal), errores
+├── application/     Casos de uso (SendChatMessage, ListCustomerTickets), registro de conversaciones y puertos
+├── adapters/
+│   ├── api/            Rutas FastAPI del chat (/api/chat, /api/chat/patterns, /api/customer/tickets)
+│   ├── patterns/       Un adaptador por patrón LangGraph + base común + registro
+│   ├── persistence/    Lectura de «Mis Tickets» desde PostgreSQL
+│   └── llm/            Trazas de LangSmith con contenido oculto
+├── infrastructure/  Raíz de composición (chat_app.py)
+├── chat/            Contrato JSON de /api/chat (ChatIn/ChatOut) y patrón de referencia
 ├── agents/
 │   ├── jerarquico/     Supervisor, soporte, ventas, almacén, RAG y persistencia
 │   ├── orquestador/    Supervisor, agentes, herramientas y recuperación
@@ -78,17 +107,19 @@ app/
 │   └── support.py      Grafo previo de soporte de demostración
 ├── database/        Conexión SQLAlchemy a PostgreSQL
 ├── email/           Servicio SMTP y plantillas
-├── main.py          API autenticada del chat y selector de patrones LangGraph
+├── main.py          Punto de entrada del chat (app.main:app); delega en infrastructure/
 └── tracing.py       Trazas locales JSONL sin contenido de los mensajes
-landing/             Frontend React 18 + Vite
 postman/             Colección de la API de cuentas
-tests/               Pruebas automáticas (pytest)
+tests/
+├── unit/            Sin red ni base de datos: domain, application, adapters, architecture, agents, accounts
+├── integration/     API con TestClient y SQLite, grafos con modelos simulados
+└── e2e/             Servicios reales: Groq, PostgreSQL, SMTP y navegador
 ```
 
 ## Requisitos
 
 - Python 3.12
-- Node.js 18 o superior
+- Node.js 18 o superior (solo para ejecutar el frontend)
 - PostgreSQL 16 con las tablas del script del equipo (`creacion_tablas_sin_inserciones.sql`)
 - Claves de Groq y LangSmith para los patrones con LLM
 
@@ -119,7 +150,7 @@ La ingesta descarga el modelo FastEmbed la primera vez y guarda el índice en
 `data/chroma/`, que está excluido de Git. Debe repetirse cuando cambie el
 contenido de `data/knowledge/`.
 
-El frontend usa `landing/.env` (ver `landing/.env.example`): `VITE_API_URL` apunta a
+El frontend ([TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
 `/auth` y `VITE_CHAT_URL` al mismo origen del chat. Los valores locales por defecto
 son `http://localhost:8000/auth` y `http://localhost:8000`; Vite los carga al
 iniciar, así que reinicia el servidor frontend después de modificarlos.
@@ -135,14 +166,7 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.combined:create_app --factory --host localhost --port 8000
 ```
 
-```bash
-npm --prefix landing install
-```
-
-```bash
-npm --prefix landing run dev
-```
-
+Para la interfaz, clonar [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) y ejecutar `npm install` y `npm run dev`.
 Abrir http://localhost:5173. El proceso unificado expone las rutas de cuentas
 en `/auth/*` y el chat en `/api/chat`; ambos clientes usan el mismo host y puerto.
 Para los endpoints independientes, ver la documentación de sus módulos.
@@ -150,16 +174,16 @@ Para los endpoints independientes, ver la documentación de sus módulos.
 ## Pruebas
 
 ```bash
-npm --prefix landing test
+.venv/Scripts/python -m pytest -q
 ```
 
 ```bash
-.venv/Scripts/python -m pytest tests --ignore=tests/test_database.py --ignore=tests/test_email.py --ignore=tests/test_e2e_decentralized.py -q
+.venv/Scripts/python -m pytest tests/e2e -q
 ```
 
-- `tests/test_database.py` y `tests/test_email.py` son scripts manuales que acceden a PostgreSQL y SMTP reales;
-  no se deben incluir en la suite aislada.
-- `tests/test_e2e_decentralized.py` llama a Groq real; se excluye de la suite aislada para evitar llamadas externas.
+- Sin argumentos, `pytest` ejecuta la suite aislada (`tests/unit` y `tests/integration`, definido en `pytest.ini`).
+- `tests/e2e` usa servicios reales (Groq, PostgreSQL, SMTP); `test_database.py` y `test_email.py` son scripts
+  manuales y `browser.cjs` con `serve_portal.py` prueban el portal en un navegador.
 - API de cuentas con Postman o Newman: `npx newman run postman/techfix-auth.postman_collection.json`.
 
 ## Seguridad

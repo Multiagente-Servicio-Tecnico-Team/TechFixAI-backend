@@ -13,7 +13,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from app.agents.decentralized.conversation import Conversation
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture

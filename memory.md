@@ -63,47 +63,48 @@
 - Error 502 en el triage jerÃ¡rquico: prueba real con Groq reprodujo una clasificaciÃ³n `service` sin `title` o `failure_description`, que el supervisor convertÃ­a en `ValueError`. Ahora se usa un tÃ­tulo genÃ©rico y, si falta la descripciÃ³n, el texto del mensaje actual; sin mensaje disponible se pide aclaraciÃ³n antes de crear ticket. Prueba de regresiÃ³n aÃ±adida. El grafo completo terminÃ³ correctamente con Groq y LangSmith bajo ocultamiento forzado de inputs/outputs (`route=service`, `outcome=awaiting_confirmation`); ademÃ¡s, `POST /api/chat` devolviÃ³ HTTP 200 usando un guard aislado y repositorio de prueba. No se escribieron datos en PostgreSQL y no se probÃ³ la cookie real. Evidencia: `spec/08-resiliencia-triage-jerarquico.md` y `docs/11-resiliencia-triage-jerarquico.md`; commit pendiente.
 - RecomendaciÃ³n de SSD para equipo lento: RAG reproduce los casos 10 y 5 del [manual_servicio.md](./app/agents/jerarquico/knowledge_base/manual_servicio.md), ambos con candidato `SSD_1TB`. El prompt de soporte forzaba `required_parts=[]` para diagnÃ³stico y el agente tambiÃ©n eliminaba toda pieza en esa rama, por eso solo cotizaba S/ 50 de diagnÃ³stico. Ahora pasa el Ãºnico artÃ­culo del caso RAG principal al almacÃ©n aunque la labor siga siendo diagnÃ³stico; stock/precio solo salen del catÃ¡logo y la compatibilidad se presenta como pendiente. En BD de prueba no existe el cÃ³digo exacto `SSD_1TB`, pero hay opciones de unidades SSD; para varias opciones se guarda selecciÃ³n pendiente, el cliente responde con cÃ³digo y el grafo continÃºa a cotizaciÃ³n y luego confirmaciÃ³n. `solo diagnÃ³stico` sigue disponible. La bÃºsqueda real tambiÃ©n encontrÃ³ carcasa USB por coincidencia parcial, excluida del listado de unidades SSD. Prueba real con Groq y lecturas de BD terminÃ³ en `awaiting_inventory_selection`; se simularon tickets/cotizaciones, sin escrituras DB. Suite enfocada: 47 aprobadas. Evidencia: `spec/09-candidato-de-inventario-para-diagnostico.md`, `docs/12-candidato-inventario-diagnostico.md`; commit pendiente.
 - Armados y ventas flexibles (2026-10-13): tres perfiles gamer curados consultan
-  inventario actual y ofrecen opciones dentro del presupuesto; selección y
+  inventario actual y ofrecen opciones dentro del presupuesto; selecciï¿½n y
   sustituciones por componente conservan elecciones y recalculan antes de
-  aceptar. Venta de múltiples artículos permite resolver RAM 8 GB y SSD 240 GB
+  aceptar. Venta de mï¿½ltiples artï¿½culos permite resolver RAM 8 GB y SSD 240 GB
   en secuencia. PostgreSQL consultado en lectura: hay marcas en `spare_parts.name`,
-  no columna `brand`; no se alteró esquema ni se escribieron datos. 60 pruebas
-  enfocadas aprobadas. Limitación: perfiles predefinidos y compatibilidad física
-  pendiente de comprobación de fichas. Evidencia en spec 11 y docs 14.
-- Respuesta de capacidades (2026-10-13): consultas como «qué funciones puedes
-  realizar» ahora enumeran directamente las funciones implementadas y no caen
-  en la FAQ de dirección/horarios simulados. Regresión incluida; 61 pruebas
+  no columna `brand`; no se alterï¿½ esquema ni se escribieron datos. 60 pruebas
+  enfocadas aprobadas. Limitaciï¿½n: perfiles predefinidos y compatibilidad fï¿½sica
+  pendiente de comprobaciï¿½n de fichas. Evidencia en spec 11 y docs 14.
+- Respuesta de capacidades (2026-10-13): consultas como ï¿½quï¿½ funciones puedes
+  realizarï¿½ ahora enumeran directamente las funciones implementadas y no caen
+  en la FAQ de direcciï¿½n/horarios simulados. Regresiï¿½n incluida; 61 pruebas
   enfocadas, compileall y `git diff --check` correctos. Evidencia en Bloque 26.
 - FAQ y datos operativos (2026-10-13): el RAG FAQ prioriza el tema consultado y
-  cubre servicios, ubicación, horario, cotizaciones, pagos, garantías, logística
-  y compras. Se eliminaron dirección/horarios de prueba del contexto: la respuesta
+  cubre servicios, ubicaciï¿½n, horario, cotizaciones, pagos, garantï¿½as, logï¿½stica
+  y compras. Se eliminaron direcciï¿½n/horarios de prueba del contexto: la respuesta
   aclara que no hay datos confirmados. 63 pruebas enfocadas, compileall y
-  `git diff --check` correctos; limitación real: sin ubicación/horario/medios de
+  `git diff --check` correctos; limitaciï¿½n real: sin ubicaciï¿½n/horario/medios de
   pago confirmados. Evidencia: Bloque 27.
-- Selección de armado (2026-10-13): ahora se extraen números de respuestas
-  conversacionales como «elijo la 3» y «quiero la opción 2», además de ordinales
-  y nombres de perfil. Prueba de flujo completo confirma la tercera opción.
-  Validación: 12 workflows, compileall y diff-check correctos. Evidencia: Bloque 28.
-- Bienvenida general del chat (2026-10-13): reemplazado el saludo que asumía una
-  avería por una bienvenida que resume soporte, compras/cotizaciones, armado,
-  garantías y logística; actualizado React, Streamlit y chat estático. No se
+- Selecciï¿½n de armado (2026-10-13): ahora se extraen nï¿½meros de respuestas
+  conversacionales como ï¿½elijo la 3ï¿½ y ï¿½quiero la opciï¿½n 2ï¿½, ademï¿½s de ordinales
+  y nombres de perfil. Prueba de flujo completo confirma la tercera opciï¿½n.
+  Validaciï¿½n: 12 workflows, compileall y diff-check correctos. Evidencia: Bloque 28.
+- Bienvenida general del chat (2026-10-13): reemplazado el saludo que asumï¿½a una
+  averï¿½a por una bienvenida que resume soporte, compras/cotizaciones, armado,
+  garantï¿½as y logï¿½stica; actualizado React, Streamlit y chat estï¿½tico. No se
   ejecutaron pruebas por ser un cambio de texto/UI.
-- Actualización de FAQ de tienda (2026-10-13): a solicitud del usuario se
-  añadieron dirección ficticia en San Borja y horario peruano al RAG, marcados
-  internamente como datos de demostración para sustituir antes de producción.
-  La FAQ los recupera para ubicación/horario; retiro no se confunde con recepción.
+- Actualizaciï¿½n de FAQ de tienda (2026-10-13): a solicitud del usuario se
+  aï¿½adieron direcciï¿½n ficticia en San Borja y horario peruano al RAG, marcados
+  internamente como datos de demostraciï¿½n para sustituir antes de producciï¿½n.
+  La FAQ los recupera para ubicaciï¿½n/horario; retiro no se confunde con recepciï¿½n.
   14 pruebas FAQ/workflows, compileall y diff-check aprobados. Sin escrituras BD.
   Evidencia: spec 14 y docs 17.
 - FAQ comercial ampliada (2026-10-13): formas de pago ficticias (Yape, Plin,
   transferencia, Visa/Mastercard y efectivo), proceso paso a paso, tarifas base
-  alineadas con settings y garantía de 3 meses para venta/armado tras logística.
+  alineadas con settings y garantï¿½a de 3 meses para venta/armado tras logï¿½stica.
   El chat solo crea pago PENDING; no procesa pagos ni comparte cuentas/QR.
   15 pruebas FAQ/workflows, compileall y diff-check correctos. Evidencia: spec 14,
-  docs 17. Valores de ubicación, horario y medios de pago son de demostración.
+  docs 17. Valores de ubicaciï¿½n, horario y medios de pago son de demostraciï¿½n.
 - Mis Tickets para cliente (2026-10-13): portal carga desde `/api/customer/tickets`
-  autenticado; API filtra estrictamente por customer_id de sesión y devuelve estado,
-  datos y última cotización. UI conserva tarjetas/filtros/búsqueda y elimina aprobar/
+  autenticado; API filtra estrictamente por customer_id de sesiï¿½n y devuelve estado,
+  datos y ï¿½ltima cotizaciï¿½n. UI conserva tarjetas/filtros/bï¿½squeda y elimina aprobar/
   revisar/admin para ser solo lectura. Build Vite aprobado. Sin consultas ni escrituras
   PostgreSQL. Evidencia: spec 15, docs 18.
 - Seed de inventario (2026-10-13): precios de referencia en PEN ajustados con cat?logos peruanos; RAM y almacenamiento compactados para retirar filas redundantes y SKU duplicados entre bloques. Filas: 438 ? 310; 310 c?digos ?nicos y sin duplicados exactos de nombre/categor?a. Limitaci?n: ambos `ON CONFLICT (code) DO NOTHING` no actualizan cat?logo ya sembrado; no se ejecut? SQL ni se toc? PostgreSQL. Evidencia: spec 16, docs 19.
 - SeparaciÃ³n del frontend (2026-10-20): `landing/` pasa al repositorio TechFixAI-frontend (con su historial, sin archivos .env) y este repositorio se renombra a TechFixAI-backend. Los README de la raÃ­z, cuentas y chat apuntan al repo del frontend. LimitaciÃ³n: Vercel debe reconectarse a TechFixAI-frontend antes de fusionar este cambio; las ramas con cambios en `landing/` sin integrar deben llevarlos al repo nuevo.
+- Clean Architecture (2026-10-20, rama feature/clean-architecture): capas `domain` (entidades, Decimal, errores), `application` (SendChatMessage, ListCustomerTickets, ConversationRegistry, puertos), `adapters` (api, patterns, persistence, llm) e `infrastructure` (raÃ­z de composiciÃ³n). Cada patrÃ³n LangGraph se consume con el puerto ChatPattern mediante un adaptador; `app/main.py` delega y conserva `create_app` y `app.main:app`. Pruebas en tests/unit, tests/integration y tests/e2e; `pytest` ejecuta la suite aislada: 310 aprobadas y 1 falla previa (test_retriever). Limitaciones: el cÃ³digo interno de los patrones sigue en app/agents (no se moviÃ³ para no romper ramas abiertas); la persistencia de tickets y presupuestos de cada patrÃ³n aÃºn usa app/database/repository.py directamente.

@@ -62,6 +62,24 @@ decisiones, validación y limitaciones del bloque.
                                                                              │ herramientas · LangSmith
 ```
 
+### Capas (Clean Architecture)
+
+```text
+ adapters/api (FastAPI) ──▶ application (casos de uso) ──▶ domain (entidades y reglas)
+ adapters/patterns ─┐            ▲ puertos (ports.py)
+ adapters/persistence ┼──────────┘ implementan los puertos
+ adapters/llm ──────┘
+ infrastructure/chat_app.py: raíz de composición (conecta todo)
+```
+
+- `domain` y `application` no importan FastAPI, SQLAlchemy, LangGraph ni Groq; lo comprueba
+  `tests/unit/architecture/test_layers.py`.
+- Cada patrón se consume como un servicio con el puerto `ChatPattern`: un adaptador por patrón
+  (`adapters/patterns/`) arma su estado inicial, invoca su grafo de `app/agents/` y convierte su estado final
+  en un `PatternReply` común (patrón Adaptador + método plantilla en `base.py` + registro en `registry.py`).
+- Reglas de la conversación (dueño, patrón fijo, presupuesto pendiente, 20 mensajes por minuto) en el caso de uso
+  `SendChatMessage`; los importes usan `Decimal` (`domain/money.py`).
+
 - La identidad del cliente sale siempre de la cookie firmada; el chat nunca pide el correo.
 - Cada patrón expone el mismo `POST /api/chat`, así el frontend funciona con cualquiera de ellos. La guía para
   conectar un patrón está en [`app/chat/README.md`](app/chat/README.md).
@@ -72,7 +90,15 @@ decisiones, validación y limitaciones del bloque.
 app/
 ├── accounts/        API de cuentas (FastAPI): /registro, /login, /logout, /me, /recuperar, /restablecer
 ├── combined.py      Punto de entrada unificado: monta cuentas en /auth junto al chat
-├── chat/            Contrato de /api/chat, patrón de referencia y modelo de tickets
+├── domain/          Entidades y reglas: presupuesto, ticket, respuesta del patrón, dinero (Decimal), errores
+├── application/     Casos de uso (SendChatMessage, ListCustomerTickets), registro de conversaciones y puertos
+├── adapters/
+│   ├── api/            Rutas FastAPI del chat (/api/chat, /api/chat/patterns, /api/customer/tickets)
+│   ├── patterns/       Un adaptador por patrón LangGraph + base común + registro
+│   ├── persistence/    Lectura de «Mis Tickets» desde PostgreSQL
+│   └── llm/            Trazas de LangSmith con contenido oculto
+├── infrastructure/  Raíz de composición (chat_app.py)
+├── chat/            Contrato JSON de /api/chat (ChatIn/ChatOut) y patrón de referencia
 ├── agents/
 │   ├── jerarquico/     Supervisor, soporte, ventas, almacén, RAG y persistencia
 │   ├── orquestador/    Supervisor, agentes, herramientas y recuperación
@@ -81,10 +107,13 @@ app/
 │   └── support.py      Grafo previo de soporte de demostración
 ├── database/        Conexión SQLAlchemy a PostgreSQL
 ├── email/           Servicio SMTP y plantillas
-├── main.py          API autenticada del chat y selector de patrones LangGraph
+├── main.py          Punto de entrada del chat (app.main:app); delega en infrastructure/
 └── tracing.py       Trazas locales JSONL sin contenido de los mensajes
 postman/             Colección de la API de cuentas
-tests/               Pruebas automáticas (pytest)
+tests/
+├── unit/            Sin red ni base de datos: domain, application, adapters, architecture, agents, accounts
+├── integration/     API con TestClient y SQLite, grafos con modelos simulados
+└── e2e/             Servicios reales: Groq, PostgreSQL, SMTP y navegador
 ```
 
 ## Requisitos
@@ -145,12 +174,16 @@ Para los endpoints independientes, ver la documentación de sus módulos.
 ## Pruebas
 
 ```bash
-.venv/Scripts/python -m pytest tests --ignore=tests/test_database.py --ignore=tests/test_email.py --ignore=tests/test_e2e_decentralized.py -q
+.venv/Scripts/python -m pytest -q
 ```
 
-- `tests/test_database.py` y `tests/test_email.py` son scripts manuales que acceden a PostgreSQL y SMTP reales;
-  no se deben incluir en la suite aislada.
-- `tests/test_e2e_decentralized.py` llama a Groq real; se excluye de la suite aislada para evitar llamadas externas.
+```bash
+.venv/Scripts/python -m pytest tests/e2e -q
+```
+
+- Sin argumentos, `pytest` ejecuta la suite aislada (`tests/unit` y `tests/integration`, definido en `pytest.ini`).
+- `tests/e2e` usa servicios reales (Groq, PostgreSQL, SMTP); `test_database.py` y `test_email.py` son scripts
+  manuales y `browser.cjs` con `serve_portal.py` prueban el portal en un navegador.
 - API de cuentas con Postman o Newman: `npx newman run postman/techfix-auth.postman_collection.json`.
 
 ## Seguridad

@@ -1,4 +1,7 @@
-# Sistema Multiagente de Servicio Técnico, Ventas y Soporte
+# TechFix.AI — Backend
+
+Sistema multiagente de servicio técnico, ventas y soporte. El frontend (React + Vite) está en
+[TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend); en producción se publica en https://techfixai.vercel.app.
 
 TechFix.AI: plataforma para un taller de reparación de equipos. El cliente se registra, inicia sesión y conversa
 con agentes LangGraph que orientan sobre fallas y preparan propuestas; los patrones Jerárquico y Orquestador
@@ -12,7 +15,7 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 
 | Módulo | Carpeta | Estado |
 | --- | --- | --- |
-| Landing, portal del cliente y panel del taller (React) | [`landing/`](landing/README.md) | En `main` |
+| Landing, portal del cliente y panel del taller (React) | [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) | Repositorio propio |
 | Cuentas: registro, inicio de sesión, recuperación de contraseña | [`app/accounts/`](app/accounts/README.md) | En `main` |
 | API unificada de cuentas y chat | [`app/combined.py`](app/combined.py) | Integrada |
 | Sesión reutilizable y contrato común del chat (`POST /api/chat`) | [`app/chat/`](app/chat/README.md), [`app/main.py`](app/main.py) | Integrados |
@@ -49,7 +52,7 @@ decisiones, validación y limitaciones del bloque.
 ## Arquitectura
 
 ```text
- Navegador (React + Vite, landing/)
+ Navegador (React + Vite, repositorio TechFixAI-frontend)
    │ cuentas: /auth/*       │ chat: /api/chat
    ▼                        ▼
  API unificada (app/combined.py): cuentas + patrones LangGraph
@@ -80,7 +83,6 @@ app/
 ├── email/           Servicio SMTP y plantillas
 ├── main.py          API autenticada del chat y selector de patrones LangGraph
 └── tracing.py       Trazas locales JSONL sin contenido de los mensajes
-landing/             Frontend React 18 + Vite
 postman/             Colección de la API de cuentas
 tests/               Pruebas automáticas (pytest)
 ```
@@ -88,7 +90,7 @@ tests/               Pruebas automáticas (pytest)
 ## Requisitos
 
 - Python 3.12
-- Node.js 18 o superior
+- Node.js 18 o superior (solo para ejecutar el frontend)
 - PostgreSQL 16 con las tablas del script del equipo (`creacion_tablas_sin_inserciones.sql`)
 - Claves de Groq y LangSmith para los patrones con LLM
 
@@ -119,7 +121,7 @@ La ingesta descarga el modelo FastEmbed la primera vez y guarda el índice en
 `data/chroma/`, que está excluido de Git. Debe repetirse cuando cambie el
 contenido de `data/knowledge/`.
 
-El frontend usa `landing/.env` (ver `landing/.env.example`): `VITE_API_URL` apunta a
+El frontend ([TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
 `/auth` y `VITE_CHAT_URL` al mismo origen del chat. Los valores locales por defecto
 son `http://localhost:8000/auth` y `http://localhost:8000`; Vite los carga al
 iniciar, así que reinicia el servidor frontend después de modificarlos.
@@ -135,23 +137,12 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.combined:create_app --factory --host localhost --port 8000
 ```
 
-```bash
-npm --prefix landing install
-```
-
-```bash
-npm --prefix landing run dev
-```
-
+Para la interfaz, clonar [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) y ejecutar `npm install` y `npm run dev`.
 Abrir http://localhost:5173. El proceso unificado expone las rutas de cuentas
 en `/auth/*` y el chat en `/api/chat`; ambos clientes usan el mismo host y puerto.
 Para los endpoints independientes, ver la documentación de sus módulos.
 
 ## Pruebas
-
-```bash
-npm --prefix landing test
-```
 
 ```bash
 .venv/Scripts/python -m pytest tests --ignore=tests/test_database.py --ignore=tests/test_email.py --ignore=tests/test_e2e_decentralized.py -q

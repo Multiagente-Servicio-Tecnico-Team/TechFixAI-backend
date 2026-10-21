@@ -1,5 +1,14 @@
 # Memoria del proyecto
 
+Historial de decisiones y limitaciones reales, una línea por tarea cerrada (la más reciente al final).
+Antes de programar, lee también `AGENTS.md`, `features.md` y `docs.md`.
+
+Cómo registrar una tarea: agrega al final una línea `- Tema (AAAA-MM-DD): qué se hizo, cómo se validó y qué
+limitación queda`, sin datos personales, claves ni textos de excepciones.
+
+Estado al 2026-10-20: el frontend se separó en TechFixAI-frontend (PR #31) y la organización en capas de
+Clean Architecture está en revisión (PR #32). Pendientes y responsables en `features.md`.
+
 - Diagnóstico del retiro presencial (2026-10-13): traza local confirma
   `logistics_agent`/`logistics_record_write` exitosos y error en
   `order_completion_agent`/`warranty_write`. LangSmith cambia el texto de error

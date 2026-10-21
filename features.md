@@ -72,7 +72,6 @@ se repite es la misma responsabilidad implementada varias veces; antes de crear 
 | Búsqueda en conocimiento | `jerarquico/retriever.py`, `orquestador/knowledge/retriever.py`, `rag/retriever.py` | Tres criterios de relevancia |
 | Consulta de inventario | `decentralized/tools/almacen_tools.py`, `orquestador/tools/inventory.py`, repositorio | Reglas de stock distintas |
 | Esquemas de diagnóstico y repuestos | `jerarquico/schemas.py` y `orquestador/graph/state.py` (`PartRequest`, `TechnicalDiagnosis`) | Campos que se separan con el tiempo |
-| Hash de contraseñas | `app/accounts/security.py` y `app/auth.py` | `app/auth.py` no se usa |
 
-Módulos sin uso en la aplicación (solo demos o pruebas): `app/auth.py`, `app/web.py`, `app/agents/support.py`;
-`app/agents/sales.py` y `app/tracing.py` se usan solo en pruebas y en el patrón de referencia.
+Módulos fuera del flujo de la aplicación: `app/web.py` (interfaz Streamlit de prueba) y `app/rag/ingest.py` (script de
+ingesta, se ejecuta con `python -m`); `app/agents/sales.py` y `app/tracing.py` se usan en pruebas y en el patrón de referencia.

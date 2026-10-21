@@ -32,7 +32,7 @@ Backend de TechFix.AI (FastAPI + LangGraph + PostgreSQL). El frontend vive en
 
 Hay piezas implementadas más de una vez; no agregues otra copia (detalle en `features.md`, sección «Código duplicado»):
 - Configuración: `app/settings.py` (patrones y BD) y `app/accounts/config.py` (cuentas). `app/config.py` solo lo usa el Orquestador.
-- Contraseñas: `app/accounts/security.py`. `app/auth.py` no se usa.
+- Contraseñas (bcrypt), firma de la sesión y límite de intentos: `app/accounts/security.py`.
 - Presupuestos: `app/agents/jerarquico/tools/quotes.py` y `app/agents/orquestador/agentes/quotes.py` calculan distinto.
 - Búsqueda en conocimiento: `app/agents/jerarquico/retriever.py`, `app/agents/orquestador/knowledge/retriever.py` y `app/rag/retriever.py`.
 

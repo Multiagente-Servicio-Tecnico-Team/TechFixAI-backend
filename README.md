@@ -16,7 +16,7 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 | Cuentas: registro, inicio de sesión, recuperación de contraseña | [`app/accounts/`](app/accounts/README.md) | En `main` |
 | API unificada de cuentas y chat | [`app/combined.py`](app/combined.py) | Integrada |
 | Sesión reutilizable y contrato común del chat (`POST /api/chat`) | [`app/chat/`](app/chat/README.md), [`app/main.py`](app/main.py) | Integrados |
-| Agente de ventas, soporte y trazas locales | `app/agents/sales.py`, `app/agents/support.py`, `app/tracing.py` | En `main` |
+| Agente de ventas y trazas locales | `app/agents/sales.py`, `app/tracing.py` | En `main` |
 | Patrón de Red Descentralizada | [`app/agents/decentralized/`](app/agents/decentralized/) | Integrado; herramientas aún simuladas |
 | Patrón Jerárquico | [`app/agents/jerarquico/`](app/agents/jerarquico/) | Integrado; consulta y persistencia PostgreSQL |
 | Patrón Orquestador/Supervisor | [`app/agents/orquestador/`](app/agents/orquestador/) | Integrado; consulta y persistencia PostgreSQL |
@@ -74,8 +74,7 @@ app/
 │   ├── jerarquico/     Supervisor, soporte, ventas, almacén, RAG y persistencia
 │   ├── orquestador/    Supervisor, agentes, herramientas y recuperación
 │   ├── decentralized/ Red descentralizada con agentes/herramientas simuladas
-│   ├── sales.py        Agente previo de ventas de demostración (Decimal)
-│   └── support.py      Grafo previo de soporte de demostración
+│   └── sales.py        Agente previo de ventas de demostración (Decimal)
 ├── database/        Conexión SQLAlchemy a PostgreSQL
 ├── email/           Servicio SMTP y plantillas
 ├── main.py          API autenticada del chat y selector de patrones LangGraph

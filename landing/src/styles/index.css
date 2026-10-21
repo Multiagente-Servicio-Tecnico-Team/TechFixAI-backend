@@ -1,4 +1,0 @@
-/* Estilos generales del frontend. Se cargan antes que styles.css (landing) y app.css (aplicación). */
-@import "./tokens.css";
-@import "./base.css";
-@import "./components.css";

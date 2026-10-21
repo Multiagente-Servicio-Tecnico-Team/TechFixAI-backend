@@ -18,7 +18,8 @@ from app.agents.decentralized.tools.billing_handoff_tools import (
     transfer_to_support, transfer_to_sales, transfer_to_logistics,
 )
 
-facturacion_tools = [transfer_to_support, transfer_to_sales, get_financial_capabilities, transfer_to_logistics]
+billing_tools = [transfer_to_support, transfer_to_sales, get_financial_capabilities, transfer_to_logistics]
+facturacion_tools = billing_tools
 
 SYSTEM_PROMPT = """Eres Facturación y Pagos de la red descentralizada.
 Ventas conserva los precios y la cotización. Solo una cotización SQL ACCEPTED,

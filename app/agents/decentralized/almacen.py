@@ -35,13 +35,14 @@ llm = ChatGroq(
 # HERRAMIENTAS
 # =========================================================
 
-almacen_tools = [
+warehouse_tools = [
     check_inventory,
     transfer_to_sales,
     transfer_to_purchasing,
 ]
 
-almacen_llm = llm.bind_tools(almacen_tools)
+almacen_tools = warehouse_tools
+almacen_llm = llm.bind_tools(warehouse_tools)
 
 
 # =========================================================

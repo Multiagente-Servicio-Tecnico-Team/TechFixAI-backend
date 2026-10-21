@@ -2,7 +2,7 @@ import json
 from app.agents.decentralized.data_compat import (
     normalize_handoff_history_entry, normalize_handoff_payload, normalize_inventory_result,
 )
-from app.agents.decentralized.garantia import warranty_node, garantia_node, garantia_tools
+from app.agents.decentralized.garantia import warranty_node, garantia_node, warranty_tools, garantia_tools
 from app.agents.decentralized.warranty_operations import validate_pending_warranty_operation
 from app.agents.decentralized.policy import handoff
 
@@ -17,18 +17,18 @@ from app.agents.decentralized.policy import evaluate_supply
 from app.agents.decentralized.handoffs import (
     HANDOFF_TOOLS, handoff_reason, validate_handoff, make_handoff_record, selected_handoff,
 )
-from app.agents.decentralized.soporte import support_node, soporte_node, soporte_tools
-from app.agents.decentralized.tecnico import hardware_node, tecnico_node, tecnico_tools
-from app.agents.decentralized.ventas import sales_node, ventas_node, ventas_tools
-from app.agents.decentralized.almacen import warehouse_node, almacen_node, almacen_tools
+from app.agents.decentralized.soporte import support_node, soporte_node, support_tools, soporte_tools
+from app.agents.decentralized.tecnico import hardware_node, tecnico_node, hardware_tools, tecnico_tools
+from app.agents.decentralized.ventas import sales_node, ventas_node, sales_tools, ventas_tools
+from app.agents.decentralized.almacen import warehouse_node, almacen_node, warehouse_tools, almacen_tools
 from app.agents.decentralized.tools.almacen_tools import consultar_inventario
 from app.agents.decentralized.software import software_node, software_tools
-from app.agents.decentralized.compras import purchasing_node, compras_node, compras_tools
+from app.agents.decentralized.compras import purchasing_node, compras_node, purchasing_tools, compras_tools
 from app.agents.decentralized.tools.compras_tools import consultar_fuentes_abastecimiento
 from app.agents.decentralized.tools.tecnico_tools import diagnosticar_problema
-from app.agents.decentralized.facturacion import billing_node, facturacion_node, facturacion_tools
+from app.agents.decentralized.facturacion import billing_node, facturacion_node, billing_tools, facturacion_tools
 from app.agents.decentralized.tools.facturacion_tools import consultar_capacidades_financieras
-from app.agents.decentralized.logistica import logistics_node, logistica_node, logistica_tools
+from app.agents.decentralized.logistica import logistics_node, logistica_node, logistics_tools, logistica_tools
 from app.agents.decentralized.logistics_operations import validate_pending_logistics_operation
 from app.agents.decentralized.payment_operations import validate_pending_payment_operation
 from langgraph.runtime import Runtime
@@ -40,6 +40,104 @@ class FinancialContext(TypedDict, total=False):
 
 MAX_HANDOFFS = 5
 MAX_TOOL_ITERATIONS = 6
+
+_INITIAL_PURCHASING_TOOLS = purchasing_tools
+
+
+def _resolve_purchasing_tools():
+    if purchasing_tools is compras_tools:
+        return purchasing_tools
+    if purchasing_tools is _INITIAL_PURCHASING_TOOLS:
+        return compras_tools
+    if compras_tools is _INITIAL_PURCHASING_TOOLS:
+        return purchasing_tools
+    raise ValueError("Conflicting purchasing tool registries")
+
+
+_INITIAL_BILLING_TOOLS = billing_tools
+_INITIAL_LOGISTICS_TOOLS = logistics_tools
+
+
+def _resolve_billing_tools():
+    if billing_tools is facturacion_tools:
+        return billing_tools
+    if billing_tools is _INITIAL_BILLING_TOOLS:
+        return facturacion_tools
+    if facturacion_tools is _INITIAL_BILLING_TOOLS:
+        return billing_tools
+    raise ValueError("Conflicting billing tool registries")
+
+
+def _resolve_logistics_tools():
+    if logistics_tools is logistica_tools:
+        return logistics_tools
+    if logistics_tools is _INITIAL_LOGISTICS_TOOLS:
+        return logistica_tools
+    if logistica_tools is _INITIAL_LOGISTICS_TOOLS:
+        return logistics_tools
+    raise ValueError("Conflicting logistics tool registries")
+
+
+_INITIAL_WARRANTY_TOOLS = warranty_tools
+
+
+def _resolve_warranty_tools():
+    if warranty_tools is garantia_tools:
+        return warranty_tools
+    if warranty_tools is _INITIAL_WARRANTY_TOOLS:
+        return garantia_tools
+    if garantia_tools is _INITIAL_WARRANTY_TOOLS:
+        return warranty_tools
+    raise ValueError("Conflicting warranty tool registries")
+
+
+_INITIAL_SUPPORT_TOOLS = support_tools
+_INITIAL_HARDWARE_TOOLS = hardware_tools
+
+
+def _resolve_support_tools():
+    if support_tools is soporte_tools:
+        return support_tools
+    if support_tools is _INITIAL_SUPPORT_TOOLS:
+        return soporte_tools
+    if soporte_tools is _INITIAL_SUPPORT_TOOLS:
+        return support_tools
+    raise ValueError("Conflicting support tool registries")
+
+
+def _resolve_hardware_tools():
+    if hardware_tools is tecnico_tools:
+        return hardware_tools
+    if hardware_tools is _INITIAL_HARDWARE_TOOLS:
+        return tecnico_tools
+    if tecnico_tools is _INITIAL_HARDWARE_TOOLS:
+        return hardware_tools
+    raise ValueError("Conflicting hardware tool registries")
+
+
+_INITIAL_SALES_TOOLS = sales_tools
+_INITIAL_WAREHOUSE_TOOLS = warehouse_tools
+
+
+def _resolve_sales_tools():
+    if sales_tools is ventas_tools:
+        return sales_tools
+    if sales_tools is _INITIAL_SALES_TOOLS:
+        return ventas_tools
+    if ventas_tools is _INITIAL_SALES_TOOLS:
+        return sales_tools
+    raise ValueError("Conflicting sales tool registries")
+
+
+def _resolve_warehouse_tools():
+    if warehouse_tools is almacen_tools:
+        return warehouse_tools
+    if warehouse_tools is _INITIAL_WAREHOUSE_TOOLS:
+        return almacen_tools
+    if almacen_tools is _INITIAL_WAREHOUSE_TOOLS:
+        return warehouse_tools
+    raise ValueError("Conflicting warehouse tool registries")
+
 
 AGENT_NODES = {
     "soporte": support_node, "tecnico": hardware_node,
@@ -652,15 +750,15 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         return "prepare" if financial_repository is not None and state.get("pending_payment_operation") else "__end__"
 
     for name, tools in (
-        ("soporte", soporte_tools),
-        ("tecnico", tecnico_tools),
-        ("ventas", ventas_tools),
-        ("almacen", almacen_tools),
+        ("soporte", _resolve_support_tools()),
+        ("tecnico", _resolve_hardware_tools()),
+        ("ventas", _resolve_sales_tools()),
+        ("almacen", _resolve_warehouse_tools()),
         ("software", software_tools),
-        ("compras", compras_tools),
-        ("facturacion", facturacion_tools),
-        ("logistica", logistica_tools),
-        ("garantia", garantia_tools),
+        ("compras", _resolve_purchasing_tools()),
+        ("facturacion", _resolve_billing_tools()),
+        ("logistica", _resolve_logistics_tools()),
+        ("garantia", _resolve_warranty_tools()),
     ):
         if name in {"soporte", "software", "tecnico", "compras", "facturacion", "logistica", "garantia", "almacen", "ventas"}:
             if name == "soporte":

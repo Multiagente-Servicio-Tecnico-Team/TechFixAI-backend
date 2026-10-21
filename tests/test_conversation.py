@@ -132,6 +132,8 @@ def graph_module(monkeypatch):
         canonical = {"soporte":"support", "tecnico":"hardware", "ventas":"sales", "almacen":"warehouse", "software":"software"}[name]
         setattr(module, f"{canonical}_node", node)
         setattr(module, f"{name}_tools", tools)
+        if name in {"soporte", "tecnico", "ventas", "almacen"}:
+            setattr(module, f"{canonical}_tools", tools)
         monkeypatch.setitem(sys.modules, fullname, module)
     spec = importlib.util.spec_from_file_location("isolated_conversation_graph", ROOT / "app/agents/decentralized/graph.py")
     module = importlib.util.module_from_spec(spec)
@@ -307,7 +309,11 @@ def isolated_function(filename, name, namespace):
     # Ejecutar solo la función examinada, sin imports/configuración de clientes.
     tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"))
     function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    exec(compile(ast.Module(body=[function], type_ignores=[]), filename, "exec"), namespace)
+    functions = [function]
+    if filename.endswith("/soporte.py") and name == "support_node" and "soporte_llm" in namespace:
+        namespace["support_llm"] = namespace["_INITIAL_SUPPORT_LLM"] = namespace["soporte_llm"]
+        functions.append(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_resolve_support_llm"))
+    exec(compile(ast.Module(body=functions, type_ignores=[]), filename, "exec"), namespace)
     return namespace[name]
 
 

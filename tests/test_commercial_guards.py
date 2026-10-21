@@ -21,6 +21,9 @@ def functions(filename, names, extra=None):
     namespace["json"] = json
     namespace.update(extra or {})
     nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
+    if filename.endswith("/soporte.py") and "support_node" in names and "soporte_llm" in namespace:
+        namespace["support_llm"] = namespace["_INITIAL_SUPPORT_LLM"] = namespace["soporte_llm"]
+        nodes.append(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_resolve_support_llm"))
     exec(compile(ast.Module(body=nodes, type_ignores=[]), filename, "exec"), namespace)
     return namespace
 

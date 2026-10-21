@@ -50,7 +50,7 @@ llm = ChatGroq(
 
 from app.agents.decentralized.tools.inventory_request_tools import request_inventory
 
-ventas_tools = [
+sales_tools = [
     transfer_to_billing,
     request_inventory,
     transfer_to_support,
@@ -59,7 +59,8 @@ ventas_tools = [
     consultar_base_conocimiento,
 ]
 
-ventas_llm = llm.bind_tools(ventas_tools)
+ventas_tools = sales_tools
+ventas_llm = llm.bind_tools(sales_tools)
 
 
 # =========================================================

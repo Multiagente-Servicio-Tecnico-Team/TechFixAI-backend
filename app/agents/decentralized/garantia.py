@@ -2,9 +2,11 @@
 from langchain_core.messages import AIMessage
 from app.agents.decentralized.policy import handoff, latest_user_message
 from app.agents.decentralized.warranty_operations import prepare_warranty_claim
-from app.agents.decentralized.tools.warranty_handoff_tools import warranty_handoff_tools as garantia_tools
+from app.agents.decentralized.tools.warranty_handoff_tools import warranty_handoff_tools as warranty_tools
 from app.database.decentralized_repository import RetryConflict, _id
 import re
+
+garantia_tools = warranty_tools
 
 
 def warranty_node(state, *, repository=None, authenticated_customer_id=None):

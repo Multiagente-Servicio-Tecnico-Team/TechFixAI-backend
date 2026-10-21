@@ -11,7 +11,8 @@ from app.agents.decentralized.ticket_operations import _revision
 from app.database.decentralized_repository import _id, RetryConflict
 from app.agents.decentralized.tools.logistics_handoff_tools import transfer_to_support
 
-logistica_tools = [transfer_to_support]
+logistics_tools = [transfer_to_support]
+logistica_tools = logistics_tools
 
 
 def collect_logistics(state):

@@ -24,7 +24,7 @@ llm = ChatGroq(
 )
 
 
-tecnico_tools = [
+hardware_tools = [
     transfer_to_logistics,
     transfer_to_support,
     transfer_to_software,
@@ -34,7 +34,8 @@ tecnico_tools = [
     consultar_base_conocimiento,
 ]
 
-tecnico_llm = llm.bind_tools(tecnico_tools)
+tecnico_tools = hardware_tools
+tecnico_llm = llm.bind_tools(hardware_tools)
 
 # Obliga a consultar RAG cuando se necesita documentación.
 tecnico_llm_rag = llm.bind_tools(

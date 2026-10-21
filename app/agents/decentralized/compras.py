@@ -5,7 +5,8 @@ from app.agents.decentralized.policy import evaluate_supply, handoff
 from app.agents.decentralized.tools.compras_tools import get_sourcing_capabilities
 from app.agents.decentralized.tools.purchasing_handoff_tools import transfer_to_sales
 
-compras_tools = [get_sourcing_capabilities, transfer_to_sales]
+purchasing_tools = [get_sourcing_capabilities, transfer_to_sales]
+compras_tools = purchasing_tools
 
 
 def purchasing_node(state: AgentState):

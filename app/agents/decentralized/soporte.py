@@ -25,7 +25,7 @@ llm = ChatGroq(
 )
 
 # Herramientas disponibles para el agente de Soporte
-soporte_tools = [
+support_tools = [
     transfer_to_warranty,
     transfer_to_logistics,
     transfer_to_billing,
@@ -37,7 +37,20 @@ soporte_tools = [
 ]
 
 # Vinculamos las herramientas con el LLM
-soporte_llm = llm.bind_tools(soporte_tools)
+soporte_tools = support_tools
+support_llm = llm.bind_tools(support_tools)
+soporte_llm = support_llm
+_INITIAL_SUPPORT_LLM = support_llm
+
+
+def _resolve_support_llm():
+    if support_llm is soporte_llm:
+        return support_llm
+    if support_llm is _INITIAL_SUPPORT_LLM:
+        return soporte_llm
+    if soporte_llm is _INITIAL_SUPPORT_LLM:
+        return support_llm
+    raise ValueError("Conflicting support models")
 
 # Instrucciones y responsabilidades del agente
 SYSTEM_PROMPT = """
@@ -199,7 +212,7 @@ def support_node(state: AgentState, *, authenticated_customer_id=None):
 
     try:
         # El modelo procesa la solicitud
-        response = soporte_llm.invoke(messages)
+        response = _resolve_support_llm().invoke(messages)
 
         # Actualizamos el estado compartido
         return {

@@ -81,15 +81,42 @@ def network(monkeypatch):
     monkeypatch.setattr(repository, "lookup_inventory", inventory)
 
     modules = {}
-    for name in ("app.rag.tools", "app.agents.decentralized.tools.almacen_tools",
-                 "app.agents.decentralized.soporte", "app.agents.decentralized.tecnico",
-                 "app.agents.decentralized.software", "app.agents.decentralized.ventas",
-                 "app.agents.decentralized.almacen", "app.agents.decentralized.graph"):
+    for name in ("app.rag.tools", "app.agents.decentralized.tools.warehouse_tools",
+                 "app.agents.decentralized.support", "app.agents.decentralized.hardware",
+                 "app.agents.decentralized.software", "app.agents.decentralized.sales",
+                 "app.agents.decentralized.warehouse", "app.agents.decentralized.graph"):
         path = ROOT / (name.replace(".", "/") + ".py")
         spec = importlib.util.spec_from_file_location(name, path)
         module = importlib.util.module_from_spec(spec)
         monkeypatch.setitem(sys.modules, name, module)
         spec.loader.exec_module(module)
+        if name == "app.agents.decentralized.tools.warehouse_tools":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.tools.almacen_tools", module)
+            package = importlib.import_module(
+                "app.agents.decentralized.tools"
+            )
+            monkeypatch.setattr(package, "almacen_tools", module, raising=False)
+            monkeypatch.setattr(package, "warehouse_tools", module, raising=False)
+        if name == "app.agents.decentralized.support":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.soporte", module)
+            package = sys.modules["app.agents.decentralized"]
+            monkeypatch.setattr(package, "soporte", module, raising=False)
+            monkeypatch.setattr(package, "support", module, raising=False)
+        if name == "app.agents.decentralized.warehouse":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.almacen", module)
+            package = sys.modules["app.agents.decentralized"]
+            monkeypatch.setattr(package, "almacen", module, raising=False)
+            monkeypatch.setattr(package, "warehouse", module, raising=False)
+        if name == "app.agents.decentralized.sales":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.ventas", module)
+            package = sys.modules["app.agents.decentralized"]
+            monkeypatch.setattr(package, "ventas", module, raising=False)
+            monkeypatch.setattr(package, "sales", module, raising=False)
+        if name == "app.agents.decentralized.hardware":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.tecnico", module)
+            package = sys.modules["app.agents.decentralized"]
+            monkeypatch.setattr(package, "tecnico", module, raising=False)
+            monkeypatch.setattr(package, "hardware", module, raising=False)
         modules[name.rsplit(".", 1)[-1]] = module
     return modules["graph"], controls
 

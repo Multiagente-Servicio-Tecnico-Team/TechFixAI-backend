@@ -108,7 +108,7 @@ def test_active_and_legacy_registries_and_prompt_are_coherent(network):
     assert len(names)==len(set(names))
     registered=module.build_graph().get_graph().nodes["ventas_tools"].data.tools_by_name
     assert {"identify_quote_service","generar_cotizacion"}<=set(registered)
-    tree=ast.parse((Path(__file__).resolve().parents[1]/"app/agents/decentralized/ventas.py").read_text(encoding="utf-8"))
+    tree=ast.parse((Path(__file__).resolve().parents[1]/"app/agents/decentralized/sales.py").read_text(encoding="utf-8"))
     prompt=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="SYSTEM_PROMPT" for t in n.targets))
     assert "identify_quote_service" in prompt and "generar_cotizacion" not in prompt
 

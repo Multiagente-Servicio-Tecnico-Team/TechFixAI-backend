@@ -148,6 +148,10 @@ def test_exact_model_initialization_binding_and_no_rebinding(network, monkeypatc
             return bound
     monkeypatch.setattr(groq, "ChatGroq", CountingGroq)
     path = Path(__file__).resolve().parents[1] / f"app/agents/decentralized/{role}.py"
+    if role == "almacen":
+        path = path.with_name("warehouse.py")
+    elif role == "ventas":
+        path = path.with_name("sales.py")
     spec = importlib.util.spec_from_file_location("isolated_registry_" + role, path)
     agent = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(agent)

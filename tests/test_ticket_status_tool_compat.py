@@ -134,7 +134,7 @@ def test_registry_and_prompt_expose_only_english_to_model(network):
     module, _ = network
     names = [item.name for item in module.soporte_tools]
     assert names.count("get_ticket_status") == 1 and "consultar_estado_ticket" not in names
-    source = (ROOT / "app/agents/decentralized/soporte.py").read_text(encoding="utf-8")
+    source = (ROOT / "app/agents/decentralized/support.py").read_text(encoding="utf-8")
     prompt = next(ast.literal_eval(node.value) for node in ast.parse(source).body if isinstance(node, ast.Assign)
                   and any(isinstance(target, ast.Name) and target.id == "SYSTEM_PROMPT" for target in node.targets))
     assert "get_ticket_status" in prompt and "consultar_estado_ticket" not in prompt

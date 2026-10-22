@@ -88,7 +88,8 @@ def test_exact_active_and_execution_registries_and_prompt_references(network, or
     assert not legacy & set(names) and len(names) == len(set(names))
     registered = set(module.build_graph().get_graph().nodes[f"{origin}_tools"].data.tools_by_name)
     assert registered == set(names) | legacy | ({"consultar_estado_ticket"} if origin == "soporte" else set())
-    tree = ast.parse((Path(__file__).resolve().parents[1] / f"app/agents/decentralized/{origin}.py").read_text(encoding="utf-8"))
+    source_origin = "support" if origin == "soporte" else origin
+    tree = ast.parse((Path(__file__).resolve().parents[1] / f"app/agents/decentralized/{source_origin}.py").read_text(encoding="utf-8"))
     prompt = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "SYSTEM_PROMPT" for target in node.targets))
     assert not any(name in prompt for name in legacy)

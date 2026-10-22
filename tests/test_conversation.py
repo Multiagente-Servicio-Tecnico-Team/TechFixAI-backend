@@ -135,6 +135,14 @@ def graph_module(monkeypatch):
         if name in {"soporte", "tecnico", "ventas", "almacen"}:
             setattr(module, f"{canonical}_tools", tools)
         monkeypatch.setitem(sys.modules, fullname, module)
+        if name == "tecnico":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.hardware", module)
+        if name == "ventas":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.sales", module)
+        if name == "almacen":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.warehouse", module)
+        if name == "soporte":
+            monkeypatch.setitem(sys.modules, "app.agents.decentralized.support", module)
     spec = importlib.util.spec_from_file_location("isolated_conversation_graph", ROOT / "app/agents/decentralized/graph.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -310,15 +318,20 @@ def isolated_function(filename, name, namespace):
     tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"))
     function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
     functions = [function]
-    if filename.endswith("/soporte.py") and name == "support_node" and "soporte_llm" in namespace:
+    if filename.endswith("/support.py") and name == "support_node" and "soporte_llm" in namespace:
         namespace["support_llm"] = namespace["_INITIAL_SUPPORT_LLM"] = namespace["soporte_llm"]
         functions.append(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_resolve_support_llm"))
+    if filename.endswith("/hardware.py") and name == "hardware_node":
+        for suffix in ("", "_rag"):
+            if "tecnico_llm" + suffix in namespace:
+                namespace["hardware_llm" + suffix] = namespace["_INITIAL_HARDWARE_LLM" + suffix.upper()] = namespace["tecnico_llm" + suffix]
+                functions.append(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_resolve_hardware_llm" + suffix))
     exec(compile(ast.Module(body=functions, type_ignores=[]), filename, "exec"), namespace)
     return namespace[name]
 
 
 def test_ventas_conserva_preguntas_para_respuestas_breves():
-    build = isolated_function("app/agents/decentralized/ventas.py", "build_sales_context", {
+    build = isolated_function("app/agents/decentralized/sales.py", "build_sales_context", {
         "AgentState": dict, "AIMessage": AIMessage, "HumanMessage": HumanMessage, "ToolMessage": ToolMessage,
     })
     messages = [AIMessage(content="¿Quieres cotizar mantenimiento?"), HumanMessage(content="Sí, ese")]
@@ -336,7 +349,7 @@ def test_rag_tecnico_se_repite_en_otro_turno_y_reintenta_errores():
 
     rag, regular = Model(), Model()
     from app.agents.decentralized.policy import es_revision_comercial, ultimo_usuario, handoff, no_puede_probar, es_atencion, triaje_soporte, transferencia_sin_progreso, peligro_fisico_reportado
-    node = isolated_function("app/agents/decentralized/tecnico.py", "hardware_node", {
+    node = isolated_function("app/agents/decentralized/hardware.py", "hardware_node", {
         "AgentState": dict, "AIMessage": AIMessage, "SystemMessage": SystemMessage,
         "ToolMessage": ToolMessage, "SYSTEM_PROMPT": "Técnico", "tecnico_llm_rag": rag, "tecnico_llm": regular,
         "is_diagnostic_pricing_query": es_revision_comercial, "latest_user_message": ultimo_usuario, "handoff": handoff,
@@ -550,7 +563,7 @@ def test_soporte_triaje_conservador_real(text, target):
     class Forbidden:
         def invoke(self, messages):
             pytest.fail("El triaje local debe resolver este caso")
-    node = isolated_function("app/agents/decentralized/soporte.py", "support_node", {
+    node = isolated_function("app/agents/decentralized/support.py", "support_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage, "SYSTEM_PROMPT": "Soporte", "soporte_llm": Forbidden(),
     })
@@ -576,7 +589,7 @@ def test_soporte_historial_respuesta_breve_y_cambio_consulta():
 def test_soporte_real_integrado_transfiere_y_conserva_contexto(graph_module, text, target):
     from app.agents.decentralized import policy
     from app.agents.decentralized.tools.support_handoff_tools import transfer_to_software, transfer_to_hardware
-    node = isolated_function("app/agents/decentralized/soporte.py", "support_node", {
+    node = isolated_function("app/agents/decentralized/support.py", "support_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage,
     })
@@ -603,7 +616,7 @@ def test_soporte_consulta_general_no_reactiva_falla_antigua():
     class Model:
         def invoke(self, messages):
             return AIMessage(content="Consulta general atendida")
-    node = isolated_function("app/agents/decentralized/soporte.py", "support_node", {
+    node = isolated_function("app/agents/decentralized/support.py", "support_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage, "SYSTEM_PROMPT": "Soporte", "soporte_llm": Model(),
     })
@@ -617,7 +630,7 @@ def hardware_node(model=None):
     class Model:
         def invoke(self, messages):
             return AIMessage(content="Evaluación Hardware preliminar")
-    return isolated_function("app/agents/decentralized/tecnico.py", "hardware_node", {
+    return isolated_function("app/agents/decentralized/hardware.py", "hardware_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
         "SystemMessage": SystemMessage, "SYSTEM_PROMPT": "Hardware",
         "tecnico_llm": model or Model(), "tecnico_llm_rag": model or Model(),
@@ -733,7 +746,7 @@ def test_auditoria_comercial_valida_y_ventas_real_tarifa_pendiente(graph_module)
                  "SYSTEM_PROMPT": "Ventas", "Decimal": __import__("decimal").Decimal,
                  "InvalidOperation": __import__("decimal").InvalidOperation}
     for name in ("validate_inventory", "build_sales_context", "build_inventory_context", "sales_node"):
-        namespace[name] = isolated_function("app/agents/decentralized/ventas.py", name, namespace)
+        namespace[name] = isolated_function("app/agents/decentralized/sales.py", name, namespace)
     # Las funciones extraídas necesitan compartir sus dependencias.
     namespace["sales_node"].__globals__.update(namespace)
     graph_module.AGENT_NODES["ventas"] = namespace["sales_node"]
@@ -786,7 +799,7 @@ def test_almacen_real_retorno_y_solicitante_obsoleto(graph_module, complete):
         return legacy.invoke({"nombre_repuesto": part_name, "cantidad": quantity})
     graph_module.almacen_tools = [*graph_module.almacen_tools, StructuredTool.from_function(
         func=lookup, name="check_inventory", description=legacy.description)]
-    node = isolated_function("app/agents/decentralized/almacen.py", "warehouse_node", {
+    node = isolated_function("app/agents/decentralized/warehouse.py", "warehouse_node", {
         **vars(policy), "AgentState": dict, "AIMessage": AIMessage, "ToolMessage": ToolMessage,
     })
     graph_module.AGENT_NODES["almacen"] = node

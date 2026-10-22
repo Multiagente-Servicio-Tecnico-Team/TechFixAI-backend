@@ -83,6 +83,22 @@ def test_loading_original_path_exports_both_names_without_duplicate_model_initia
             super().__init__(**kwargs)
     monkeypatch.setattr(groq,"ChatGroq",CountingGroq)
     path=Path(__file__).resolve().parents[1]/f"app/agents/decentralized/{role}.py"
+    if role == "tecnico":
+        path = path.with_name("hardware.py")
+    elif role == "soporte":
+        path = path.with_name("support.py")
+    elif role == "almacen":
+        path = path.with_name("warehouse.py")
+    elif role == "ventas":
+        path = path.with_name("sales.py")
+    elif role == "compras":
+        path = path.with_name("purchasing.py")
+    elif role == "facturacion":
+        path = path.with_name("billing.py")
+    elif role == "logistica":
+        path = path.with_name("logistics.py")
+    elif role == "garantia":
+        path = path.with_name("warranty.py")
     spec=importlib.util.spec_from_file_location("isolated_export_"+role,path)
     module=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

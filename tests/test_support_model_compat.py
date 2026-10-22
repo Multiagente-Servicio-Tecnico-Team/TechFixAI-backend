@@ -35,7 +35,7 @@ def test_single_initialization_and_binding_with_original_registry(network, monke
             bindings.append((tools, kwargs, bound))
             return bound
     monkeypatch.setattr(groq, "ChatGroq", CountingGroq)
-    path = Path(__file__).resolve().parents[1] / "app/agents/decentralized/soporte.py"
+    path = Path(__file__).resolve().parents[1] / "app/agents/decentralized/support.py"
     spec = importlib.util.spec_from_file_location("isolated_support_model", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

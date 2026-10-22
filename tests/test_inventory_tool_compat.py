@@ -19,7 +19,8 @@ LEGACY = {"consultar_capacidades_financieras", "diagnosticar_problema", "consult
 @pytest.mark.parametrize("role", ["tecnico", "almacen", "compras", "facturacion"])
 def test_active_prompt_identifiers_match_registry(network, role):
     module, _ = network
-    source = (ROOT / f"app/agents/decentralized/{role}.py").read_text(encoding="utf-8")
+    source_role = {"facturacion": "billing", "almacen": "warehouse", "tecnico": "hardware"}.get(role, role)
+    source = (ROOT / f"app/agents/decentralized/{source_role}.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     prompts = [ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
                and any(isinstance(target, ast.Name) and target.id == "SYSTEM_PROMPT" for target in node.targets)]

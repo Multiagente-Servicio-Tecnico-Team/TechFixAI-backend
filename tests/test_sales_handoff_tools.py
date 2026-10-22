@@ -45,7 +45,7 @@ def test_exact_active_registry_legacy_execution_and_prompt(network):
     legacy={"transferir_a_facturacion","transferir_a_soporte","transferir_a_tecnico","solicitar_inventario","generar_cotizacion"}
     registered=module.build_graph().get_graph().nodes["ventas_tools"].data.tools_by_name
     assert set(registered)==set(active)|legacy
-    tree=ast.parse((Path(__file__).resolve().parents[1]/"app/agents/decentralized/ventas.py").read_text(encoding="utf-8"))
+    tree=ast.parse((Path(__file__).resolve().parents[1]/"app/agents/decentralized/sales.py").read_text(encoding="utf-8"))
     prompt=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="SYSTEM_PROMPT" for t in n.targets))
     assert not any(name in prompt for name in legacy)
 

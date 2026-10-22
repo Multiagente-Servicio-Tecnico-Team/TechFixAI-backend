@@ -21,9 +21,12 @@ def functions(filename, names, extra=None):
     namespace["json"] = json
     namespace.update(extra or {})
     nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
-    if filename.endswith("/soporte.py") and "support_node" in names and "soporte_llm" in namespace:
+    if filename.endswith("/support.py") and "support_node" in names and "soporte_llm" in namespace:
         namespace["support_llm"] = namespace["_INITIAL_SUPPORT_LLM"] = namespace["soporte_llm"]
         nodes.append(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_resolve_support_llm"))
+    if filename.endswith("/sales.py") and "sales_node" in names and "ventas_llm" in namespace:
+        namespace["sales_llm"] = namespace["_INITIAL_SALES_LLM"] = namespace["ventas_llm"]
+        nodes.append(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_resolve_sales_llm"))
     exec(compile(ast.Module(body=nodes, type_ignores=[]), filename, "exec"), namespace)
     return namespace
 
@@ -34,7 +37,7 @@ class ForbiddenModel:
 
 
 def test_contexto_ventas_datos_preliminares_y_par_handoff():
-    build = functions("app/agents/decentralized/ventas.py", {"build_sales_context"})["build_sales_context"]
+    build = functions("app/agents/decentralized/sales.py", {"build_sales_context"})["build_sales_context"]
     call = AIMessage(content="", tool_calls=[dict(name="transferir_a_ventas", args={"motivo": "Evaluar editor", "alcance": "solo_servicio"}, id="a")])
     output = ToolMessage(content='{"motivo":"Evaluar editor","alcance":"solo_servicio"}', name="transferir_a_ventas", tool_call_id="a")
     context = build({"messages": [call, output], "request_revision": 2,
@@ -47,7 +50,7 @@ def test_contexto_ventas_datos_preliminares_y_par_handoff():
 
 
 def sales():
-    return functions("app/agents/decentralized/ventas.py", {
+    return functions("app/agents/decentralized/sales.py", {
         "sales_node", "validate_inventory", "build_sales_context", "build_inventory_context",
     }, {"ventas_llm": ForbiddenModel()})["sales_node"]
 
@@ -83,7 +86,7 @@ def test_compatibilidad_es_tecnica_incluso_con_inventario():
 
 
 def test_soporte_no_inventa_canales_ni_promete_contacto():
-    node = functions("app/agents/decentralized/soporte.py", {"support_node"}, {"soporte_llm": ForbiddenModel()})["support_node"]
+    node = functions("app/agents/decentralized/support.py", {"support_node"}, {"soporte_llm": ForbiddenModel()})["support_node"]
     for text in ("¿Cómo solicito una revisión presencial?", "¿Puedes reservarme una cita?"):
         result = node({"messages": [HumanMessage(content=text)]})
         reply = result["messages"][-1].content
@@ -92,7 +95,7 @@ def test_soporte_no_inventa_canales_ni_promete_contacto():
 
 
 def test_revision_comercial_transfiere_con_alcance_correcto():
-    node = functions("app/agents/decentralized/tecnico.py", {"hardware_node"})["hardware_node"]
+    node = functions("app/agents/decentralized/hardware.py", {"hardware_node"})["hardware_node"]
     result = node({"messages": [HumanMessage(content="¿Cuánto cuesta una revisión de diagnóstico?")]})
     call = result["messages"][-1].tool_calls[0]
     assert call["name"] == "transfer_to_sales" and call["args"]["scope"] == "solo_servicio"
@@ -107,7 +110,7 @@ def test_repuesto_no_se_infiere_de_nombre_generico():
 
 
 def test_almacen_pide_repuesto_exacto_sin_elegir_otro():
-    node = functions("app/agents/decentralized/almacen.py", {"warehouse_node"})["warehouse_node"]
+    node = functions("app/agents/decentralized/warehouse.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="Una unidad")],
                    "required_parts": [{"name": "SSD 500GB NVMe", "quantity": 1}]})
     call = result["messages"][-1].tool_calls[0]
@@ -133,7 +136,7 @@ def test_inventario_con_error_no_confirma_precios():
 
 
 def test_almacen_no_reintenta_indefinidamente_una_consulta_fallida():
-    node = functions("app/agents/decentralized/almacen.py", {"warehouse_node"})["warehouse_node"]
+    node = functions("app/agents/decentralized/warehouse.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="Una unidad")],
                    "required_parts": [{"name": "SSD 500GB NVMe", "quantity": 1}],
                    "errors": ["Error al consultar inventario"]})
@@ -142,7 +145,7 @@ def test_almacen_no_reintenta_indefinidamente_una_consulta_fallida():
 
 
 def test_tecnico_no_insiste_si_usuario_no_sabe_hacer_pruebas():
-    node = functions("app/agents/decentralized/tecnico.py", {"hardware_node"})["hardware_node"]
+    node = functions("app/agents/decentralized/hardware.py", {"hardware_node"})["hardware_node"]
     for text in ("Ni idea no se hacer prubeas tecnicas", "No sé conectar un monitor externo"):
         result = node({"messages": [HumanMessage(content=text)]})
         assert "revisión presencial" in result["messages"][-1].content
@@ -155,7 +158,7 @@ def test_stock_en_ventas_va_a_almacen_no_a_soporte():
 
 
 def test_almacen_no_simula_un_listado_ni_elige_variante():
-    node = functions("app/agents/decentralized/almacen.py", {"warehouse_node"})["warehouse_node"]
+    node = functions("app/agents/decentralized/warehouse.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="q ssd tienes en stock")], "inventory_query": "SSD"})
     assert not result["messages"][-1].tool_calls
     assert "no listar" in result["messages"][-1].content
@@ -171,7 +174,7 @@ def test_marcador_se_pide_aclarar_sin_citas():
 
 
 def test_transferencia_generica_a_soporte_no_responde_sobre_citas():
-    node = functions("app/agents/decentralized/soporte.py", {"support_node"})["support_node"]
+    node = functions("app/agents/decentralized/support.py", {"support_node"})["support_node"]
     result = node({"messages": [HumanMessage(content="Tengo una consulta"),
                    ToolMessage(content="Atención general", name="transferir_a_soporte", tool_call_id="support")]})
     assert "ticket" in result["messages"][-1].content

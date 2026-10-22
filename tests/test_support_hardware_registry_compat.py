@@ -183,6 +183,10 @@ def test_model_initialization_binds_exact_original_objects_once(network, monkeyp
             return bound
     monkeypatch.setattr(groq, "ChatGroq", CountingGroq)
     path = Path(__file__).resolve().parents[1] / f"app/agents/decentralized/{role}.py"
+    if role == "tecnico":
+        path = path.with_name("hardware.py")
+    elif role == "soporte":
+        path = path.with_name("support.py")
     spec = importlib.util.spec_from_file_location("isolated_registry_" + role, path)
     agent = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(agent)

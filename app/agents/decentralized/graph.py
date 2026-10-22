@@ -2,7 +2,7 @@ import json
 from app.agents.decentralized.data_compat import (
     normalize_handoff_history_entry, normalize_handoff_payload, normalize_inventory_result,
 )
-from app.agents.decentralized.garantia import warranty_node, garantia_node, warranty_tools, garantia_tools
+from app.agents.decentralized.warranty import warranty_node, garantia_node, warranty_tools, garantia_tools
 from app.agents.decentralized.warranty_operations import validate_pending_warranty_operation
 from app.agents.decentralized.policy import handoff
 
@@ -17,18 +17,18 @@ from app.agents.decentralized.policy import evaluate_supply
 from app.agents.decentralized.handoffs import (
     HANDOFF_TOOLS, handoff_reason, validate_handoff, make_handoff_record, selected_handoff,
 )
-from app.agents.decentralized.soporte import support_node, soporte_node, support_tools, soporte_tools
-from app.agents.decentralized.tecnico import hardware_node, tecnico_node, hardware_tools, tecnico_tools
-from app.agents.decentralized.ventas import sales_node, ventas_node, sales_tools, ventas_tools
-from app.agents.decentralized.almacen import warehouse_node, almacen_node, warehouse_tools, almacen_tools
+from app.agents.decentralized.support import support_node, soporte_node, support_tools, soporte_tools
+from app.agents.decentralized.hardware import hardware_node, tecnico_node, hardware_tools, tecnico_tools
+from app.agents.decentralized.sales import sales_node, ventas_node, sales_tools, ventas_tools
+from app.agents.decentralized.warehouse import warehouse_node, almacen_node, warehouse_tools, almacen_tools
 from app.agents.decentralized.tools.almacen_tools import consultar_inventario
 from app.agents.decentralized.software import software_node, software_tools
-from app.agents.decentralized.compras import purchasing_node, compras_node, purchasing_tools, compras_tools
+from app.agents.decentralized.purchasing import purchasing_node, compras_node, purchasing_tools, compras_tools
 from app.agents.decentralized.tools.compras_tools import consultar_fuentes_abastecimiento
 from app.agents.decentralized.tools.tecnico_tools import diagnosticar_problema
-from app.agents.decentralized.facturacion import billing_node, facturacion_node, billing_tools, facturacion_tools
+from app.agents.decentralized.billing import billing_node, facturacion_node, billing_tools, facturacion_tools
 from app.agents.decentralized.tools.facturacion_tools import consultar_capacidades_financieras
-from app.agents.decentralized.logistica import logistics_node, logistica_node, logistics_tools, logistica_tools
+from app.agents.decentralized.logistics import logistics_node, logistica_node, logistics_tools, logistica_tools
 from app.agents.decentralized.logistics_operations import validate_pending_logistics_operation
 from app.agents.decentralized.payment_operations import validate_pending_payment_operation
 from langgraph.runtime import Runtime

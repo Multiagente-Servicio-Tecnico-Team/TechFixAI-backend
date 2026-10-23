@@ -37,6 +37,9 @@ from typing_extensions import TypedDict
 
 class FinancialContext(TypedDict, total=False):
     authenticated_customer_id: int
+    quote_action: str
+    quote_proposal_id: str
+    quote_conversation_id: str
 
 MAX_HANDOFFS = 5
 MAX_TOOL_ITERATIONS = 6
@@ -577,7 +580,7 @@ def registrar_handoff(state: AgentState, origen: str):
     return record_handoff(state, origin=origen)
 
 
-def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=False):
+def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=False, quote_writes=False):
     """Construye la misma red; el consumidor puede aportar su checkpointer.
 
     Sin checkpointer admite invoke(state) y el historial gestionado por Conversation.
@@ -585,8 +588,34 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
     """
     if financial_repository is not None and checkpointer is None:
         raise ValueError("Preparación financiera requiere checkpointer explícito")
+    if quote_writes and (financial_repository is None or checkpointer is None):
+        raise ValueError("Aceptación de cotizaciones requiere repositorio y checkpointer")
     builder = StateGraph(AgentState, context_schema=FinancialContext)
     for name, node in AGENT_NODES.items():
+        if name == "ventas" and quote_writes:
+            def sales_entry(state: AgentState, config, runtime: Runtime[FinancialContext]):
+                from app.agents.decentralized.quote_operations import build_proposal, QuoteConflict
+                from app.database.decentralized_repository import RetryConflict
+                result = sales_node(state)
+                if result.get("quote", {}).get("status") != "proposed":
+                    return {**result, "proposal": None, "proposal_decision": None}
+                if state.get("quote_receipt") is not None:
+                    return result
+                try:
+                    proposal = build_proposal({**state, **result}, result["quote"],
+                        authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"),
+                        conversation_id=config.get("metadata", {}).get("conversation_id", config["configurable"]["thread_id"]),
+                        repository=financial_repository)
+                except (RetryConflict, ValueError, LookupError, KeyError, TypeError):
+                    return {**result, "proposal": None, "proposal_decision": None,
+                            "messages": [AIMessage(content="La propuesta todavía no permite aceptación: verifica el ticket, la revisión y el inventario vigente. No se guardó una cotización.")]}
+                same = (state.get("proposal") or {}).get("proposal_id") == proposal["proposal_id"]
+                patch = {**result, "proposal": proposal,
+                         "proposal_decision": state.get("proposal_decision") if same else None}
+                if not state.get("required_parts"):
+                    patch.update(inventory_revision=proposal["request_revision"], inventory_pending=False)
+                return patch
+            node = sales_entry
         if name == "soporte" and financial_repository is not None:
             def support_entry(state: AgentState, runtime: Runtime[FinancialContext]):
                 customer = (runtime.context or {}).get("authenticated_customer_id")
@@ -609,6 +638,58 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                     authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"))
             node = financial_entry
         builder.add_node(name, node)
+
+    if quote_writes:
+        def prepare_quote(state: AgentState, runtime: Runtime[FinancialContext]):
+            from app.agents.decentralized.quote_operations import prepare_quote_decision
+            context = runtime.context or {}
+            patch = prepare_quote_decision(state,
+                authenticated_customer_id=context.get("authenticated_customer_id"),
+                conversation_id=context.get("quote_conversation_id"),
+                proposal_id=context.get("quote_proposal_id"), action=context.get("quote_action"),
+                repository=financial_repository)
+            patch["messages"] = [AIMessage(content=("La cotización ya estaba aceptada y guardada; no se duplicó ni se registró un pago."
+                if state.get("quote_receipt") is not None else
+                "La propuesta fue rechazada; no se registró una cotización aceptada."
+                if context.get("quote_action") == "reject_quote" else
+                "La aceptación está preparada; todavía no se confirmó el guardado de la cotización."))]
+            return patch
+
+        def execute_quote(state: AgentState, config, runtime: Runtime[FinancialContext]):
+            from app.agents.decentralized.quote_operations import validate_pending_quote, QuoteConflict
+            from app.database.decentralized_repository import _id, _money
+            from copy import deepcopy
+            context = runtime.context or {}
+            if context.get("quote_action") != "accept_quote":
+                raise QuoteConflict("La ejecución requiere aceptación autenticada")
+            operation = validate_pending_quote(state,
+                authenticated_customer_id=context.get("authenticated_customer_id"),
+                conversation_id=context.get("quote_conversation_id"), proposal_id=context.get("quote_proposal_id"))
+            saved = checkpointer.get_tuple({"configurable": {
+                "thread_id": config["configurable"]["thread_id"], "checkpoint_ns": ""}})
+            if saved is None or saved.checkpoint.get("channel_values", {}).get("pending_quote_operation") != operation:
+                raise QuoteConflict("La operación no está confirmada en checkpoint")
+            row = financial_repository.create_accepted_quote(**operation["payload"])
+            proposal = state["proposal"]
+            if (row.get("ticket_id") != operation["payload"]["ticket_id"] or row.get("status") != "ACCEPTED"
+                    or row.get("quote_type") != proposal["quote_type"]
+                    or _money(row.get("total_amount")) != proposal["total_amount"]
+                    or _money(row.get("labor_cost")) != proposal["labor_cost"]):
+                raise QuoteConflict("Respuesta persistida incompatible; requiere reconciliación")
+            quote_id = _id(row.get("id"))
+            return {"quote_id": quote_id, "quote_status": "ACCEPTED", "ticket_status": "QUOTED",
+                    "pending_quote_operation": None,
+                    "quote_receipt": dict(proposal_id=operation["proposal_id"], quote_id=quote_id,
+                                          payload=deepcopy(operation["payload"])),
+                    "quote": {**state["quote"], "status": "confirmed"},
+                    "messages": [AIMessage(content="La cotización quedó aceptada y guardada con el identificador " + str(quote_id) + ". No se ha registrado ni confirmado un pago.")]}
+
+        builder.add_node("preparar_cotizacion", prepare_quote)
+        builder.add_node("ejecutar_cotizacion", execute_quote)
+        builder.add_conditional_edges("preparar_cotizacion",
+            lambda state: "execute" if state.get("pending_quote_operation") else "done",
+            {"execute": "ejecutar_cotizacion", "done": END})
+        builder.add_edge("ejecutar_cotizacion", END)
 
     if ticket_writes and (financial_repository is None or checkpointer is None):
         raise ValueError("Creación de tickets requiere repositorio y checkpointer")
@@ -821,8 +902,19 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
 
     builder.add_node("preparar_turno", prepare_turn)
     builder.add_edge(START, "preparar_turno")
-    builder.add_conditional_edges("preparar_turno", route_entry,
-                                  {name: name for name in AGENT_NODES})
+    if quote_writes:
+        def quote_entry(state: AgentState, runtime: Runtime[FinancialContext]):
+            from app.agents.decentralized.quote_operations import QuoteConflict
+            if (runtime.context or {}).get("quote_action") in {"accept_quote", "reject_quote"}:
+                return "preparar_cotizacion"
+            if state.get("pending_quote_operation") is not None:
+                raise QuoteConflict("Hay una cotización pendiente de reintento; no se puede reemplazar")
+            return route_entry(state)
+        builder.add_conditional_edges("preparar_turno", quote_entry,
+            {**{name: name for name in AGENT_NODES}, "preparar_cotizacion": "preparar_cotizacion"})
+    else:
+        builder.add_conditional_edges("preparar_turno", route_entry,
+                                      {name: name for name in AGENT_NODES})
     for agent in AGENT_NODES:
         if agent == "soporte" and ticket_writes:
             def support_route(state):
@@ -878,6 +970,8 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
     interrupts = ["ejecutar_pago", "ejecutar_logistica", "ejecutar_garantia"] if financial_repository is not None else []
     if ticket_writes:
         interrupts.append("ejecutar_ticket")
+    if quote_writes:
+        interrupts.append("ejecutar_cotizacion")
     return builder.compile(checkpointer=checkpointer, interrupt_before=interrupts or None)
 
 

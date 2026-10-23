@@ -94,7 +94,7 @@ def _build_decentralized_graph(checkpointer, *, financial_repository=None) -> An
     from app.agents.decentralized.graph import build_graph
     from app.database.decentralized_repository import DecentralizedRepository
 
-    return build_graph(checkpointer=checkpointer, ticket_writes=True, financial_repository=(
+    return build_graph(checkpointer=checkpointer, ticket_writes=True, quote_writes=True, financial_repository=(
         financial_repository if financial_repository is not None else DecentralizedRepository()))
 
 
@@ -116,6 +116,10 @@ def _as_decimal_text(value: Any) -> str:
 
 
 def _quote_for_result(pattern: str, result: dict[str, Any]) -> QuoteOut | None:
+    if pattern == "decentralized":
+        from app.agents.decentralized.quote_operations import quote_response
+        quote = quote_response(result)
+        return QuoteOut(**quote) if quote is not None else None
     status: str | None = None
     lines: list[QuoteLine] = []
     total: Any = None
@@ -358,6 +362,8 @@ def create_app(
         resume_payment: bool = False,
         resume_logistics: bool = False,
         resume_warranty: bool = False,
+        quote_action: str | None = None,
+        proposal_id: str | None = None,
     ) -> dict[str, Any]:
         from app.agents.orquestador.graph.state import AgentState as OrchestratorState
         from app.agents.jerarquico.graph.state import ServiceState
@@ -388,6 +394,18 @@ def create_app(
         }
         with (trace_context_factory or (lambda: get_trace_context(settings_factory())))():
             graph = get_graph(pattern)
+            if pattern == "decentralized" and quote_action is not None:
+                from psycopg import Error as PsycopgError
+                from app.agents.decentralized.quote_operations import apply_quote_action, QuoteConflict
+                try:
+                    return apply_quote_action(graph, config, authenticated_customer_id=customer.id,
+                        conversation_id=conversation_id, proposal_id=proposal_id, action=quote_action)
+                except QuoteConflict as exc:
+                    raise HTTPException(status_code=409, detail=str(exc)) from None
+                except (ValueError, LookupError):
+                    raise HTTPException(status_code=409, detail="No se pudo validar la propuesta y su propietario. Consulta una propuesta vigente.") from None
+                except PsycopgError:
+                    raise HTTPException(status_code=503, detail="El almacenamiento del asistente no está disponible.") from None
             if pattern == "decentralized" and (graph_factories is None or financial_repository is not None):
                 from psycopg import Error as PsycopgError
                 from app.agents.decentralized.payment_operations import validate_pending_payment_operation
@@ -397,6 +415,9 @@ def create_app(
                     saved = snapshot.values
                     if saved and saved.get("customer_id") != customer.id:
                         raise HTTPException(status_code=404, detail="Conversación no encontrada.")
+                    from app.agents.decentralized.quote_operations import quote_requires_retry
+                    if quote_requires_retry(graph, config, snapshot):
+                        raise HTTPException(status_code=409, detail="Hay una cotización pendiente. Reintenta su aceptación sin cambiar la propuesta.")
                     if "ejecutar_ticket" in snapshot.next:
                         from app.agents.decentralized.ticket_operations import validate_pending_ticket_operation
                         from app.agents.decentralized.policy import normalize_text
@@ -541,8 +562,7 @@ def create_app(
         if body.action in {"resume_payment", "resume_logistics", "resume_warranty"} and body.pattern != "decentralized":
             raise HTTPException(status_code=409, detail="Acción no disponible para este patrón.")
         if body.action and body.action not in {"resume_payment", "resume_logistics", "resume_warranty"} and (
-            body.pattern == "decentralized"
-            or not conversation["pending_quote"]
+            body.pattern != "decentralized" and not conversation["pending_quote"]
         ):
             return JSONResponse(
                 status_code=409,
@@ -581,6 +601,8 @@ def create_app(
                     resume_payment=body.action == "resume_payment",
                     resume_logistics=body.action == "resume_logistics",
                     resume_warranty=body.action == "resume_warranty",
+                    quote_action=body.action if body.pattern == "decentralized" and body.action in {"accept_quote", "reject_quote"} else None,
+                    proposal_id=body.proposal_id,
                 )
             except (SQLAlchemyError, OSError) as exc:
                 logger.error(

@@ -128,6 +128,12 @@ class ProposalLine(TypedDict):
 
 
 class CommercialProposal(TypedDict):
+    proposal_id: str
+    customer_id: int
+    ticket_id: int
+    conversation_id: str
+    request_type: RequestType
+    inventory_snapshot: list[dict[str, Any]]
     request_revision: int
     quote_type: QuoteType
     currency: str
@@ -138,6 +144,7 @@ class CommercialProposal(TypedDict):
 
 
 class ProposalDecision(TypedDict):
+    proposal_id: str
     request_revision: int
     accepted: bool
     # Debe venir de una decisión inequívoca, no de presupuesto/silencio/inferencia.
@@ -213,6 +220,13 @@ class PendingPaymentOperation(TypedDict):
     payload: PaymentCreationPayload
 
 
+class PendingQuoteOperation(TypedDict):
+    proposal_id: str
+    conversation_id: str
+    request_revision: int
+    payload: dict[str, Any]
+
+
 class PendingLogisticsOperation(TypedDict):
     request_revision: int
     request_type: RequestType
@@ -278,6 +292,8 @@ class AgentState(TypedDict, total=False):
     pending_ticket_operation: PendingTicketOperation | None
     ticket_correction_required: bool
     pending_payment_operation: PendingPaymentOperation | None
+    pending_quote_operation: PendingQuoteOperation | None
+    quote_receipt: dict[str, Any] | None
     pending_warranty_operation: PendingWarrantyOperation | None
     warranty_preparation_ready: bool
     pending_logistics_operation: PendingLogisticsOperation | None
@@ -335,6 +351,7 @@ def invalidate_request(state: AgentState, *, new_request: bool = False) -> Agent
     Cualquier resultado asíncrono debe comprobar request_revision antes de aplicarse.
     """
     if (state.get("pending_ticket_operation") is not None
+            or state.get("pending_quote_operation") is not None
             or state.get("pending_payment_operation") is not None
             or state.get("pending_logistics_operation") is not None
             or state.get("pending_warranty_operation") is not None):
@@ -348,6 +365,7 @@ def invalidate_request(state: AgentState, *, new_request: bool = False) -> Agent
         "ticket_correction_required": False,
         "ticket_preparation_ready": False,
         "inventory_revision": None, "proposal": None, "proposal_decision": None,
+        "quote_receipt": None,
         "logistics_preparation_ready": False, "warranty_preparation_ready": False,
         "quote": {}, "quote_scope": "", "inventory_query": None,
         "required_parts": [], "inventory_results": [], "inventory_pending": True,
@@ -388,4 +406,5 @@ def proposal_is_accepted(state: AgentState) -> bool:
         and type(decision.get("request_revision")) is int
         and decision["request_revision"] == revision
         and decision.get("accepted") is True and decision.get("explicit") is True
+        and ("proposal_id" not in proposal or decision.get("proposal_id") == proposal["proposal_id"])
     )

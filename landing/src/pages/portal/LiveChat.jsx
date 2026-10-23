@@ -55,7 +55,7 @@ function QuoteCard({ quote, busy, onAction }) {
           </div>
         ) : (
           <p className={`ok-text${quote.status === "rejected" ? " muted" : ""}`}>
-            {{ saved: "Ticket y presupuesto guardados · pendiente de aceptación", confirmed: "Presupuesto aceptado · reparación autorizada", rejected: "Propuesta no guardada" }[quote.status]
+            {{ saved: "Ticket y presupuesto guardados · pendiente de aceptación", confirmed: quote.proposal_id ? "Cotización aceptada y guardada · no confirma un pago" : "Presupuesto aceptado · reparación autorizada", rejected: "Propuesta no guardada" }[quote.status]
               || "Reemplazado por un presupuesto más reciente"}
           </p>
         )}
@@ -191,7 +191,8 @@ export default function LiveChat({ api = defaultChatApi }) {
                     <QuoteCard
                       quote={m.id === lastQuoteId ? m.quote : { ...m.quote, status: m.quote.status === "proposed" ? "superseded" : m.quote.status }}
                       busy={busy || m.id !== lastQuoteId}
-                      onAction={(action) => call({ action })}
+                      onAction={(action) => call({ action,
+                        ...(m.quote.proposal_id ? { proposalId: m.quote.proposal_id } : {}) })}
                     />
                   )}
                   {m.ticket && (

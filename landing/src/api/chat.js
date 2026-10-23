@@ -49,6 +49,7 @@ export function createChatApi({ baseUrl = "", fetchImpl } = {}) {
       conversationId = null,
       message = null,
       action = null,
+      proposalId = null,
       pattern = "hierarchical",
     }) {
       let res;
@@ -57,7 +58,8 @@ export function createChatApi({ baseUrl = "", fetchImpl } = {}) {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           credentials: "include",
-          body: JSON.stringify({ conversation_id: conversationId, message, action, pattern }),
+          body: JSON.stringify({ conversation_id: conversationId, message, action, pattern,
+            ...(proposalId ? { proposal_id: proposalId } : {}) }),
         });
       } catch {
         throw new ChatError(CHAT_MESSAGES.unavailable, { code: "network" });

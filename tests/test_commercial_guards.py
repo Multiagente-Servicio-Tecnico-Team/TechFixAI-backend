@@ -160,8 +160,9 @@ def test_stock_en_ventas_va_a_almacen_no_a_soporte():
 def test_almacen_no_simula_un_listado_ni_elige_variante():
     node = functions("app/agents/decentralized/warehouse.py", {"warehouse_node"})["warehouse_node"]
     result = node({"messages": [HumanMessage(content="q ssd tienes en stock")], "inventory_query": "SSD"})
-    assert not result["messages"][-1].tool_calls
-    assert "no listar" in result["messages"][-1].content
+    call = result["messages"][-1].tool_calls[0]
+    assert call["name"] == "check_inventory" and call["args"] == {"part_name": "SSD", "quantity": 1}
+    assert not result.get("inventory_results") and not result.get("quote")
     result = node({"messages": [HumanMessage(content="SSD 500GB NVMe")], "inventory_query": "SSD"})
     assert result["messages"][-1].tool_calls[0]["args"]["part_name"] == "SSD 500GB NVMe"
     assert result["inventory_query"] is None

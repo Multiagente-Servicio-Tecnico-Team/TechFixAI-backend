@@ -108,11 +108,79 @@ def contains_placeholder(text):
 
 
 def extract_inventory_reference(text):
-    """Solo extrae una referencia SSD explícita; nunca completa capacidad/interfaz."""
+    """Extrae especificaciones reportadas, sin completar marca ni interfaz."""
     if contains_placeholder(text):
         return None
-    match = re.search(r"\bssd\s*\d+\s*(?:gb|tb)(?:\s+(?:nvme|sata|m\.?2))?", text, re.I)
-    return match[0].strip() if match else None
+    codes = re.findall(r"\b(?:SSD|RAM|CPU|GPU|MB|PSU|CASE|COOLER)[_-][A-Z0-9][A-Z0-9_.-]{1,48}\b", text, re.I)
+    if codes:
+        if len(set(code.casefold() for code in codes)) != 1 or re.search(
+                r"\b(no quiero|no elijo|no prefiero|quizas|tal vez)\b", normalize_text(text)):
+            return None
+        return codes[0]
+    match = re.search(
+        r"\b(?:ssd|ram)\b(?:\s+[\w.+-]+){0,8}?\s+\d+\s*(?:gb|tb)\b"
+        r"(?:\s+(?:nvme|sata|m\.?2|ddr[345]|\d+\s*mhz))*", text, re.I)
+    if not match:
+        match = re.search(r"\bssd\s*\d+\s*(?:gb|tb)(?:\s+(?:nvme|sata|m\.?2))?", text, re.I)
+        if not match:
+            return None
+    reference = re.sub(r"\b(?:de|del|una?|unos?|las?|los?)\b\s*", "", match[0], flags=re.I)
+    return " ".join(reference.split())
+
+
+def extract_inventory_query(text):
+    """Una familia identifica candidatos; no confirma un componente compatible."""
+    reference = extract_inventory_reference(text)
+    if reference:
+        return reference
+    if contains_placeholder(text):
+        return None
+    families = set(re.findall(r"\b(?:ssd|ram|gpu|cpu|procesador|memoria|gabinete)\b", normalize_text(text)))
+    return next(iter(families)).upper() if len(families) == 1 else None
+
+
+def inventory_candidates(result):
+    """Valida alternativas sin convertirlas en selección ni cotización."""
+    candidates = result.get("candidates", [])
+    if not isinstance(candidates, list):
+        return []
+    valid = []
+    seen = set()
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            return []
+        try:
+            price = Decimal(str(candidate["unit_price"]))
+            if (type(candidate.get("id")) is not int or candidate["id"] <= 0
+                    or candidate["id"] in seen or not isinstance(candidate.get("name"), str)
+                    or not candidate["name"].strip() or type(candidate.get("current_stock")) is not int
+                    or (candidate.get("code") is not None and
+                        (not isinstance(candidate["code"], str) or not candidate["code"].strip()))
+                    or candidate["current_stock"] < 0 or not price.is_finite() or price < 0):
+                return []
+        except (KeyError, ValueError, TypeError, ArithmeticError):
+            return []
+        seen.add(candidate["id"])
+        valid.append(dict(candidate, unit_price=str(price.quantize(Decimal("0.01")))))
+    return valid
+
+
+def selected_inventory_reference(state):
+    """Una elección explícita identifica una consulta nueva, nunca stock reservado."""
+    user = normalize_text(latest_user_message(state)).strip()
+    if re.search(r"\b(no|quizas|tal vez|si quisiera)\b", user):
+        return None
+    matches = set()
+    for result in current_inventory_results(state):
+        for candidate in inventory_candidates(result):
+            for value in (candidate.get("code"), candidate["name"]):
+                if not isinstance(value, str) or not value.strip():
+                    continue
+                normalized = normalize_text(value).strip()
+                if user == normalized or (re.search(r"\b(elijo|prefiero|quiero|selecciono)\b", user)
+                        and re.search(r"(?<!\w)" + re.escape(normalized) + r"(?!\w)", user)):
+                    matches.add(value)
+    return next(iter(matches)) if len(matches) == 1 else None
 
 
 def handoff(agent, tool_name, **args):
@@ -145,11 +213,14 @@ CUSTOMER_SERVICE_UNAVAILABLE = (
 ATENCION_NO_CONFIGURADA = CUSTOMER_SERVICE_UNAVAILABLE
 
 
-def build_verified_quote(inventory, errors, pending=False, scope=None):
-    """Mano de obra sin tarifa oficial: nunca producir total ni importe inventado."""
+def build_verified_quote(inventory, errors, pending=False, scope=None, request_type=None):
+    """Propuesta conversacional: precios verificados, nunca aceptación ni commit."""
     quote = {"currency": "PEN", "status": "incomplete", "parts": [],
              "labor_total": None, "total": None, "known_parts_subtotal": None}
     if scope == "solo_servicio":
+        if request_type in {"REPAIR", "SUPPORT"} and not errors and not pending:
+            quote.update(status="proposed", labor_total="35.00", known_parts_subtotal="0.00", total="35.00")
+            return quote, "La mano de obra del servicio es S/ 35.00. No incluye repuestos. Es una propuesta; no se ha registrado aceptación, pago ni reserva."
         return quote, "La tarifa de revisión o mano de obra está pendiente de validación. No puedo confirmar un precio. No incluye repuestos."
     if errors or pending:
         return quote, "No puedo confirmar disponibilidad ni precios: el inventario sigue pendiente o tiene errores."
@@ -168,6 +239,14 @@ def build_verified_quote(inventory, errors, pending=False, scope=None):
             continue
         seen.add(key)
         if not item.get("found", True):
+            candidates = inventory_candidates(item)
+            if candidates:
+                lines.append(f"Opciones de catálogo para {item['name']} (cantidad solicitada {item['quantity']}):")
+                for candidate in candidates:
+                    label = candidate.get("code") or str(candidate["id"])
+                    lines.append(f"- {label}: {candidate['name']}; S/ {candidate['unit_price']} por unidad; stock {candidate['current_stock']}.")
+                lines.append("Indica el código o nombre exacto que prefieres. La selección requiere volver a verificar stock y precio; no confirma compatibilidad ni reserva.")
+                continue
             lines.append(f"{item['name']}: no se encontró una referencia única coincidente. Confirma la capacidad, interfaz y nombre; no sustituiré el repuesto por otro.")
             continue
         price = Decimal(item["unit_price"]).quantize(Decimal("0.01"))
@@ -182,8 +261,17 @@ def build_verified_quote(inventory, errors, pending=False, scope=None):
     if quote["parts"]:
         quote["known_parts_subtotal"] = str(subtotal)
         lines.append(f"Subtotal de repuestos disponibles: S/ {subtotal}.")
+    complete = (bool(quote["parts"]) and len(quote["parts"]) == len(seen)
+                and all(item["available"] for item in quote["parts"]))
+    if complete and request_type in {"SALE", "REPAIR", "SUPPORT"}:
+        labor = Decimal("0.00") if request_type == "SALE" else Decimal("35.00")
+        quote.update(status="proposed", labor_total=str(labor), total=str((subtotal + labor).quantize(Decimal("0.01"))))
+        lines.append(f"Mano de obra: S/ {labor}. Total propuesto: S/ {quote['total']}. No se ha registrado una cotización aceptada ni un pago.")
+    elif complete and request_type == "PC_BUILD":
+        lines.append("La tarifa de ensamblaje es S/ 50.00. Falta verificar los ocho componentes y su compatibilidad; no hay total final autorizado.")
+    else:
+        lines.append("Instalación y mano de obra no incluidas: tarifa pendiente de validación. No hay un total final.")
     lines.extend([
-                  "Instalación y mano de obra no incluidas: tarifa pendiente de validación. No hay un total final.",
                   "Disponibilidad no confirma compatibilidad. No se ha reservado stock ni confirmado una compra."])
     return quote, "\n".join(lines)
 
@@ -279,7 +367,7 @@ def evaluate_supply(state):
         elif result.get("found") is False:
             status = "NEEDS_DETAILS" if result.get("match_status") == "ambiguous" else "NOT_FOUND"
             fields = ["identificación de catálogo"]
-            valid = False
+            valid = valid and result.get("match_status") == "ambiguous" and bool(inventory_candidates(result))
         elif (result.get("found") is not True
               or not isinstance(result.get("name"), str) or not result["name"].strip()
               or result.get("match_status") in {"ambiguous", "not_found"}

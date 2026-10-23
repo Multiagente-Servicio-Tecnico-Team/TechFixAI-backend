@@ -136,7 +136,7 @@ def validate_inventory(state: AgentState):
             if available != (stock >= quantity):
                 raise ValueError("Disponibilidad inconsistente")
 
-            inventory.append({
+            item = {
                 "found": result.get("found", True),
                 "name": name,
                 "quantity": quantity,
@@ -148,7 +148,11 @@ def validate_inventory(state: AgentState):
                      if available
                      else None
                  ),
-            })
+            }
+            if "candidates" in result:
+                from app.agents.decentralized.policy import inventory_candidates
+                item["candidates"] = inventory_candidates(result)
+            inventory.append(item)
 
         except (
             KeyError,
@@ -399,7 +403,8 @@ def sales_node(state: AgentState):
         return handoff("ventas", "transfer_to_hardware", reason="Verificar compatibilidad con evidencia técnica")
     if is_customer_service_query(user):
         return handoff("ventas", "transfer_to_support", reason="Orientación de atención presencial")
-    reference = extract_inventory_reference(user)
+    from app.agents.decentralized.policy import selected_inventory_reference
+    reference = selected_inventory_reference(state) or extract_inventory_reference(user)
     intake = state.get("intake") or {}
     intake_reference = extract_inventory_reference(str(intake.get("product_description", "")))
     needs_intake_inventory = False
@@ -430,11 +435,14 @@ def sales_node(state: AgentState):
         inventory, problems = validate_inventory(state)
         problems.extend(e for e in state.get("errors", []) if "inventario" in e.lower())
         if inventory or problems or state.get("quote_scope") or state.get("inventory_pending"):
-            quote, reply = build_verified_quote(inventory, problems, state.get("inventory_pending", False), state.get("quote_scope"))
+            quote, reply = build_verified_quote(inventory, problems, state.get("inventory_pending", False), state.get("quote_scope"), request_type=state.get("request_type"))
             if state.get("quote_scope") == "solo_servicio" and state.get("technical_assessment", {}).get("software_diagnosis"):
                 reply = "La evaluación de software recibida es preliminar; no confirma una reparación ni ejecución del servicio. " + reply
             if "instalacion" in normalize_text(user) and any(w in normalize_text(user) for w in ("incluye", "incluido", "solo", "importe")):
-                if any(p["subtotal"] is not None for p in quote["parts"]):
+                if quote["labor_total"] is not None:
+                    reply = (f"El subtotal de repuestos es S/ {quote['known_parts_subtotal']}; mano de obra S/ {quote['labor_total']}; "
+                             f"total propuesto S/ {quote['total']}. La disponibilidad no confirma compatibilidad ni un servicio ejecutado. No se registró una aceptación ni pago.")
+                elif any(p["subtotal"] is not None for p in quote["parts"]):
                     reply = "El subtotal mostrado corresponde solo a los repuestos disponibles. No incluye instalación ni mano de obra; su tarifa sigue pendiente de validación."
                 else:
                     reply = "Todavía no hay un importe de repuestos disponibles confirmado. La tarifa de instalación y mano de obra también está pendiente de validación."

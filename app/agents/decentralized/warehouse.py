@@ -199,13 +199,22 @@ def warehouse_node(state: AgentState):
     # Repuestos del estado: la herramienta consulta exactamente la solicitud,
     # sin dejar que el modelo sustituya un nombre genérico por otro producto.
     if state.get("inventory_query"):
+        from app.agents.decentralized.policy import selected_inventory_reference, current_inventory_results, inventory_candidates, extract_inventory_query
         user = latest_user_message(state)
-        name = extract_inventory_reference(user)
+        selected = selected_inventory_reference(state)
+        name = selected or extract_inventory_query(user)
         intake = state.get("intake") or {}
         requested = extract_inventory_reference(str(intake.get("product_description", "")))
         if not name and state.get("request_type") == "SALE":
             name = requested
         quantity = 1
+        if selected:
+            quantities = {result["quantity"] for result in current_inventory_results(state)
+                          if any(selected in {candidate.get("code"), candidate["name"]}
+                                 for candidate in inventory_candidates(result))}
+            if len(quantities) != 1 or any(type(value) is not int or value <= 0 for value in quantities):
+                return {"current_agent": "almacen", "messages": [AIMessage(content="Confirma una cantidad entera positiva para la opción elegida.")]}
+            quantity = quantities.pop()
         if state.get("request_type") == "SALE" and name and name == requested:
             quantity = intake.get("quantity", 1)
             if type(quantity) is not int or quantity <= 0:

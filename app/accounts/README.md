@@ -2,7 +2,7 @@
 
 Servicio Python que registra clientes en la tabla `users` de PostgreSQL con la contraseña protegida por hash
 bcrypt, abre sesión con una cookie firmada y permite restablecer la contraseña con un enlace temporal enviado
-por correo (tabla `recovery_tokens`). Lo usa el frontend (`landing/`) para las pantallas de registro, inicio de
+por correo (tabla `recovery_tokens`). Lo usa el frontend ([TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend)) para las pantallas de registro, inicio de
 sesión, recuperación y restablecimiento.
 
 ## Frameworks y librerías
@@ -124,8 +124,8 @@ separado con las rutas sin prefijo descritas arriba:
    .venv/Scripts/python -m uvicorn app.accounts.api:create_app --factory --host localhost --port 8000
    ```
 
-5. Conectar el frontend con `VITE_API_URL=http://localhost:8000` en `landing/.env` y ejecutar
-   `npm --prefix landing run dev`.
+5. Conectar el frontend con `VITE_API_URL=http://localhost:8000` en el `.env` del repositorio TechFixAI-frontend y ejecutar
+   `npm run dev` allí.
 
 Usar `localhost` (no `127.0.0.1`) tanto en la API como en el frontend: así el navegador trata ambos puertos como
 el mismo sitio y envía la cookie de sesión.

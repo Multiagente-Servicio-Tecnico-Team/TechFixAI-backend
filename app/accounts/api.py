@@ -119,11 +119,13 @@ def create_app(settings: Settings | None = None, session_factory: sessionmaker |
         )
 
     @app.post("/registro", status_code=201, response_model=UserResponse)
-    def register(body: RegisterIn, db: Session = Depends(get_db)):
+    def register(body: RegisterIn, response: Response, db: Session = Depends(get_db)):
         try:
             user = register_user(db, body, settings.bcrypt_rounds)
         except EmailAlreadyRegistered:
             return JSONResponse(status_code=409, content={"detail": "El correo ya está registrado.", "field": "email"})
+        # El portal entra directo tras el registro: abre la misma sesión que /login.
+        set_session_cookie(response, user)
         return UserResponse(user=to_out(user))
 
     @app.post("/login", response_model=UserResponse)

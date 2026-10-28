@@ -9,7 +9,8 @@ escrito en el chat.
 | `app/accounts/session.py` | `SessionGuard`: dependencias `require_customer` y `require_user` para FastAPI |
 | `app/chat/contract.py` | Modelos del contrato: `ChatIn`, `ChatOut`, `QuoteOut`, `TicketOut` |
 | `app/chat/models.py` | Mapeo de la tabla `tickets` del script de BD |
-| `app/main.py` | API integrada que selecciona e invoca los tres patrones LangGraph |
+| `app/main.py` | Punto de entrada de la API integrada; delega en `app/infrastructure/chat_app.py` |
+| `app/adapters/patterns/` | Un adaptador por patrón LangGraph (puerto `ChatPattern`); para sumar un patrón se agrega su adaptador al registro |
 | `app/chat/reference.py` | API de referencia independiente para probar el contrato |
 
 ## Contrato `POST /api/chat`

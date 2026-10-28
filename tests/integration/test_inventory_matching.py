@@ -12,7 +12,7 @@ from sqlalchemy.engine import Connection, Engine
 
 @pytest.fixture
 def inventory():
-    source = Path(__file__).resolve().parents[1] / "app/database/repository.py"
+    source = Path(__file__).resolve().parents[2] / "app/database/repository.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
     namespace = dict(Decimal=Decimal, re=re, unicodedata=unicodedata,
                      MetaData=MetaData, Table=Table, inspect=inspect, select=select, Engine=Engine, Connection=Connection)

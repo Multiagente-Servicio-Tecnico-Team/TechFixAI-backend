@@ -1,5 +1,14 @@
 # Memoria del proyecto
 
+Historial de decisiones y limitaciones reales, una línea por tarea cerrada (la más reciente al final).
+Antes de programar, lee también `AGENTS.md`, `features.md` y `docs.md`.
+
+Cómo registrar una tarea: agrega al final una línea `- Tema (AAAA-MM-DD): qué se hizo, cómo se validó y qué
+limitación queda`, sin datos personales, claves ni textos de excepciones.
+
+Estado al 2026-10-20: el frontend se separó en TechFixAI-frontend (PR #31) y la organización en capas de
+Clean Architecture está en revisión (PR #32). Pendientes y responsables en `features.md`.
+
 - Diagnóstico del retiro presencial (2026-10-13): traza local confirma
   `logistics_agent`/`logistics_record_write` exitosos y error en
   `order_completion_agent`/`warranty_write`. LangSmith cambia el texto de error
@@ -105,6 +114,7 @@
   datos y �ltima cotizaci�n. UI conserva tarjetas/filtros/b�squeda y elimina aprobar/
   revisar/admin para ser solo lectura. Build Vite aprobado. Sin consultas ni escrituras
   PostgreSQL. Evidencia: spec 15, docs 18.
+- Registro con sesión (2026-10-13): `POST /auth/registro` emite la misma cookie `techfix_session` que `/login`; un 409/422 no la emite. Corrige que tras registrarse "Mis Tickets" mostrara "Tu sesión terminó" (caso CN-02 de la caja negra del frontend). 2 pruebas nuevas en `tests/test_accounts_api.py`; pruebas de cuentas, sesión y chat aprobadas (72). Limitación: las pruebas RAG que llaman a Groq fallan sin red/clave y no dependen de este cambio.
 - Seed de inventario (2026-10-13): precios de referencia en PEN ajustados con cat?logos peruanos; RAM y almacenamiento compactados para retirar filas redundantes y SKU duplicados entre bloques. Filas: 438 ? 310; 310 c?digos ?nicos y sin duplicados exactos de nombre/categor?a. Limitaci?n: ambos `ON CONFLICT (code) DO NOTHING` no actualizan cat?logo ya sembrado; no se ejecut? SQL ni se toc? PostgreSQL. Evidencia: spec 16, docs 19.
 - Separación del frontend (2026-10-20): `landing/` pasa al repositorio TechFixAI-frontend (con su historial, sin archivos .env) y este repositorio se renombra a TechFixAI-backend. Los README de la raíz, cuentas y chat apuntan al repo del frontend. Limitación: Vercel debe reconectarse a TechFixAI-frontend antes de fusionar este cambio; las ramas con cambios en `landing/` sin integrar deben llevarlos al repo nuevo.
 - Clean Architecture (2026-10-20, rama feature/clean-architecture): capas `domain` (entidades, Decimal, errores), `application` (SendChatMessage, ListCustomerTickets, ConversationRegistry, puertos), `adapters` (api, patterns, persistence, llm) e `infrastructure` (raíz de composición). Cada patrón LangGraph se consume con el puerto ChatPattern mediante un adaptador; `app/main.py` delega y conserva `create_app` y `app.main:app`. Pruebas en tests/unit, tests/integration y tests/e2e; `pytest` ejecuta la suite aislada: 310 aprobadas y 1 falla previa (test_retriever). Limitaciones: el código interno de los patrones sigue en app/agents (no se movió para no romper ramas abiertas); la persistencia de tickets y presupuestos de cada patrón aún usa app/database/repository.py directamente.

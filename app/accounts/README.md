@@ -40,7 +40,7 @@ postman/techfix-auth.postman_collection.json   # Pruebas de API con Postman
 
 | Método y ruta | Cuerpo | Respuestas |
 | --- | --- | --- |
-| `POST /registro` | `{ nombre, apellido?, email, telefono, password }` | `201 { usuario }` · `409` correo ya registrado · `422` datos inválidos |
+| `POST /registro` | `{ nombre, apellido?, email, telefono, password }` | `201 { usuario }` + cookie `techfix_session` · `409` correo ya registrado · `422` datos inválidos |
 | `POST /login` | `{ email, password }` | `200 { usuario }` + cookie `techfix_session` · `401` credenciales · `429` demasiados intentos |
 | `POST /logout` | — | `204` y borra la cookie |
 | `GET /me` | — | `200 { usuario }` con sesión válida · `401` sin sesión |

@@ -17,7 +17,7 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 | --- | --- | --- |
 | Landing, portal del cliente y panel del taller (React) | [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) | Repositorio propio |
 | Cuentas: registro, inicio de sesión, recuperación de contraseña | [`app/accounts/`](app/accounts/README.md) | En `main` |
-| API unificada de cuentas y chat | [`app/combined.py`](app/combined.py) | Integrada |
+| API unificada de cuentas y chat | [`app/main.py`](app/main.py) | Integrada |
 | Sesión reutilizable y contrato común del chat (`POST /api/chat`) | [`app/chat/`](app/chat/README.md), [`app/main.py`](app/main.py) | Integrados |
 | Agente de ventas y trazas locales | `app/agents/sales.py`, `app/tracing.py` | En `main` |
 | Patrón de Red Descentralizada | [`app/agents/decentralized/`](app/agents/decentralized/) | Integrado; herramientas aún simuladas |
@@ -55,7 +55,7 @@ decisiones, validación y limitaciones del bloque.
  Navegador (React + Vite, repositorio TechFixAI-frontend)
    │ cuentas: /auth/*       │ chat: /api/chat
    ▼                        ▼
- API unificada (app/combined.py): cuentas + patrones LangGraph
+ API unificada (app/main.py): cuentas + patrones LangGraph
    │ cookie HttpOnly compartida; SessionGuard valida la sesión
    ▼
  PostgreSQL: users · recovery_tokens · tickets · quotes · spare_parts …   ◀── grafo LangGraph del patrón
@@ -89,7 +89,7 @@ decisiones, validación y limitaciones del bloque.
 ```text
 app/
 ├── accounts/        API de cuentas (FastAPI): /registro, /login, /logout, /me, /recuperar, /restablecer
-├── combined.py      Punto de entrada unificado: monta cuentas en /auth junto al chat
+├── main.py          Punto único de entrada: monta cuentas en /auth y chat en /api/*
 ├── domain/          Entidades y reglas: presupuesto, ticket, respuesta del patrón, dinero (Decimal), errores
 ├── application/     Casos de uso (SendChatMessage, ListCustomerTickets), registro de conversaciones y puertos
 ├── adapters/
@@ -106,7 +106,6 @@ app/
 │   └── sales.py        Agente previo de ventas de demostración (Decimal)
 ├── database/        Conexión SQLAlchemy a PostgreSQL
 ├── email/           Servicio SMTP y plantillas
-├── main.py          Punto de entrada del chat (app.main:app); delega en infrastructure/
 └── tracing.py       Trazas locales JSONL sin contenido de los mensajes
 postman/             Colección de la API de cuentas
 tests/
@@ -162,7 +161,7 @@ python -m venv .venv
 ```
 
 ```bash
-.venv/Scripts/python -m uvicorn app.combined:create_app --factory --host localhost --port 8000
+.venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
 ```
 
 Para la interfaz, clonar [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) y ejecutar `npm install` y `npm run dev`.

@@ -9,7 +9,7 @@ escrito en el chat.
 | `app/accounts/session.py` | `SessionGuard`: dependencias `require_customer` y `require_user` para FastAPI |
 | `app/chat/contract.py` | Modelos del contrato: `ChatIn`, `ChatOut`, `QuoteOut`, `TicketOut` |
 | `app/chat/models.py` | Mapeo de la tabla `tickets` del script de BD |
-| `app/main.py` | Punto de entrada de la API integrada; delega en `app/infrastructure/chat_app.py` |
+| `app/main.py` | Punto único de entrada; monta cuentas y chat con la raíz de composición |
 | `app/adapters/patterns/` | Un adaptador por patrón LangGraph (puerto `ChatPattern`); para sumar un patrón se agrega su adaptador al registro |
 | `app/chat/reference.py` | API de referencia independiente para probar el contrato |
 
@@ -54,12 +54,12 @@ Respuesta `200`:
 El punto de entrada recomendado ejecuta cuentas y chat en el mismo servidor:
 
 ```bash
-.venv/Scripts/python -m uvicorn app.combined:create_app --factory --host localhost --port 8000
+.venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
 ```
 
 Las rutas de cuentas quedan bajo `/auth/*`; el chat conserva `/api/chat` y
-`/api/chat/patterns`. `app.main:app` sigue disponible para ejecutar solo la API
-de chat durante pruebas o desarrollo aislado.
+`/api/chat/patterns`. Este es el punto de entrada recomendado para el backend
+completo; para pruebas aisladas se inyectan fábricas y dependencias a `create_app`.
 
 El portal comparte el contrato, pero los motores no tienen la misma paridad de
 persistencia: Jerárquico y Orquestador conectan sus herramientas de negocio a

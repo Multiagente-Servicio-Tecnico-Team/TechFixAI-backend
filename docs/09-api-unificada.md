@@ -2,12 +2,11 @@
 
 ## Cambio
 
-Se añadió `app.combined:create_app` como punto de entrada. Monta la API de
-cuentas en `/auth` dentro de la aplicación del chat, preservando las rutas
-`/api/chat` y `/api/chat/patterns`. La fábrica crea una única configuración de
-cuentas y comparte con `SessionGuard` la misma fábrica de sesiones SQLAlchemy.
-La API de cuentas publica esa fábrica en `app.state.session_factory` para que
-la aplicación integrada pueda reutilizarla.
+Históricamente `app.combined:create_app` montaba la API de cuentas en `/auth`
+dentro de la aplicación del chat, preservando `/api/chat` y
+`/api/chat/patterns`. En 2026-10-27 la composición se movió al punto estándar
+`app.main:app` y se retiró el módulo combinado separado. La misma configuración
+y fábrica SQLAlchemy se comparte con `SessionGuard`.
 
 Las URLs configuradas para el frontend local son:
 
@@ -21,10 +20,10 @@ No se añadieron manifiestos ni archivos de despliegue.
 
 ## Validación
 
-- `pytest tests/test_combined_api.py tests/test_pattern_api.py tests/test_accounts_api.py -q`: 29 aprobadas.
+- Validación histórica del punto de entrada combinado: `pytest tests/test_combined_api.py tests/test_pattern_api.py tests/test_accounts_api.py -q`, 29 aprobadas. La consolidación posterior en `app.main:app` todavía no se ha validado con suite automatizada.
 - `npm --prefix landing test -- tests/register.test.jsx`: 11 aprobadas.
 - `npm --prefix landing run build`: aprobado.
-- Pylance syntax check de `app/combined.py` y `tests/test_combined_api.py`: sin errores.
+- Pylance syntax check de la implementación histórica y `tests/test_combined_api.py`: sin errores.
 - La primera ejecución completa de Vitest tuvo un timeout de 5 segundos en una prueba de registro bajo carga concurrente; la suite dirigida de ese archivo pasó al ejecutarse aislada.
 
 La prueba de integración confirma que una cookie emitida por `/auth/login`

@@ -6,7 +6,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 FRAMEWORKS = ("fastapi", "starlette", "sqlalchemy", "langgraph", "langchain", "langchain_core", "groq", "langsmith", "pydantic")
-OUTER_LAYERS = ("app.adapters", "app.infrastructure", "app.agents", "app.database", "app.accounts", "app.main", "app.combined")
+OUTER_LAYERS = ("app.adapters", "app.infrastructure", "app.agents", "app.database", "app.accounts", "app.main")
 
 RULES = {
     "app/domain": {"forbidden": FRAMEWORKS + OUTER_LAYERS + ("app.application",)},

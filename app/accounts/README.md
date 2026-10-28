@@ -84,7 +84,7 @@ Para ejecutar cuentas y chat juntos (opción recomendada para que compartan el
 mismo host y cookie), inicia el punto de entrada unificado desde la raíz:
 
 ```bash
-.venv/Scripts/python -m uvicorn app.combined:create_app --factory --host localhost --port 8000
+.venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
 ```
 
 En esta modalidad, todas las rutas de esta API llevan el prefijo `/auth`

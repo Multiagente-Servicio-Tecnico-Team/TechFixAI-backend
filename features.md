@@ -9,7 +9,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | --- | --- | --- |
 | `app/accounts/` (registro, login, recuperación, sesión) | SebasBazauri | jsalinas4 |
 | `app/chat/` (contrato de `/api/chat`, patrón de referencia) | SebasBazauri | jsalinas4 |
-| `app/main.py`, `app/combined.py` (API unificada) | jsalinas4 | SebasBazauri, johstevnn |
+| `app/main.py` (API unificada; único punto de entrada) | jsalinas4 | SebasBazauri, johstevnn |
 | `app/agents/jerarquico/` (patrón Jerárquico) | jsalinas4 | — |
 | `app/agents/orquestador/` (patrón Orquestador) | johstevnn | jsalinas4 |
 | `app/agents/decentralized/` (Red descentralizada) | Jose Saldaña | jsalinas4 |
@@ -27,7 +27,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Inicio y cierre de sesión con cookie HttpOnly firmada | `app/accounts/` | Listo | `test_accounts_api.py`, `test_session_guard.py` |
 | Límite de 5 intentos de login cada 15 min | `app/accounts/security.py` | Listo | `test_accounts_api.py` |
 | Recuperar y restablecer contraseña (enlace de 15 min, un solo uso) | `app/accounts/` | Listo | `test_accounts_recovery.py` |
-| API unificada (`/auth` + `/api`, un proceso y un origen) | `app/combined.py` | Listo | `test_combined_api.py` |
+| API unificada (`/auth` + `/api`, un proceso y un origen) | `app/main.py` | Listo | `test_combined_api.py` |
 | Chat autenticado `POST /api/chat` con selector de patrón | `app/main.py`, `app/chat/contract.py` | Listo | `test_pattern_api.py`, `test_portal.py` |
 | Límite de 20 mensajes por minuto por cliente | `app/main.py` | Listo | `test_pattern_api.py` |
 | Patrón Jerárquico (ventas, soporte, almacén, garantía, logística) | `app/agents/jerarquico/` | Funciona; ver pendientes | `test_hierarchical_workflows.py`, `test_multiagent_graph.py` |

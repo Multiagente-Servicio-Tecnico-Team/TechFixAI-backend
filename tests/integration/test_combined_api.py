@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.accounts.config import Settings as AccountSettings
 from app.accounts.models import Base
-from app.combined import create_app
+from app.main import create_app
 
 
 PASSWORD = "CombinedTest#2026"

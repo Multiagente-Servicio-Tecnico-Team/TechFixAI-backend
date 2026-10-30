@@ -1,6 +1,6 @@
 # Chat del portal — sesión del login y contrato común
 
-El chat del portal (`/portal/asistente` en [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend)) habla con el patrón LangGraph del equipo mediante
+El chat del portal (`/portal/asistente` en [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) habla con el patrón LangGraph del equipo mediante
 `POST /api/chat`. El cliente se identifica con la cookie de sesión de la API de cuentas, nunca con un correo
 escrito en el chat.
 

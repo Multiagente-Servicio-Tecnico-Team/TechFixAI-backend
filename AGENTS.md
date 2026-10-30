@@ -1,7 +1,7 @@
 # Instrucciones del proyecto
 
 Backend de TechFix.AI (FastAPI + LangGraph + PostgreSQL). El frontend vive en
-[TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend).
+[TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend).
 
 ## Antes de escribir código
 

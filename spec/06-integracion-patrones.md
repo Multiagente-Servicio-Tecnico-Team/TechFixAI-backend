@@ -1,5 +1,10 @@
 # Spec 06 — integración de patrones LangGraph en el portal
 
+**Estado retrospectivo: Parcial — integración común implementada; las capacidades varían por patrón.**
+**Evidencia revisada:** app/adapters/patterns/; app/main.py; features.md; docs/06-integracion-patrones.md
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Conectar el portal React autenticado con los patrones Jerárquico, Orquestador y

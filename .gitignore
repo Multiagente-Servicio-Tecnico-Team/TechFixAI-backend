@@ -40,3 +40,7 @@ data/chroma/
 
 #contexto
 contexto/
+
+#specify
+.agents/
+.specify/

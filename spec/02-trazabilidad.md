@@ -1,5 +1,10 @@
 # 02 — Trazabilidad jerárquica
 
+**Estado retrospectivo: Implementada según código y evidencia documentada; límites operativos pendientes.**
+**Evidencia revisada:** docs/02-trazabilidad.md; app/agents/jerarquico/trace.py; tests/unit/agents/test_hierarchical_tracing.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Correlacionar la ruta de cada ejecución del patrón, los agentes llamados y las

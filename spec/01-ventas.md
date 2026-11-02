@@ -1,5 +1,10 @@
 # 01 — Ventas del patrón jerárquico
 
+**Estado retrospectivo: Parcial — revisar el estado del esquema y el flujo de guardado antes de tratarlo como completo.**
+**Evidencia revisada:** docs/01-ventas.md; app/agents/jerarquico/; app/database/repository.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 El equipo comercial debe atender ventas directas consultando exclusivamente el

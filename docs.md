@@ -51,5 +51,5 @@ libre en ambas carpetas y regístrala en esta tabla.
 
 ## Fuera de este repositorio
 
-- Frontend (pantallas, estilos, pruebas Vitest): [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend), con sus propios `AGENTS.md`, `features.md`, `docs.md` y `memory.md`.
+- Frontend (pantallas, estilos, pruebas Vitest): [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend), con sus propios `AGENTS.md`, `features.md`, `docs.md` y `memory.md`.
 - Producción: frontend en https://techfixai.vercel.app y API en Render (`/backend/*` se reenvía a la API).

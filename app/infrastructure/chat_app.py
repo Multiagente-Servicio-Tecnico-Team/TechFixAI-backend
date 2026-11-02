@@ -16,6 +16,7 @@ from app.accounts.config import Settings as AccountSettings
 from app.accounts.security import LoginLimiter
 from app.accounts.session import SessionCustomer, SessionError, SessionGuard
 from app.adapters.api.chat import create_chat_router
+from app.adapters.api.admin_tickets import create_admin_ticket_router
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
 from app.adapters.patterns.registry import PATTERN_NAMES, build_patterns
 from app.adapters.persistence.tickets import RepositoryTicketReader
@@ -41,7 +42,7 @@ def build_chat_app(
         CORSMiddleware,
         allow_origins=list(account_settings.frontend_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "Accept"],
     )
     app.add_exception_handler(
@@ -57,6 +58,11 @@ def build_chat_app(
         if guard_holder["guard"] is None:
             guard_holder["guard"] = SessionGuard.from_env()
         return guard_holder["guard"].require_customer(request)
+
+    def require_admin(request: Request) -> SessionCustomer:
+        if guard_holder["guard"] is None:
+            guard_holder["guard"] = SessionGuard.from_env()
+        return guard_holder["guard"].require_admin(request)
 
     patterns = build_patterns(
         graph_factories,
@@ -75,6 +81,12 @@ def build_chat_app(
             list_tickets=list_tickets,
             require_customer=require_customer,
             pattern_names=PATTERN_NAMES,
+        )
+    )
+    app.include_router(
+        create_admin_ticket_router(
+            require_admin=require_admin,
+            repository_factory=ticket_repository_factory,
         )
     )
     return app

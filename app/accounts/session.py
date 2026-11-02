@@ -93,6 +93,13 @@ class SessionGuard:
             raise SessionError(403, CUSTOMER_ONLY, "customer_only")
         return customer
 
+    def require_admin(self, request: Request) -> SessionCustomer:
+        """Exige cuenta autenticada con rol ADMIN (TECHNICIAN no es suficiente)."""
+        user = self.require_user(request)
+        if user.role != Role.ADMIN.value:
+            raise SessionError(403, "Se requiere rol de administrador.", "admin_only")
+        return user
+
     @staticmethod
     def install(app: FastAPI) -> None:
         @app.exception_handler(SessionError)

@@ -57,6 +57,17 @@ El punto de entrada recomendado ejecuta cuentas y chat en el mismo servidor:
 .venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
 ```
 
+## API administrativa de tickets
+
+- `GET /api/admin/customers?email=...`: busca una cuenta cliente activa para asociarla al alta manual.
+- `GET /api/admin/tickets`: lista tickets; admite filtros `status`, `request_type`, `search`, `limit` y `offset`.
+- `GET /api/admin/tickets/{id}`: obtiene detalle.
+- `POST /api/admin/tickets`: crea un ticket asociado a `customer_email`.
+- `PATCH /api/admin/tickets/{id}`: actualiza solo los campos enviados.
+- `DELETE /api/admin/tickets/{id}`: elimina físicamente el ticket y las relaciones con borrado en cascada.
+
+Todas las rutas requieren sesión `techfix_session` de usuario activo con rol `ADMIN`; rol `TECHNICIAN` no concede acceso. La guía paso a paso para Postman está en `contexto/CRUD-tickets-admin-postman.md`.
+
 Las rutas de cuentas quedan bajo `/auth/*`; el chat conserva `/api/chat` y
 `/api/chat/patterns`. Este es el punto de entrada recomendado para el backend
 completo; para pruebas aisladas se inyectan fábricas y dependencias a `create_app`.

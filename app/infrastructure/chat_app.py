@@ -18,11 +18,14 @@ from app.accounts.session import SessionCustomer, SessionError, SessionGuard
 from app.adapters.api.chat import create_chat_router
 from app.adapters.api.admin_tickets import create_admin_ticket_router
 from app.adapters.api.accounting import create_accounting_router
+from app.adapters.api.inventory import create_inventory_router
+from app.adapters.api.purchases import create_supplier_purchase_router
 from app.adapters.speech.groq import GroqAudioTranscriber
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
 from app.adapters.patterns.registry import PATTERN_NAMES, build_patterns
 from app.adapters.persistence.tickets import RepositoryTicketReader
 from app.adapters.persistence.accounting import AccountingRepositoryAdapter
+from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
 from app.application.chat import SendChatMessage
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.audio_requests import AudioRequestRegistry
@@ -44,6 +47,8 @@ def build_chat_app(
     ticket_repository_factory: Callable[[], Any] | None = None,
     audio_transcriber: AudioTranscriber | None = None,
     accounting_repository_factory: Callable[[], Any] | None = None,
+    inventory_repository_factory: Callable[[], Any] | None = None,
+    purchase_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0")
     runtime_settings = settings_factory()
@@ -52,7 +57,7 @@ def build_chat_app(
         CORSMiddleware,
         allow_origins=list(account_settings.frontend_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Content-Type", "Accept", "Idempotency-Key"],
     )
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=runtime_settings.audio_max_bytes + 100_000)
@@ -60,7 +65,10 @@ def build_chat_app(
     @app.middleware("http")
     async def accounting_no_store(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith("/api/admin/accounting/"):
+        if (request.url.path.startswith("/api/admin/accounting/")
+                or request.url.path.startswith("/api/admin/tickets")
+                or request.url.path.startswith("/api/admin/purchases")
+                or request.url.path.startswith("/api/admin/suppliers")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -69,6 +77,18 @@ def build_chat_app(
         lambda _request, exc: JSONResponse(status_code=exc.status, content={"detail": exc.detail, "code": exc.code}),
     )
     def validation_response(request: Request, exc: RequestValidationError):
+        if request.url.path.startswith("/api/inventory/"):
+            errors = []
+            for error in exc.errors():
+                location = [str(part) for part in error.get("loc", ()) if part not in {"body", "query", "header", "path"}]
+                errors.append({"field": ".".join(location) or None, "reason": str(error.get("msg", "Valor inválido."))})
+            field = next((error["field"] for error in errors if error["field"]), None)
+            return JSONResponse(status_code=422, content={
+                "detail": "Datos del repuesto inválidos.",
+                "code": "invalid",
+                "field": field,
+                "errors": errors,
+            })
         if request.url.path.startswith("/api/admin/accounting/"):
             errors = []
             for error in exc.errors():
@@ -91,6 +111,11 @@ def build_chat_app(
         if guard_holder["guard"] is None:
             guard_holder["guard"] = SessionGuard.from_env()
         return guard_holder["guard"].require_admin(request)
+
+    def require_staff(request: Request) -> SessionCustomer:
+        if guard_holder["guard"] is None:
+            guard_holder["guard"] = SessionGuard.from_env()
+        return guard_holder["guard"].require_staff(request)
 
     patterns = build_patterns(
         graph_factories,
@@ -139,4 +164,12 @@ def build_chat_app(
     )
     repository_factory = accounting_repository_factory or (lambda: AccountingRepositoryAdapter())
     app.include_router(create_accounting_router(repository_factory, require_admin))
+    purchases_factory = purchase_repository_factory or (lambda: SupplierPurchaseRepositoryAdapter())
+    app.include_router(create_supplier_purchase_router(require_admin=require_admin, repository_factory=purchases_factory))
+    app.include_router(
+        create_inventory_router(
+            require_staff=require_staff,
+            repository_factory=inventory_repository_factory,
+        )
+    )
     return app

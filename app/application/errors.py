@@ -142,3 +142,79 @@ class AccountingStorageUnavailable(AccountingError):
 
     def __init__(self):
         super().__init__(self.detail)
+
+
+class InventoryError(ApplicationError):
+    """Error de inventario serializable sin detalles de persistencia."""
+
+    status_code = 422
+    code = "invalid"
+    detail = "Los datos del repuesto no son válidos."
+
+    def __init__(self, detail: str | None = None, *, field: str | None = None):
+        self.field = field
+        self.detail = detail or type(self).detail
+        super().__init__(self.detail)
+
+
+class InventoryValidationError(InventoryError):
+    status_code = 422
+    code = "invalid"
+    detail = "Revisa los datos del repuesto."
+
+
+class InventoryConflict(InventoryError):
+    status_code = 409
+    code = "conflict"
+    detail = "El repuesto entra en conflicto con otro registro."
+
+    def __init__(self, detail: str | None = None, *, code: str = "conflict", field: str | None = None):
+        super().__init__(detail, field=field)
+        self.code = code
+
+
+class InventoryNotFound(InventoryError):
+    status_code = 404
+    code = "not_found"
+    detail = "No se encontró el repuesto solicitado."
+
+
+class InventoryStorageUnavailable(InventoryError):
+    status_code = 503
+    code = "inventory_unavailable"
+    detail = "El servicio de inventario no está disponible. Inténtalo más tarde."
+
+
+class PurchaseError(ApplicationError):
+    status_code = 422
+    code = "purchase_validation"
+    detail = "Los datos de la compra no son válidos."
+
+    def __init__(self, detail: str | None = None, *, field: str | None = None):
+        self.field = field
+        self.detail = detail or type(self).detail
+        super().__init__(self.detail)
+
+
+class PurchaseConflict(PurchaseError):
+    status_code = 409
+    code = "purchase_conflict"
+    detail = "La compra entra en conflicto con un registro existente."
+
+
+class PurchaseNotFound(PurchaseError):
+    status_code = 404
+    code = "purchase_not_found"
+    detail = "No se encontró la compra solicitada."
+
+
+class SupplierNotFound(PurchaseError):
+    status_code = 404
+    code = "supplier_not_found"
+    detail = "No se encontró el proveedor solicitado."
+
+
+class PurchaseStorageUnavailable(PurchaseError):
+    status_code = 503
+    code = "purchase_storage_unavailable"
+    detail = "El servicio de compras no está disponible. Inténtalo más tarde."

@@ -49,6 +49,7 @@ El contrato backend de audio y su validacion local viven en
 | 15 | «Mis Tickets» del cliente | `spec/15-mis-tickets-cliente.md` | `docs/18-mis-tickets-cliente.md` |
 | 16 | Precios y deduplicación del catálogo | `spec/16-precios-y-dedupe-catalogo-seed.md` | `docs/19-precios-y-dedupe-catalogo-seed.md` |
 | 21 | Registro interno de asientos contables | `specs/003-asientos-contables/` | `docs/21-asientos-contables.md` |
+| 24 | API CRUD del inventario para el taller | `specs/005-api-inventario/` | `docs/24-api-inventario.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.

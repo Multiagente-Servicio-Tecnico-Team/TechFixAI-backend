@@ -46,3 +46,13 @@ class KnowledgeUnavailable(DomainError):
 class NoPendingQuote(DomainError):
     code = "no_quote"
     detail = "No hay un presupuesto pendiente en esta conversación."
+
+
+class InventoryValidationFailure(DomainError, ValueError):
+    code = "invalid"
+    detail = "Revisa los datos del repuesto."
+
+    def __init__(self, detail: str, *, field: str | None = None):
+        self.detail = detail
+        self.field = field
+        super().__init__(detail)

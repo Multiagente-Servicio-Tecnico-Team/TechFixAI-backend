@@ -23,7 +23,14 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 | Patrón de Red Descentralizada | [`app/agents/decentralized/`](app/agents/decentralized/) | Integrado; herramientas aún simuladas |
 | Patrón Jerárquico | [`app/agents/jerarquico/`](app/agents/jerarquico/) | Integrado; consulta y persistencia PostgreSQL |
 | Patrón Orquestador/Supervisor | [`app/agents/orquestador/`](app/agents/orquestador/) | Integrado; consulta y persistencia PostgreSQL |
+| Compras y proveedores: rutas administrativas `/api/admin/purchases` y `/api/admin/suppliers` | [`app/adapters/api/purchases.py`](app/adapters/api/purchases.py) | Compras separadas de órdenes; recepción explícita para incrementar stock |
 | Correo transaccional (SMTP) | `app/email/` | En `main` |
+
+### Registro de compras a proveedores
+
+El contrato HTTP se mantiene en [`specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml`](specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml). La feature registra comprobantes, método y estado de pago, recepciones y movimientos auditables; no genera asientos contables ni PLE.
+
+Para un entorno existente, aplicar únicamente la migración aditiva [`sql/migrations/005_supplier_purchases.sql`](sql/migrations/005_supplier_purchases.sql) después de verificar el destino y contar con respaldo. No ejecutar `contexto/tablas postgres v2.sql` para actualizar una base con datos: ese archivo es un esquema de instalación y contiene operaciones destructivas.
 
 ## Integración de patrones
 

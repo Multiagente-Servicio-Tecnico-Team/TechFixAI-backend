@@ -35,6 +35,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Red descentralizada | `app/agents/decentralized/` | Herramientas simuladas en `develop` | `test_decentralized*.py`, `test_conversation.py` |
 | «Mis Tickets» del cliente `GET /api/customer/tickets` | `app/main.py`, `app/database/repository.py` | Falla con tickets presupuestados (ver pendientes) | `test_portal.py` |
 | CRUD administrativo de tickets (`/api/admin/tickets`) | `app/adapters/api/admin_tickets.py`, `app/database/repository.py`, `app/accounts/session.py` | Implementado; requiere esquema completo y rol ADMIN | Guía Postman en `contexto/CRUD-tickets-admin-postman.md` |
+| CRUD de inventario (`/api/inventory/parts`, `/api/inventory/categories`) | `app/adapters/api/inventory.py`, `app/application/inventory.py`, `app/adapters/persistence/inventory.py`, `app/domain/inventory.py` | Implementado; sesiones de personal ADMIN/TECHNICIAN; usa `spare_parts` y respeta referencias de presupuestos | `tests/contract/test_inventory_contract.py`, `tests/integration/test_inventory_api.py` |
 | Trazas en LangSmith (contenido oculto) | `app/main.py` | Listo; se activa con `LANGSMITH_TRACING` | `test_api.py` |
 | Trazas locales del Jerárquico | `app/agents/jerarquico/trace.py` | Listo | `test_hierarchical_tracing.py` |
 | Correo de recuperación (SMTP u outbox local) | `app/accounts/mailer.py`, `app/email/` | Listo | `test_accounts_recovery.py` |
@@ -44,6 +45,8 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
 
 ## Pendientes conocidos
+
+- El backend entrega todas las categorías activas por `/api/inventory/categories`; el frontend actual todavía tiene cinco opciones fijas y debe consumir esta ruta para exponer toda la taxonomía de la base de datos.
 
 ### Patrones multiagente coherentes (Spec Kit)
 

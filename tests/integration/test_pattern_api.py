@@ -157,10 +157,13 @@ def test_selector_lists_patterns_and_chat_runs_selected_graph(pattern_client):
     assert graphs["decentralized"].calls[0][1]["tags"] == [
         "service-chat",
         "pattern:decentralized",
+        "scenario:interactive",
     ]
     metadata = graphs["decentralized"].calls[0][1]["metadata"]
-    assert metadata["pattern"] == "decentralized"
-    assert metadata["conversation_id"] == response.json()["conversation_id"]
+    assert metadata["pattern_id"] == "decentralized"
+    assert metadata["scenario_id"] == "interactive"
+    assert metadata["model_profile_id"]
+    assert "conversation_id" not in metadata
     assert "customer_id" not in metadata
     assert not graphs["hierarchical"].calls
     assert not graphs["orchestrator"].calls

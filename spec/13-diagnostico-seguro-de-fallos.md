@@ -1,5 +1,10 @@
 # Spec 13 — Diagnóstico seguro de fallos del grafo
 
+**Estado retrospectivo: Implementada según evidencia histórica; no se reejecutaron pruebas en esta revisión.**
+**Evidencia revisada:** docs/16-diagnostico-seguro-de-fallos.md; app/agents/jerarquico/trace.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Permitir ubicar con mayor precisión errores de nodos y herramientas sin registrar

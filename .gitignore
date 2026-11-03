@@ -7,6 +7,8 @@
 
 # Entorno virtual de Python
 .venv/
+venv/
+*.egg-info/
 
 # Variables de entorno y credenciales
 .env
@@ -31,3 +33,7 @@ data/chroma/
 
 #contexto
 contexto/
+
+#specify
+.agents/
+.specify/

@@ -14,6 +14,8 @@ def after_supervisor(state: ServiceState) -> str:
         "pc_build": "commercial_team_supervisor",
         "warranty_status": "operations_team_supervisor",
         "warranty_claim": "operations_team_supervisor",
+        "refund_request": "refund_agent",
+        "supplier_procurement": "purchasing_agent",
         "logistics": "operations_team_supervisor",
         "inventory_selection": "warehouse_agent",
         "diagnosis_only": "warehouse_agent",

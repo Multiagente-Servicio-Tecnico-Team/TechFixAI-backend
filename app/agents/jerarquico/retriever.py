@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from langchain_core.documents import Document
+
+from app.rag.retriever import retrieve_documents
 
 
 KNOWLEDGE_BASE_PATH = Path(__file__).parent / "knowledge_base"
@@ -18,57 +21,6 @@ _FIELD_PATTERN = re.compile(
     r"(Diagn[oó]stico|Soluci[oó]n|Componente\s*/\s*Servicio|Palabras\s+clave)"
     r"\*\*\s*:\s*(.*?)\s*$"
 )
-_GENERIC_TERMS = {
-    "ademas",
-    "algo",
-    "alguna",
-    "algunas",
-    "algunos",
-    "como",
-    "con",
-    "cuando",
-    "de",
-    "del",
-    "desde",
-    "donde",
-    "el",
-    "ella",
-    "ellos",
-    "en",
-    "es",
-    "esta",
-    "este",
-    "estoy",
-    "funciona",
-    "hay",
-    "la",
-    "las",
-    "laptop",
-    "laptops",
-    "lo",
-    "los",
-    "mi",
-    "mis",
-    "mucho",
-    "muy",
-    "no",
-    "para",
-    "pero",
-    "por",
-    "problema",
-    "que",
-    "se",
-    "sin",
-    "su",
-    "tengo",
-    "un",
-    "una",
-    "unas",
-    "unos",
-    "y",
-}
-
-
 class CatalogItem(BaseModel):
     identifier: str = Field(min_length=1, max_length=100)
     reason: str = Field(min_length=1, max_length=1000)
@@ -91,13 +43,6 @@ def _normalize(value: str) -> str:
     )
     return re.sub(r"[^a-z0-9]+", " ", without_accents).strip()
 
-
-def _terms(value: str) -> set[str]:
-    return {
-        term
-        for term in _normalize(value).split()
-        if len(term) > 2 and term not in _GENERIC_TERMS
-    }
 
 
 def _parse_case(
@@ -210,33 +155,33 @@ class MarkdownKnowledgeRetriever:
     def retrieve(self, query: str, *, limit: int = 3) -> list[KnowledgeDocument]:
         if limit < 1:
             raise ValueError("El límite de recuperación debe ser mayor que cero.")
-        query_terms = _terms(query)
-        if not query_terms:
-            return []
-
-        ranked: list[tuple[int, KnowledgeDocument]] = []
-        for document in self._documents:
-            keyword_terms = _terms(" ".join(document.keywords))
-            title_terms = _terms(document.title)
-            diagnostic_terms = _terms(document.diagnosis)
-            score = (
-                4 * len(query_terms & keyword_terms)
-                + 2 * len(query_terms & title_terms)
-                + len(query_terms & diagnostic_terms)
+        by_source = {f"hierarchical:case:{item.id}": item for item in self._documents}
+        searchable = [
+            Document(
+                page_content="\n".join(
+                    [item.title, *item.keywords, item.diagnosis, item.solution]
+                ),
+                metadata={
+                    "source_id": f"hierarchical:case:{item.id}",
+                    "source_path": f"knowledge_base/{item.id}",
+                    "title": item.title,
+                    "area": "technical",
+                    "trust_level": "verified_guide",
+                    "audience": "internal",
+                    "language": "es",
+                    "content_digest": item.id,
+                },
             )
-            if score:
-                ranked.append((score, document))
-
-        ranked.sort(key=lambda match: (-match[0], match[1].id))
-        if not ranked:
-            return []
-        relevance_threshold = (ranked[0][0] * 3 + 3) // 4
-        relevant_documents = [
-            document
-            for score, document in ranked
-            if score >= relevance_threshold
+            for item in self._documents
         ]
-        return relevant_documents[:limit]
+        passages = retrieve_documents(
+            query,
+            documents=searchable,
+            allowed_areas={"technical"},
+            allowed_trust_levels={"verified_guide"},
+            limit=limit,
+        )
+        return [by_source[item.source_id] for item in passages if item.source_id in by_source]
 
     @staticmethod
     def format_context(documents: list[KnowledgeDocument]) -> str:

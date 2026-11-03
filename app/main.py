@@ -38,6 +38,7 @@ def create_app(
     settings_factory: Callable[[], Settings] = load_settings,
     trace_context_factory: TraceContextFactory | None = None,
     ticket_repository_factory: Callable[[], Any] | None = None,
+    accounting_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     load_dotenv()
     account_settings = settings or (session_guard.settings if session_guard else AccountSettings.from_env())
@@ -56,6 +57,7 @@ def create_app(
         settings_factory=settings_factory,
         trace_context_factory=trace_context_factory,
         ticket_repository_factory=ticket_repository_factory,
+        accounting_repository_factory=accounting_repository_factory,
     )
     application.mount("/auth", accounts_app)
     return application

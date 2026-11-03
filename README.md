@@ -1,7 +1,7 @@
 # TechFix.AI — Backend
 
 Sistema multiagente de servicio técnico, ventas y soporte. El frontend (React + Vite) está en
-[TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend); en producción se publica en https://techfixai.vercel.app.
+[TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend); en producción se publica en https://techfixai.vercel.app.
 
 TechFix.AI: plataforma para un taller de reparación de equipos. El cliente se registra, inicia sesión y conversa
 con agentes LangGraph que orientan sobre fallas y preparan propuestas; los patrones Jerárquico y Orquestador
@@ -15,7 +15,7 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 
 | Módulo | Carpeta | Estado |
 | --- | --- | --- |
-| Landing, portal del cliente y panel del taller (React) | [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) | Repositorio propio |
+| Landing, portal del cliente y panel del taller (React) | [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend) | Repositorio propio |
 | Cuentas: registro, inicio de sesión, recuperación de contraseña | [`app/accounts/`](app/accounts/README.md) | En `main` |
 | API unificada de cuentas y chat | [`app/main.py`](app/main.py) | Integrada |
 | Sesión reutilizable y contrato común del chat (`POST /api/chat`) | [`app/chat/`](app/chat/README.md), [`app/main.py`](app/main.py) | Integrados |
@@ -48,6 +48,22 @@ configurar el entorno local.
 Ver [`spec/06-integracion-patrones.md`](spec/06-integracion-patrones.md) y
 [`docs/06-integracion-patrones.md`](docs/06-integracion-patrones.md) para alcance,
 decisiones, validación y limitaciones del bloque.
+
+## Chat por voz (backend)
+
+`POST /api/chat/audio` recibe `multipart/form-data` autenticado por la misma cookie
+que el chat escrito. El backend transcribe con Groq `whisper-large-v3-turbo` y entrega
+el texto normalizado al caso de uso compartido de los tres patrones. No persiste el
+archivo; conserva respuestas exitosas para idempotencia durante diez minutos y aplica
+un limite de cinco envios por cliente por minuto.
+
+La funcion permanece desactivada hasta configurar `AUDIO_TRANSCRIPTION_ENABLED=true`.
+Usa el `GROQ_API_KEY` existente. Si LangSmith esta habilitado, ambas opciones
+`LANGSMITH_HIDE_INPUTS` y `LANGSMITH_HIDE_OUTPUTS` deben ser `true`. Los limites
+ajustables y sus valores por defecto estan en `.env.example`. El contrato HTTP
+canonico esta en
+[`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml);
+detalles de ejecucion en [`app/chat/README.md`](app/chat/README.md).
 
 ## Arquitectura
 
@@ -150,7 +166,7 @@ La ingesta descarga el modelo FastEmbed la primera vez y guarda el índice en
 `data/chroma/`, que está excluido de Git. Debe repetirse cuando cambie el
 contenido de `data/knowledge/`.
 
-El frontend ([TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
+El frontend ([TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
 `/auth` y `VITE_CHAT_URL` al mismo origen del chat. Los valores locales por defecto
 son `http://localhost:8000/auth` y `http://localhost:8000`; Vite los carga al
 iniciar, así que reinicia el servidor frontend después de modificarlos.
@@ -166,12 +182,15 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
 ```
 
-Para la interfaz, clonar [TechFixAI-frontend](https://github.com/Multiagente-Servicio-Tecnico-Team/TechFixAI-frontend) y ejecutar `npm install` y `npm run dev`.
+Para la interfaz, clonar [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend) y ejecutar `npm install` y `npm run dev`.
 Abrir http://localhost:5173. El proceso unificado expone las rutas de cuentas
 en `/auth/*` y el chat en `/api/chat`; ambos clientes usan el mismo host y puerto.
 Para los endpoints independientes, ver la documentación de sus módulos.
 
 ## Pruebas
+
+Para recorrer manualmente las capacidades disponibles desde el chat, consulta la
+[guía de pruebas del patrón jerárquico](docs/22-guia-pruebas-manuales-jerarquico.md).
 
 ```bash
 .venv/Scripts/python -m pytest -q
@@ -206,3 +225,9 @@ Para los endpoints independientes, ver la documentación de sus módulos.
 - Tickets, inventario y "Mis Tickets" del frontend usan datos de demostración.
 - `npm audit --omit=dev` reporta dos vulnerabilidades moderadas en React Router; el arreglo sugerido por npm
   salta a la versión 7 y requiere evaluar cambios incompatibles antes de aplicarlo.
+
+## Especificación de paridad multiagente (en progreso)
+
+La rama `feature/spec-kit` conserva las tres topologías para evaluación académica y centraliza el perfil del modelo. El RAG compartido registra fuentes, secciones, versiones y nivel de confianza; el FAQ con datos ficticios se etiqueta como demostrativo. Las compras a proveedores siguen no disponibles. El repositorio puede registrar solicitudes de reembolso pendientes tras validar titularidad y pago, pero el flujo conversacional aún no está conectado a los tres grafos.
+
+La paridad funcional todavía no está implementada: la Red Descentralizada conserva herramientas simuladas y faltan flujos del Orquestador. Consulta [las tareas pendientes](specs/001-patrones-multiagente-coherentes/tasks.md) y [la trazabilidad del esquema](docs/20-esquema-ampliado-y-trazabilidad.md).

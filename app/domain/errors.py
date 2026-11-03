@@ -18,6 +18,31 @@ class PatternLocked(DomainError):
     detail = "Para cambiar de patrón, inicia una conversación nueva."
 
 
+class AmbiguousCatalogMatch(DomainError):
+    code = "catalog_ambiguous"
+    detail = "Hay varias coincidencias; selecciona el artículo exacto."
+
+
+class InsufficientStock(DomainError):
+    code = "insufficient_stock"
+    detail = "No hay existencias suficientes para esa cantidad."
+
+
+class StaleQuote(DomainError):
+    code = "stale_quote"
+    detail = "El precio o la disponibilidad cambió; solicita una cotización actualizada."
+
+
+class OwnershipViolation(DomainError):
+    code = "ownership_violation"
+    detail = "No se encontró un registro que puedas consultar."
+
+
+class KnowledgeUnavailable(DomainError):
+    code = "knowledge_unavailable"
+    detail = "No se encontró evidencia suficiente en las fuentes disponibles."
+
+
 class NoPendingQuote(DomainError):
     code = "no_quote"
     detail = "No hay un presupuesto pendiente en esta conversación."

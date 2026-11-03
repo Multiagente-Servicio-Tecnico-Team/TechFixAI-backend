@@ -17,13 +17,20 @@ from app.accounts.security import LoginLimiter
 from app.accounts.session import SessionCustomer, SessionError, SessionGuard
 from app.adapters.api.chat import create_chat_router
 from app.adapters.api.admin_tickets import create_admin_ticket_router
+from app.adapters.api.accounting import create_accounting_router
+from app.adapters.speech.groq import GroqAudioTranscriber
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
 from app.adapters.patterns.registry import PATTERN_NAMES, build_patterns
 from app.adapters.persistence.tickets import RepositoryTicketReader
+from app.adapters.persistence.accounting import AccountingRepositoryAdapter
 from app.application.chat import SendChatMessage
+from app.application.audio_chat import SendAudioChatMessage
+from app.application.audio_requests import AudioRequestRegistry
+from app.application.ports import AudioTranscriber
 from app.application.conversations import ConversationRegistry
 from app.application.tickets import ListCustomerTickets
 from app.settings import Settings, load_settings
+from app.infrastructure.request_limits import RequestBodyLimitMiddleware
 
 MESSAGES_PER_MINUTE = 20
 
@@ -35,21 +42,42 @@ def build_chat_app(
     settings_factory: Callable[[], Settings] = load_settings,
     trace_context_factory: TraceContextFactory | None = None,
     ticket_repository_factory: Callable[[], Any] | None = None,
+    audio_transcriber: AudioTranscriber | None = None,
+    accounting_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0")
+    runtime_settings = settings_factory()
     account_settings = session_guard.settings if session_guard is not None else AccountSettings.from_env()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(account_settings.frontend_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE"],
-        allow_headers=["Content-Type", "Accept"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Accept", "Idempotency-Key"],
     )
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=runtime_settings.audio_max_bytes + 100_000)
+
+    @app.middleware("http")
+    async def accounting_no_store(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/admin/accounting/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     app.add_exception_handler(
         SessionError,
         lambda _request, exc: JSONResponse(status_code=exc.status, content={"detail": exc.detail, "code": exc.code}),
     )
-    app.add_exception_handler(RequestValidationError, lambda _request, exc: _validation_response(exc))
+    def validation_response(request: Request, exc: RequestValidationError):
+        if request.url.path.startswith("/api/admin/accounting/"):
+            errors = []
+            for error in exc.errors():
+                location = [str(part) for part in error.get("loc", ()) if part not in {"body", "query", "header", "path"}]
+                errors.append({"field": ".".join(location) or None, "reason": str(error.get("msg", "Valor inválido."))})
+            return JSONResponse(status_code=422, content={"detail": "Datos contables inválidos.", "code": "accounting_validation", "fields": errors})
+        return _validation_response(exc)
+
+    app.add_exception_handler(RequestValidationError, validation_response)
 
     # La sesión se resuelve al primer uso para que importar el módulo no exija AUTH_SECRET.
     guard_holder: dict[str, SessionGuard | None] = {"guard": session_guard}
@@ -75,12 +103,32 @@ def build_chat_app(
         limiter=LoginLimiter(MESSAGES_PER_MINUTE, 60),
     )
     list_tickets = ListCustomerTickets(lambda: RepositoryTicketReader(ticket_repository_factory))
+    configured_transcriber = audio_transcriber
+    if runtime_settings.audio_transcription_enabled and configured_transcriber is None and runtime_settings.groq_api_key:
+        configured_transcriber = GroqAudioTranscriber(
+            runtime_settings.groq_api_key,
+            timeout=runtime_settings.audio_transcription_timeout_seconds,
+        )
+    audio_use_case = (
+        SendAudioChatMessage(
+            configured_transcriber,
+            send_message,
+            AudioRequestRegistry(quota=runtime_settings.audio_requests_per_minute),
+            max_bytes=runtime_settings.audio_max_bytes,
+            max_duration_ms=runtime_settings.audio_max_duration_ms,
+        )
+        if runtime_settings.audio_transcription_enabled and configured_transcriber is not None
+        else None
+    )
     app.include_router(
         create_chat_router(
             send_message=send_message,
             list_tickets=list_tickets,
             require_customer=require_customer,
             pattern_names=PATTERN_NAMES,
+            audio_message=audio_use_case,
+            audio_enabled=runtime_settings.audio_transcription_enabled,
+            audio_max_bytes=runtime_settings.audio_max_bytes,
         )
     )
     app.include_router(
@@ -89,4 +137,6 @@ def build_chat_app(
             repository_factory=ticket_repository_factory,
         )
     )
+    repository_factory = accounting_repository_factory or (lambda: AccountingRepositoryAdapter())
+    app.include_router(create_accounting_router(repository_factory, require_admin))
     return app

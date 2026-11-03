@@ -7,11 +7,24 @@ from langgraph.graph.message import add_messages
 class AgentState(TypedDict, total=False):
     # Historial compartido entre agentes
     messages: Annotated[list[AnyMessage], add_messages]
+    customer_id: int
+    conversation_id: str
 
     # Inicio del turno actual, para no confundir herramientas de turnos anteriores.
     turn_start_index: int
     quote_scope: str
+    quote_type: str
+    quote_task_type: str
+    quote_status: str
     quote: dict[str, Any]
+    ticket_id: int
+    ticket_code: str
+    ticket_status: str
+    payment_code: str
+    awaiting_refund_details: bool
+    refund_id: int
+    refund_status: str
+    outcome: str
     inventory_query: str | None
 
     # Agente actual y siguiente

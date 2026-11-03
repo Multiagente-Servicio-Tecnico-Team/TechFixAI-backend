@@ -1,4 +1,5 @@
 import unittest
+from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from langchain_core.messages import HumanMessage
@@ -7,6 +8,7 @@ from app.agents.orquestador.agentes.atencion import atencion_node
 from app.agents.orquestador.agentes.ventas import persistencia_node, ventas_node
 from app.agents.orquestador.graph.state import IntakeResult
 from app.agents.orquestador.graph.supervisor import _supervisor_route
+from app.agents.orquestador.graph.supervisor import build_graph
 
 
 class TicketConfirmationGraphTests(unittest.TestCase):
@@ -32,6 +34,59 @@ class TicketConfirmationGraphTests(unittest.TestCase):
         self.assertFalse(result["awaiting_ticket_confirmation"])
         self.assertNotIn("ticket_id", result)
         self.assertEqual(_supervisor_route(result), "tecnico")
+
+    def test_refund_intent_routes_to_manual_refund_agent_without_llm(self):
+        with patch("app.agents.orquestador.agentes.atencion.create_chat_model") as model:
+            result = atencion_node({
+                "user_id": 12,
+                "messages": [HumanMessage(content="Quiero solicitar un reembolso")],
+            })
+
+        self.assertTrue(result["awaiting_refund_details"])
+        self.assertTrue(result["refund_request_pending"])
+        self.assertEqual(_supervisor_route(result), "reembolsos")
+        model.assert_not_called()
+
+    def test_supplier_purchase_intent_routes_to_unavailable_response_without_llm(self):
+        with patch("app.agents.orquestador.agentes.atencion.create_chat_model") as model:
+            result = atencion_node({
+                "user_id": 12,
+                "messages": [HumanMessage(content="¿Pueden comprar el repuesto al proveedor?")],
+            })
+
+        self.assertTrue(result["supplier_procurement_pending"])
+        self.assertEqual(_supervisor_route(result), "compras")
+        model.assert_not_called()
+
+    def test_supplier_purchase_uses_unavailable_node_in_orchestrator_graph(self):
+        with patch("app.agents.orquestador.graph.supervisor.create_chat_model"):
+            graph = build_graph()
+        result = graph.invoke(
+            {
+                "user_id": 12,
+                "messages": [HumanMessage(content="¿Pueden comprar el repuesto al proveedor?")],
+            },
+            config={"configurable": {"thread_id": "orchestrator-procurement"}},
+        )
+
+        self.assertEqual(result["outcome"], "procurement_unavailable")
+        self.assertIn("proveedor", result["messages"][-1].content.casefold())
+        self.assertIn("no se creó una orden", result["messages"][-1].content.casefold())
+
+    def test_refund_intent_reaches_pending_refund_response_in_orchestrator_graph(self):
+        with patch("app.agents.orquestador.graph.supervisor.create_chat_model"):
+            graph = build_graph()
+        result = graph.invoke(
+            {
+                "user_id": 12,
+                "messages": [HumanMessage(content="Quiero solicitar un reembolso")],
+            },
+            config={"configurable": {"thread_id": "orchestrator-refund"}},
+        )
+
+        self.assertTrue(result["awaiting_refund_details"])
+        self.assertIn("PAY-", result["messages"][-1].content)
+        self.assertNotIn("refund_id", result)
 
     def test_intake_uses_spanish_normalized_symptoms_not_raw_english(self):
         model = Mock()
@@ -130,12 +185,17 @@ class TicketConfirmationGraphTests(unittest.TestCase):
             "diagnosis": "Diagnóstico provisional",
             "labor_cost": 100,
             "available_parts": [],
+            "parts_total": Decimal("0.00"),
             "ticket_confirmed": True,
             "total": 100,
         }
         with patch(
-            "app.agents.orquestador.agentes.ventas.create_ticket_with_quote",
-            return_value=(91, 27, 100, "TCK-TEST-91"),
+            "app.agents.orquestador.agentes.ventas.sales_repository.create_accepted_ticket_quote",
+            return_value={
+                "ticket_id": 91, "ticket_code": "TCK-TEST-91", "quote_id": 27,
+                "payment_code": "PAY-TEST-91", "payment_status": "PENDING",
+                "total_amount": Decimal("100.00"),
+            },
         ) as persist:
             result = persistencia_node(state)
 
@@ -143,6 +203,8 @@ class TicketConfirmationGraphTests(unittest.TestCase):
         self.assertEqual(result["ticket_id"], 91)
         self.assertEqual(result["quote_id"], 27)
         self.assertEqual(result["ticket_code"], "TCK-TEST-91")
+        self.assertEqual(result["payment_code"], "PAY-TEST-91")
+        self.assertEqual(result["ticket_status"], "PAYMENT_PENDING")
         self.assertIn("S/ 100.00", result["response"])
 
 

@@ -1,11 +1,12 @@
 from langchain_core.tools import tool
 
-from app.database.repository import lookup_inventory
+from app.application.catalog import CatalogService
+from app.database.repository import ServiceRepository
+
+catalog_service = CatalogService(ServiceRepository())
 
 
 @tool
 def consultar_inventario(nombre_repuesto: str, cantidad: int = 1) -> dict[str, object]:
     """Consulta existencias y precio actual de un repuesto en PostgreSQL."""
-    item = lookup_inventory(nombre_repuesto, cantidad)
-    item["unit_price"] = str(item["unit_price"])
-    return item
+    return catalog_service.lookup(nombre_repuesto, cantidad)

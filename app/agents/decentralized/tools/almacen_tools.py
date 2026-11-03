@@ -1,30 +1,31 @@
+from typing import Annotated, Any
+
+from langgraph.prebuilt import InjectedState
 from langchain_core.tools import tool
 
-from app.database.repository import lookup_inventory
+from app.application.catalog import CatalogService
+from app.application.ports import CustomerContext
+from app.adapters.tools.catalog import make_catalog_lookup_tool
+from app.database.repository import ServiceRepository
+from app.agents.decentralized.state import AgentState
+
+catalog_service = CatalogService(ServiceRepository())
 
 
 @tool
 def consultar_inventario(
     nombre_repuesto: str,
+    state: Annotated[AgentState, InjectedState()],
     cantidad: int = 1,
 ) -> dict[str, object]:
-    """Consulta en PostgreSQL el stock y precio de un repuesto."""
-
-    if not nombre_repuesto.strip():
-        raise ValueError("El nombre del repuesto es obligatorio.")
-
-    if cantidad < 1:
-        raise ValueError("La cantidad debe ser mayor que cero.")
-
-    resultado = lookup_inventory(
-        requested_name=nombre_repuesto,
-        quantity=cantidad,
+    """Consulta PostgreSQL con la identidad autenticada inyectada por LangGraph."""
+    context = CustomerContext(
+        customer_id=state["customer_id"],
+        conversation_id=state.get("conversation_id", ""),
+        pattern_id="decentralized",
     )
-
-    return {
-        **resultado,
-        "unit_price": str(resultado["unit_price"]),
-    }
+    tool = make_catalog_lookup_tool(catalog_service, customer_context=context)
+    return tool.invoke({"requested_name": nombre_repuesto, "quantity": cantidad})
 
 @tool
 def transferir_a_ventas(motivo: str) -> str:

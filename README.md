@@ -97,6 +97,8 @@ detalles de ejecucion en [`app/chat/README.md`](app/chat/README.md).
   `SendChatMessage`; los importes usan `Decimal` (`domain/money.py`).
 
 - La identidad del cliente sale siempre de la cookie firmada; el chat nunca pide el correo.
+- La administración de tickets (`/api/admin/tickets` y `/api/admin/customers`) exige cookie de sesión de rol `ADMIN`; el backend rechaza clientes y técnicos con `403`.
+- Gestión administrativa de tickets (`/api/admin/tickets` y `/api/admin/customers`) exige una cookie de sesión de rol `ADMIN`; el backend rechaza clientes y técnicos con `403`.
 - Cada patrón expone el mismo `POST /api/chat`, así el frontend funciona con cualquiera de ellos. La guía para
   conectar un patrón está en [`app/chat/README.md`](app/chat/README.md).
 
@@ -109,7 +111,7 @@ app/
 ├── domain/          Entidades y reglas: presupuesto, ticket, respuesta del patrón, dinero (Decimal), errores
 ├── application/     Casos de uso (SendChatMessage, ListCustomerTickets), registro de conversaciones y puertos
 ├── adapters/
-│   ├── api/            Rutas FastAPI del chat (/api/chat, /api/chat/patterns, /api/customer/tickets)
+│   ├── api/            Rutas del chat y CRUD administrativo de tickets
 │   ├── patterns/       Un adaptador por patrón LangGraph + base común + registro
 │   ├── persistence/    Lectura de «Mis Tickets» desde PostgreSQL
 │   └── llm/            Trazas de LangSmith con contenido oculto

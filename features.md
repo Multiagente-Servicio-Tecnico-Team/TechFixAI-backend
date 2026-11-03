@@ -34,6 +34,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Patrón Orquestador / supervisor | `app/agents/orquestador/` | Cotiza; guardar ticket falla (ver pendientes) | `test_graph_confirmation.py`, `test_quotes.py` |
 | Red descentralizada | `app/agents/decentralized/` | Herramientas simuladas en `develop` | `test_decentralized*.py`, `test_conversation.py` |
 | «Mis Tickets» del cliente `GET /api/customer/tickets` | `app/main.py`, `app/database/repository.py` | Falla con tickets presupuestados (ver pendientes) | `test_portal.py` |
+| CRUD administrativo de tickets (`/api/admin/tickets`) | `app/adapters/api/admin_tickets.py`, `app/database/repository.py`, `app/accounts/session.py` | Implementado; requiere esquema completo y rol ADMIN | Guía Postman en `contexto/CRUD-tickets-admin-postman.md` |
 | Trazas en LangSmith (contenido oculto) | `app/main.py` | Listo; se activa con `LANGSMITH_TRACING` | `test_api.py` |
 | Trazas locales del Jerárquico | `app/agents/jerarquico/trace.py` | Listo | `test_hierarchical_tracing.py` |
 | Correo de recuperación (SMTP u outbox local) | `app/accounts/mailer.py`, `app/email/` | Listo | `test_accounts_recovery.py` |

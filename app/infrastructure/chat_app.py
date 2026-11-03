@@ -16,6 +16,7 @@ from app.accounts.config import Settings as AccountSettings
 from app.accounts.security import LoginLimiter
 from app.accounts.session import SessionCustomer, SessionError, SessionGuard
 from app.adapters.api.chat import create_chat_router
+from app.adapters.api.admin_tickets import create_admin_ticket_router
 from app.adapters.api.accounting import create_accounting_router
 from app.adapters.speech.groq import GroqAudioTranscriber
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
@@ -128,6 +129,12 @@ def build_chat_app(
             audio_message=audio_use_case,
             audio_enabled=runtime_settings.audio_transcription_enabled,
             audio_max_bytes=runtime_settings.audio_max_bytes,
+        )
+    )
+    app.include_router(
+        create_admin_ticket_router(
+            require_admin=require_admin,
+            repository_factory=ticket_repository_factory,
         )
     )
     repository_factory = accounting_repository_factory or (lambda: AccountingRepositoryAdapter())

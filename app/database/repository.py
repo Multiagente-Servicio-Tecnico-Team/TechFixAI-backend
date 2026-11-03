@@ -503,6 +503,155 @@ class ServiceRepository:
             session_factory = SessionLocal
         self._session_factory = session_factory
 
+    def list_admin_tickets(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        status: str | None = None,
+        request_type: str | None = None,
+        search: str | None = None,
+    ) -> list[dict[str, Any]]:
+        query = text(
+            """
+            SELECT t.id, t.code, t.customer_id, t.technician_id, t.title,
+                   t.failure_description, t.request_type::text AS request_type,
+                   t.diagnosis_type::text AS diagnosis_type,
+                   t.status::text AS status, t.hardware_diagnosis,
+                   t.software_diagnosis, t.estimated_labor_hours,
+                   t.is_remote_service, t.created_at, t.updated_at,
+                   u.name AS customer_first_name, u.last_name AS customer_last_name,
+                   u.email AS customer_email, u.phone AS customer_phone,
+                   q.total_amount AS quote_total, q.status::text AS quote_status,
+                   p.status::text AS payment_status,
+                   p.payment_method::text AS payment_method, p.amount AS payment_amount
+            FROM tickets t
+            JOIN users u ON u.id = t.customer_id
+            LEFT JOIN LATERAL (
+                SELECT id, total_amount, status
+                FROM quotes WHERE ticket_id = t.id
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            ) q ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT status, payment_method, amount
+                FROM payments WHERE ticket_id = t.id
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            ) p ON TRUE
+            WHERE (:status IS NULL OR t.status::text = :status)
+              AND (:request_type IS NULL OR t.request_type::text = :request_type)
+              AND (
+                :search IS NULL OR t.code ILIKE :search_pattern
+                OR t.title ILIKE :search_pattern
+                OR t.failure_description ILIKE :search_pattern
+                OR u.name ILIKE :search_pattern
+                OR COALESCE(u.last_name, '') ILIKE :search_pattern
+                OR u.email ILIKE :search_pattern
+              )
+            ORDER BY t.created_at DESC NULLS LAST, t.id DESC
+            LIMIT :limit OFFSET :offset
+            """
+        )
+        params = {
+            "status": status,
+            "request_type": request_type,
+            "search": search,
+            "search_pattern": f"%{search}%" if search else None,
+            "limit": limit,
+            "offset": offset,
+        }
+        with self._session_factory() as session:
+            return [dict(row) for row in session.execute(query, params).mappings()]
+
+    def get_admin_ticket(self, ticket_id: int) -> dict[str, Any] | None:
+        # Fetch by primary key with the same related quote/payment projection.
+        query = text(
+            """
+            SELECT t.id, t.code, t.customer_id, t.technician_id, t.title,
+                   t.failure_description, t.request_type::text AS request_type,
+                   t.diagnosis_type::text AS diagnosis_type,
+                   t.status::text AS status, t.hardware_diagnosis,
+                   t.software_diagnosis, t.estimated_labor_hours,
+                   t.is_remote_service, t.created_at, t.updated_at,
+                   u.name AS customer_first_name, u.last_name AS customer_last_name,
+                   u.email AS customer_email, u.phone AS customer_phone,
+                   q.total_amount AS quote_total, q.status::text AS quote_status,
+                   p.status::text AS payment_status,
+                   p.payment_method::text AS payment_method, p.amount AS payment_amount
+            FROM tickets t JOIN users u ON u.id = t.customer_id
+            LEFT JOIN LATERAL (
+                SELECT id, total_amount, status FROM quotes WHERE ticket_id = t.id
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            ) q ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT status, payment_method, amount FROM payments WHERE ticket_id = t.id
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            ) p ON TRUE
+            WHERE t.id = :ticket_id
+            """
+        )
+        with self._session_factory() as session:
+            row = session.execute(query, {"ticket_id": ticket_id}).mappings().first()
+        return dict(row) if row else None
+
+    def find_active_customer_by_email(self, email: str) -> dict[str, Any] | None:
+        query = text(
+            """SELECT id, name, last_name, email, phone FROM users
+               WHERE LOWER(email) = LOWER(:email) AND active IS TRUE
+                 AND role::text = 'CUSTOMER' LIMIT 1"""
+        )
+        with self._session_factory() as session:
+            row = session.execute(query, {"email": email.strip()}).mappings().first()
+        return dict(row) if row else None
+
+    def create_admin_ticket(self, *, values: dict[str, Any], code: str) -> int:
+        query = text(
+            """INSERT INTO tickets (
+                   code, customer_id, technician_id, title, failure_description,
+                   request_type, diagnosis_type, status, hardware_diagnosis,
+                   software_diagnosis, estimated_labor_hours, is_remote_service
+               ) VALUES (
+                   :code, :customer_id, :technician_id, :title, :failure_description,
+                   CAST(:request_type AS request_type_enum),
+                   CAST(:diagnosis_type AS diagnosis_type_enum),
+                   CAST(:status AS ticket_status_enum), :hardware_diagnosis,
+                   :software_diagnosis, :estimated_labor_hours, :is_remote_service
+               ) RETURNING id"""
+        )
+        with self._session_factory() as session, session.begin():
+            return int(session.execute(query, {**values, "code": code}).scalar_one())
+
+    def update_admin_ticket(self, ticket_id: int, values: dict[str, Any]) -> bool:
+        if not values:
+            return self.get_admin_ticket(ticket_id) is not None
+        allowed = {
+            "technician_id", "title", "failure_description", "request_type",
+            "diagnosis_type", "status", "hardware_diagnosis",
+            "software_diagnosis", "estimated_labor_hours", "is_remote_service",
+        }
+        if set(values) - allowed:
+            raise ValueError("El ticket contiene campos que no se pueden actualizar.")
+        assignments = []
+        params: dict[str, Any] = {"ticket_id": ticket_id}
+        enum_columns = {"request_type": "request_type_enum", "diagnosis_type": "diagnosis_type_enum", "status": "ticket_status_enum"}
+        for name, value in values.items():
+            if name in enum_columns:
+                assignments.append(f"{name} = CAST(:{name} AS {enum_columns[name]})")
+            else:
+                assignments.append(f"{name} = :{name}")
+            params[name] = value
+        assignments.append("updated_at = CURRENT_TIMESTAMP")
+        query = text(
+            f"UPDATE tickets SET {', '.join(assignments)} WHERE id = :ticket_id RETURNING id"
+        )
+        with self._session_factory() as session, session.begin():
+            result = session.execute(query, params).scalar_one_or_none()
+        return result is not None
+
+    def delete_admin_ticket(self, ticket_id: int) -> bool:
+        query = text("DELETE FROM tickets WHERE id = :ticket_id RETURNING id")
+        with self._session_factory() as session, session.begin():
+            result = session.execute(query, {"ticket_id": ticket_id}).scalar_one_or_none()
+        return result is not None
     def lookup_inventory(
         self, requested_name: str, quantity: int
     ) -> dict[str, object]:

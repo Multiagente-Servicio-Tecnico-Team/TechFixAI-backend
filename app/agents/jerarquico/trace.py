@@ -25,6 +25,7 @@ AGENT_NAMES = {
     "billing_agent",
     "logistics_agent",
     "warranty_agent",
+    "refund_agent",
     "order_completion_agent",
     "persist_diagnosis",
     "quote_suggestion_response",
@@ -41,6 +42,8 @@ TOOL_NAMES = {
     "ticket_diagnosis_write",
     "customer_lookup",
     "ticket_cancel",
+    "refund_payment_lookup",
+    "refund_request_write",
 }
 _trace_lock = Lock()
 

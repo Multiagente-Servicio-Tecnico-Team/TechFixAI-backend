@@ -13,6 +13,10 @@ escrito en el chat.
 | `app/adapters/patterns/` | Un adaptador por patrón LangGraph (puerto `ChatPattern`); para sumar un patrón se agrega su adaptador al registro |
 | `app/chat/reference.py` | API de referencia independiente para probar el contrato |
 
+| `app/application/audio_chat.py` | Transcribe y delega en el mismo caso de uso del chat escrito |
+| `app/adapters/speech/groq.py` | Adaptador Groq Whisper con errores seguros |
+| `app/infrastructure/request_limits.py` | Limite incremental del cuerpo multipart |
+
 ## Contrato `POST /api/chat`
 
 Petición (cookie `techfix_session` obligatoria):
@@ -48,6 +52,23 @@ Respuesta `200`:
 | `429` | Más de 20 mensajes por minuto |
 | `502` | Error procesando con el proveedor LLM o el patrón |
 | `503` | Base de datos o almacenamiento no disponibles |
+
+## Contrato de audio `POST /api/chat/audio`
+
+La ruta usa la misma sesion autenticada y acepta `audio`, `duration_ms`, `pattern`,
+`request_id` y opcionalmente `conversation_id` como `multipart/form-data`. El resultado
+agrega `transcript` a los campos habituales de `ChatOut`. Solo admite audio hasta 25 MB
+y 120 segundos; una cuota de cinco envios por minuto y la idempotencia por cliente
+protegen las llamadas a Groq. El arranque exige ocultar inputs y outputs de LangSmith
+si el tracing esta activo.
+
+`AUDIO_TRANSCRIPTION_ENABLED` vale `false` por defecto. Para activar voz, configura
+esa bandera y `GROQ_API_KEY`; revisa timeout y limites en `.env.example`. El archivo
+se procesa temporalmente y se cierra al terminar. El endpoint no cambia `POST /api/chat`.
+
+El contrato canonico es
+[`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](../../specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml).
+La tarea frontend se implementa y valida en el repositorio hermano.
 
 ## API integrada
 

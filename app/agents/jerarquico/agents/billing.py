@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage
 
 from app.agents.jerarquico.graph.state import ServiceState
 from app.agents.jerarquico.trace import traced_tool
+from app.application.quotes import accept_quoted_draft
 from app.database.repository import ServiceRepository
 
 
@@ -14,20 +15,18 @@ def make_billing_agent(repository: ServiceRepository):
         accepted_quote = traced_tool(
             state,
             "accepted_quote_write",
-            lambda: repository.accept_ticket_quote(
+            lambda: accept_quoted_draft(
+                writer=repository,
                 ticket_id=state["ticket_id"],
                 customer_id=state["customer_id"],
                 quote_type=state["quote_type"],
-                labor_cost=quote["labor_cost"],
-                parts_cost=quote["parts_cost"],
-                total_amount=quote["total_amount"],
+                draft=quote,
                 observations=(
                     "Cotización aceptada explícitamente por el cliente. "
                     f"Tipo de mano de obra: {quote['labor_task_type']}. "
                     f"Costo fijo de mano de obra: S/ {quote['labor_cost']:.2f}. "
                     "El inventario no se reserva ni descuenta automáticamente."
                 ),
-                parts=quote["parts"],
                 payment_code=f"PAY-{uuid4().hex[:12].upper()}",
             ),
         )

@@ -1,15 +1,21 @@
 """Rutas HTTP del chat: traducen JSON ↔ casos de uso y errores ↔ códigos HTTP."""
 from collections.abc import Callable, Mapping
 from typing import Any
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.accounts.session import SessionCustomer
 from app.application.chat import SendChatMessage
-from app.application.errors import PatternFailure, RateLimited, StorageUnavailable
+from app.application.audio_chat import SendAudioChatMessage
+from app.application.errors import (
+    AudioIdempotencyConflict, AudioQuotaExceeded, AudioRequestError,
+    AudioTranscriptionTimeout, AudioUnavailable,
+    PatternFailure, RateLimited, StorageUnavailable,
+)
 from app.application.tickets import ListCustomerTickets
-from app.chat.contract import ChatIn, ChatOut, QuoteLine, QuoteOut, TicketOut
+from app.chat.contract import AudioChatOut, ChatIn, ChatOut, QuoteLine, QuoteOut, TicketOut
 from app.domain.chat import PatternReply
 from app.domain.errors import ConversationNotFound, DomainError
 from app.domain.money import money_text
@@ -22,6 +28,9 @@ def create_chat_router(
     list_tickets: ListCustomerTickets,
     require_customer: Callable[[Request], SessionCustomer],
     pattern_names: Mapping[str, str],
+    audio_message: SendAudioChatMessage | None = None,
+    audio_enabled: bool = False,
+    audio_max_bytes: int = 25_000_000,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -57,6 +66,69 @@ def create_chat_router(
         except PatternFailure as exc:
             raise HTTPException(status_code=502, detail=exc.detail) from exc
         return chat_out(turn.conversation_id, turn.pattern, turn.reply)
+
+    @router.post(
+        "/api/chat/audio",
+        response_model=AudioChatOut,
+        response_model_exclude_none=True,
+        responses={
+            401: {"description": "Sesión requerida"}, 403: {"description": "Solo clientes"},
+            409: {"description": "Conversación o clave idempotente en conflicto"},
+            413: {"description": "Carga o archivo demasiado grande"},
+            415: {"description": "Formato no admitido"}, 422: {"description": "Audio inválido o sin voz"},
+            429: {"description": "Cuota agotada"}, 503: {"description": "Transcripción no disponible"},
+            502: {"description": "El patrón de chat no completó el turno"},
+            504: {"description": "Timeout del proveedor"},
+        },
+    )
+    def audio_chat(
+        audio: UploadFile = File(...),
+        duration_ms: int = Form(..., ge=1, le=120_000),
+        pattern: str = Form(..., pattern="^(hierarchical|orchestrator|decentralized)$"),
+        request_id: str = Form(...),
+        conversation_id: UUID | None = Form(default=None),
+        customer: SessionCustomer = Depends(require_customer),
+    ):
+        if not audio_enabled or audio_message is None:
+            return JSONResponse(status_code=503, content={
+                "detail": "La transcripción de audio no está disponible. Puedes continuar por escrito.",
+                "code": "audio_unavailable",
+            })
+        try:
+            content_type = audio.content_type or ""
+            content = audio.file.read(audio_max_bytes + 1)
+            result = audio_message.execute(
+                customer_id=customer.id,
+                audio=content,
+                content_type=content_type,
+                duration_ms=duration_ms,
+                pattern=pattern,
+                request_id=request_id,
+                conversation_id=str(conversation_id) if conversation_id else None,
+            )
+        except AudioQuotaExceeded as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail, "code": exc.code},
+                headers={"Retry-After": "60"},
+            )
+        except (AudioRequestError, AudioIdempotencyConflict) as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
+        except RateLimited as exc:
+            return JSONResponse(status_code=429, content={"detail": exc.detail, "code": "rate_limited"})
+        except DomainError as exc:
+            status = 404 if isinstance(exc, ConversationNotFound) else 409
+            return JSONResponse(status_code=status, content={"detail": exc.detail, "code": exc.code})
+        except StorageUnavailable as exc:
+            raise HTTPException(status_code=503, detail=exc.detail) from exc
+        except PatternFailure as exc:
+            raise HTTPException(status_code=502, detail=exc.detail) from exc
+        except (AudioUnavailable, AudioTranscriptionTimeout) as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
+        finally:
+            audio.file.close()
+        output = chat_out(result.turn.conversation_id, result.turn.pattern, result.turn.reply)
+        return AudioChatOut(**output.model_dump(), transcript=result.transcript)
 
     return router
 

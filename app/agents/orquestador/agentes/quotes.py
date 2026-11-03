@@ -1,17 +1,17 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
+
+from app.application.quotes import calculate_quote as calculate_shared_quote
 
 
 def calculate_quote(
     labor_cost: Decimal,
     available_parts: list[dict[str, object]],
 ) -> tuple[Decimal, Decimal]:
-    labor = Decimal(str(labor_cost)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    parts_total = sum(
-        (
-            Decimal(str(part["unit_price"])) * int(part["quantity"])
-            for part in available_parts
-        ),
-        Decimal("0.00"),
+    # Orchestrator quotes only validated in-stock catalog lines here.
+    task_type = "sale" if Decimal(str(labor_cost)) == 0 else "maintenance"
+    quote = calculate_shared_quote(
+        labor_cost=labor_cost,
+        labor_task_type=task_type,
+        parts=available_parts,
     )
-    parts_total = parts_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return parts_total, labor + parts_total
+    return quote["parts_cost"], quote["total_amount"]

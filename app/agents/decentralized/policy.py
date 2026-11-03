@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from app.application.quotes import calculate_quote as calculate_shared_quote
+
 
 def normalizar(text):
     return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn")
@@ -103,15 +105,38 @@ def cotizacion_verificada(inventory, errors, pending=False, scope=None):
             lines.append(f"{item['nombre']}: no se encontró una referencia única coincidente. Confirma la capacidad, interfaz y nombre; no sustituiré el repuesto por otro.")
             continue
         price = Decimal(item["precio_unitario"]).quantize(Decimal("0.01"))
-        amount = (price * item["cantidad"]).quantize(Decimal("0.01")) if item["disponible"] else None
+        amount = None
+        if item["disponible"]:
+            amount = calculate_shared_quote(
+                labor_cost=Decimal("0.00"),
+                labor_task_type="sale",
+                parts=[{
+                    "name": item["nombre"],
+                    "quantity": item["cantidad"],
+                    "unit_price": price,
+                    "current_stock": item["stock"],
+                }],
+            )["parts"][0]["subtotal"]
         quote["parts"].append({"name": item["nombre"], "quantity": item["cantidad"],
                                "stock": item["stock"], "unit_price": str(price),
                                "available": item["disponible"], "subtotal": str(amount) if amount is not None else None})
         lines.append(f"{item['nombre']}: cantidad solicitada {item['cantidad']}; stock {item['stock']}; "
                      f"precio unitario S/ {price}; " + (f"subtotal S/ {amount}." if amount is not None else "stock insuficiente."))
-        if amount is not None:
-            subtotal += amount
     if quote["parts"]:
+        subtotal = calculate_shared_quote(
+            labor_cost=Decimal("0.00"),
+            labor_task_type="sale",
+            parts=[
+                {
+                    "name": part["name"],
+                    "quantity": part["quantity"],
+                    "unit_price": Decimal(part["unit_price"]),
+                    "current_stock": part["stock"],
+                }
+                for part in quote["parts"]
+                if part["available"]
+            ],
+        )["parts_cost"]
         quote["known_parts_subtotal"] = str(subtotal)
         lines.append(f"Subtotal de repuestos disponibles: S/ {subtotal}.")
     lines.extend([

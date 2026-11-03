@@ -26,6 +26,9 @@ Dónde está explicado cada tema. Antes de documentar algo nuevo, revisa si ya e
 
 ## Especificaciones (`spec/`) y evidencias (`docs/`), numeradas por tarea
 
+El contrato backend de audio y su validacion local viven en
+[`specs/002-transcripcion-audio/`](specs/002-transcripcion-audio/); el OpenAPI es la referencia para el frontend.
+
 | N.º | Tema | Especificación | Evidencia |
 | --- | --- | --- | --- |
 | 00 | Plan de trabajo | — | `docs/00-plan.md` |
@@ -45,11 +48,19 @@ Dónde está explicado cada tema. Antes de documentar algo nuevo, revisa si ya e
 | 14 | Datos comerciales y FAQ de demostración | `spec/14-datos-comerciales-faq-demo.md` | `docs/17-datos-comerciales-faq-demo.md` |
 | 15 | «Mis Tickets» del cliente | `spec/15-mis-tickets-cliente.md` | `docs/18-mis-tickets-cliente.md` |
 | 16 | Precios y deduplicación del catálogo | `spec/16-precios-y-dedupe-catalogo-seed.md` | `docs/19-precios-y-dedupe-catalogo-seed.md` |
+| 21 | Registro interno de asientos contables | `specs/003-asientos-contables/` | `docs/21-asientos-contables.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.
 
 ## Fuera de este repositorio
+
+### Trabajo de esta rama (`feature/spec-kit`)
+
+- `specs/001-patrones-multiagente-coherentes/`: especificación, plan, investigación, contratos, quickstart y tareas de paridad académica entre los tres patrones.
+- `specs/002-transcripcion-audio/`: especificación, contrato OpenAPI y tareas de transcripción de audio para el backend.
+- `specs/003-asientos-contables/`: especificación, plan, contrato, tareas e implementación backend del registro interno de asientos; migración aplicada y validada en la BD PostgreSQL de prueba.
+- `docs/20-esquema-ampliado-y-trazabilidad.md`: comparación estructural de solo lectura con `contexto/tablas postgres v2.sql` y registro de validación.
 
 - Frontend (pantallas, estilos, pruebas Vitest): [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend), con sus propios `AGENTS.md`, `features.md`, `docs.md` y `memory.md`.
 - Producción: frontend en https://techfixai.vercel.app y API en Render (`/backend/*` se reenvía a la API).

@@ -9,6 +9,18 @@ class PartRequest(BaseModel):
     quantity: int = Field(ge=1, le=1000)
 
 
+class PendingCatalogRefinement(BaseModel):
+    pending_index: int = Field(ge=0, le=9)
+    constraints: str = Field(min_length=1, max_length=120)
+
+
+class CatalogFollowupDecision(BaseModel):
+    current_constraints: str | None = Field(default=None, max_length=200)
+    pending_refinements: list[PendingCatalogRefinement] = Field(default_factory=list, max_length=10)
+    additional_items: list[PartRequest] = Field(default_factory=list, max_length=10)
+    cancel: bool = False
+
+
 class IntakeDecision(BaseModel):
     route: Literal[
         "service",
@@ -33,8 +45,8 @@ class IntakeDecision(BaseModel):
         default=None,
         max_length=4000,
         description=(
-            "Respuesta breve de hasta 500 caracteres; solo se completa cuando "
-            "route es informational. Para service o clarification debe ser null."
+            "Campo legado: déjalo siempre null; el agente FAQ redacta la respuesta "
+            "final para route informational."
         ),
     )
 

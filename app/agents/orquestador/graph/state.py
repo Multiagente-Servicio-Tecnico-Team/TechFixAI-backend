@@ -12,6 +12,26 @@ class AgentState(TypedDict, total=False):
     user_id: object
     ticket_id: int
     ticket_code: str
+    ticket_lookup_pending: bool
+    warranty_code: str
+    warranty_status_pending: bool
+    warranty_claim_pending: bool
+    logistics_pending: bool
+    logistics_record_id: int
+    logistics_mode: str
+    warranty_claim_code: str
+    warranty_id: int
+    pc_build_pending: bool
+    pc_build_collecting_use: bool
+    pc_build_selected: bool
+    awaiting_build_selection: bool
+    build_intended_use: str
+    build_budget_max: Decimal
+    build_options: list[dict[str, object]]
+    selected_build_profile_id: str
+    matched_parts: list[dict[str, object]]
+    build_labor_cost: Decimal
+    build_total: Decimal
     category: str
     product: str
     symptoms: str
@@ -27,10 +47,19 @@ class AgentState(TypedDict, total=False):
     available_parts: list[dict[str, object]]
     parts_total: Decimal
     quote_id: int
+    payment_code: str
+    payment_status: str
+    ticket_status: str
     quote_preview_ready: bool
     ticket_cancelled: bool
     total: Decimal
     response: str
+    awaiting_refund_details: bool
+    refund_request_pending: bool
+    refund_id: int
+    refund_status: str
+    supplier_procurement_pending: bool
+    outcome: str
 
 
 class IntakeResult(BaseModel):

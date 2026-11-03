@@ -160,6 +160,113 @@ def _normalize(value: object) -> str:
     )
 
 
+def _catalog_tokens(value: object) -> list[str]:
+    """Normalize catalog text while keeping specs such as 32GB and 3200MHz atomic."""
+    normalized = _normalize(value)
+    normalized = re.sub(r"\bddr\s*([345])\b", r"ddr\1", normalized)
+    normalized = re.sub(r"(?<=\d)\s*(?:gigabytes?|gigas?|gb)\b", "gb", normalized)
+    normalized = re.sub(r"(?<=\d)\s*(?:terabytes?|tb)\b", "tb", normalized)
+    normalized = re.sub(r"(?<=\d)\s*(?:mhz|mt\s*/\s*s)\b", "mtps", normalized)
+    normalized = re.sub(
+        r"(?<=\d)\s+(?=(?:gb|tb|mhz|ghz|w|mm|cm|inch|pulgadas)\b)",
+        "",
+        normalized,
+    )
+    return re.findall(r"[a-z]*\d+(?:\.\d+)?[a-z]*|[a-z]+", normalized)
+
+
+_CATALOG_CATEGORY_PREFIXES = {
+    "ram": ("ram",),
+    "storage": ("almacenamiento",),
+    "cpu": ("procesador",),
+    "gpu": ("tarjeta de video",),
+    "motherboard": ("placa madre",),
+    "power_supply": ("fuente de poder",),
+    "battery": ("bateria laptop",),
+    "screen": ("pantalla laptop",),
+    "charger": ("cargador",),
+    "monitor": ("monitores",),
+    "case": ("gabinete",),
+    "cooling": ("refrigeracion pc",),
+    "keyboard": ("teclado laptop",),
+    "peripheral": ("perifericos",),
+    "maintenance": ("mantenimiento",),
+    "supplies": ("insumos",),
+    "adapter": ("adaptador",),
+    "cable": ("cable",),
+    "tool": ("herramientas",),
+    "expansion": ("tarjeta de expansion",),
+    "laptop_part": ("repuesto laptop",),
+    "energy": ("energia",),
+}
+
+
+_CATALOG_QUERY_ALIASES = {
+    "ram": ("ram", "memoria", "memorias"),
+    "storage": ("ssd", "disco", "discos", "almacenamiento", "nvme", "sata"),
+    "cpu": ("cpu", "procesador", "procesadores"),
+    "gpu": ("gpu", "video", "grafica", "graficas", "tarjeta de video", "tarjeta grafica"),
+    "motherboard": ("placa madre", "motherboard", "placa base"),
+    "power_supply": ("fuente", "fuentes", "psu", "fuente de poder"),
+    "battery": ("bateria", "baterias"),
+    "screen": ("pantalla", "pantallas"),
+    "charger": ("cargador", "cargadores"),
+    "monitor": ("monitor", "monitores"),
+    "case": ("gabinete", "case"),
+    "cooling": ("refrigeracion", "disipador", "ventilador", "cooler"),
+    "keyboard": ("teclado", "teclados"),
+    "peripheral": ("periferico", "perifericos", "mouse", "raton", "audifono"),
+    "maintenance": ("mantenimiento",),
+    "supplies": ("insumo", "insumos"),
+    "adapter": ("adaptador", "adaptadores"),
+    "cable": ("cable", "cables"),
+    "tool": ("herramienta", "herramientas"),
+    "expansion": ("expansion",),
+    "laptop_part": ("repuesto", "repuestos"),
+    "energy": ("energia",),
+}
+
+
+_CATALOG_STOPWORDS = {
+    "a", "al", "alguna", "algunas", "algun", "algunos", "articulo",
+    "articulos", "busco", "catalogo", "con", "cuanto", "cuantos",
+    "cuantas", "de", "del", "dime", "disponible", "disponibles",
+    "disponibilidad", "el", "en", "hay", "la", "las", "lo", "los",
+    "me", "modelo", "modelos", "necesito", "opcion", "opciones", "para",
+    "por", "precio", "precios", "quiero", "quisiera", "stock", "tienen",
+    "tiene", "un", "una", "unas", "unos", "venden", "vende", "ver",
+    "comprar", "compra", "favor", "producto", "productos", "que", "marca",
+    "marcas", "capacidad", "capacidades", "generacion", "generaciones",
+    "formato", "interfaz", "velocidad", "tipo", "prefiero", "preferencia",
+    "pulgada", "pulgadas",
+}
+
+_CATALOG_FAMILY_WORDS = {
+    "ram": {"ram", "memoria", "memorias"},
+    "storage": {"ssd", "disco", "discos", "almacenamiento"},
+    "cpu": {"cpu", "procesador", "procesadores"},
+    "gpu": {"gpu", "video", "grafica", "graficas", "tarjeta"},
+    "motherboard": {"placa", "madre", "motherboard", "base"},
+    "power_supply": {"fuente", "fuentes", "psu", "poder"},
+    "battery": {"bateria", "baterias"},
+    "screen": {"pantalla", "pantallas"},
+    "charger": {"cargador", "cargadores"},
+    "monitor": {"monitor", "monitores"},
+    "case": {"gabinete", "case"},
+    "cooling": {"refrigeracion", "disipador", "ventilador", "cooler"},
+    "keyboard": {"teclado", "teclados"},
+    "peripheral": {"periferico", "perifericos"},
+    "maintenance": {"mantenimiento"},
+    "supplies": {"insumo", "insumos"},
+    "adapter": {"adaptador", "adaptadores"},
+    "cable": {"cable", "cables"},
+    "tool": {"herramienta", "herramientas"},
+    "expansion": {"expansion"},
+    "laptop_part": {"repuesto", "repuestos"},
+    "energy": {"energia"},
+}
+
+
 def lookup_inventory(
     requested_name: str,
     quantity: int,
@@ -180,6 +287,7 @@ def lookup_inventory(
         stock_column = _column(table,"current_stock","stock_actual","stock","cantidad","existencias","disponible")
         price_column = _column(table, "unit_price", "precio", "precio_unitario", "costo")
         id_column = _column(table, "id", "spare_part_id", "repuesto_id")
+        code_column = _column(table, "code", "sku", "codigo", "código")
         active_column = _column(table, "active", "activo")
         if name_column is None or stock_column is None or price_column is None:
             raise RuntimeError(
@@ -225,9 +333,11 @@ def lookup_inventory(
         "name": str(row[name_column.name]),
         "quantity": quantity,
         "stock": stock,
+        "current_stock": stock,
         "unit_price": Decimal(str(row[price_column.name] or 0)),
         "available": stock >= quantity,
         "inventory_id": row[id_column.name] if id_column is not None else None,
+        "code": row[code_column.name] if code_column is not None else None,
         "found": True,
     }
 
@@ -392,6 +502,18 @@ class ServiceRepository:
 
             session_factory = SessionLocal
         self._session_factory = session_factory
+
+    def lookup_inventory(
+        self, requested_name: str, quantity: int
+    ) -> dict[str, object]:
+        """Read current stock and price through this repository's engine."""
+        with self._session_factory() as session:
+            engine = session.get_bind()
+            return lookup_inventory(
+                requested_name=requested_name,
+                quantity=quantity,
+                engine=engine,
+            )
 
     def find_customer(self, email: str) -> dict[str, Any] | None:
         query = text(
@@ -705,6 +827,154 @@ class ServiceRepository:
             )
             if result.rowcount != 1:
                 raise LookupError("No se pudo cancelar el ticket.")
+
+    def create_accepted_ticket_quote(
+        self,
+        *,
+        customer_id: int,
+        request_type: str,
+        quote_type: str,
+        title: str,
+        failure_description: str,
+        provisional_diagnosis: str,
+        diagnosis_type: str,
+        labor_cost: Decimal,
+        parts_cost: Decimal,
+        total_amount: Decimal,
+        observations: str,
+        parts: list[dict[str, Any]],
+        payment_code: str,
+    ) -> dict[str, Any]:
+        """Atomically create an accepted ticket quote and pending payment."""
+        if type(customer_id) is not int or customer_id < 1:
+            raise ValueError("Se requiere el cliente autenticado.")
+        expected_request = {
+            "REPAIR": "REPAIR",
+            "DIRECT_SALE": "SALE",
+            "PC_BUILD": "PC_BUILD",
+        }
+        if expected_request.get(quote_type) != request_type:
+            raise ValueError("El tipo de ticket no corresponde a la cotización.")
+        if diagnosis_type not in {"HARDWARE", "SOFTWARE", "HYBRID", "NONE"}:
+            raise ValueError("Tipo de diagnóstico no admitido.")
+        if total_amount <= 0 or labor_cost < 0 or parts_cost < 0:
+            raise ValueError("La cotización debe tener importes válidos.")
+        ticket_code = f"TCK-{uuid4().hex[:12].upper()}"
+        insert_ticket = text(
+            """
+            INSERT INTO tickets (
+                code, customer_id, title, failure_description, request_type,
+                diagnosis_type, status, hardware_diagnosis, software_diagnosis
+            )
+            VALUES (
+                :code, :customer_id, :title, :failure_description,
+                CAST(:request_type AS request_type_enum),
+                CAST(:diagnosis_type AS diagnosis_type_enum),
+                CAST('PAYMENT_PENDING' AS ticket_status_enum),
+                :hardware_diagnosis, :software_diagnosis
+            )
+            RETURNING id
+            """
+        )
+        insert_quote = text(
+            """
+            INSERT INTO quotes (
+                ticket_id, quote_type, labor_cost, parts_cost, total_amount,
+                status, observations
+            )
+            VALUES (
+                :ticket_id, CAST(:quote_type AS quote_type_enum), :labor_cost,
+                :parts_cost, :total_amount, CAST('ACCEPTED' AS quote_status_enum),
+                :observations
+            )
+            RETURNING id
+            """
+        )
+        insert_detail = text(
+            """
+            INSERT INTO quote_details (
+                quote_id, spare_part_id, quantity, unit_price, subtotal
+            )
+            VALUES (:quote_id, :spare_part_id, :quantity, :unit_price, :subtotal)
+            """
+        )
+        insert_payment = text(
+            """
+            INSERT INTO payments (
+                ticket_id, quote_id, customer_id, payment_code, amount, status
+            )
+            VALUES (
+                :ticket_id, :quote_id, :customer_id, :payment_code, :amount,
+                CAST('PENDING' AS payment_status_enum)
+            )
+            RETURNING id, payment_code, status
+            """
+        )
+        with self._session_factory() as session, session.begin():
+            ticket_id = session.execute(
+                insert_ticket,
+                {
+                    "code": ticket_code,
+                    "customer_id": customer_id,
+                    "title": title[:200],
+                    "failure_description": failure_description,
+                    "request_type": request_type,
+                    "diagnosis_type": diagnosis_type,
+                    "hardware_diagnosis": (
+                        provisional_diagnosis
+                        if diagnosis_type in {"HARDWARE", "HYBRID"}
+                        else None
+                    ),
+                    "software_diagnosis": (
+                        provisional_diagnosis
+                        if diagnosis_type in {"SOFTWARE", "HYBRID"}
+                        else None
+                    ),
+                },
+            ).scalar_one()
+            quote_id = session.execute(
+                insert_quote,
+                {
+                    "ticket_id": ticket_id,
+                    "quote_type": quote_type,
+                    "labor_cost": labor_cost,
+                    "parts_cost": parts_cost,
+                    "total_amount": total_amount,
+                    "observations": observations,
+                },
+            ).scalar_one()
+            for part in parts:
+                if type(part.get("quantity")) is not int or part["quantity"] < 1:
+                    raise ValueError("Cantidad de artículo no válida.")
+                session.execute(
+                    insert_detail,
+                    {
+                        "quote_id": quote_id,
+                        "spare_part_id": part["id"],
+                        "quantity": part["quantity"],
+                        "unit_price": part["unit_price"],
+                        "subtotal": part["subtotal"],
+                    },
+                )
+            payment = session.execute(
+                insert_payment,
+                {
+                    "ticket_id": ticket_id,
+                    "quote_id": quote_id,
+                    "customer_id": customer_id,
+                    "payment_code": payment_code,
+                    "amount": total_amount,
+                },
+            ).mappings().one()
+        return {
+            "ticket_id": int(ticket_id),
+            "ticket_code": ticket_code,
+            "quote_id": int(quote_id),
+            "payment_id": int(payment["id"]),
+            "payment_code": payment["payment_code"],
+            "payment_status": payment["status"],
+            "total_amount": total_amount,
+        }
 
     def find_warranty(self, warranty_code: str) -> dict[str, Any] | None:
         query = text(
@@ -1061,70 +1331,73 @@ class ServiceRepository:
             return [dict(row) for row in rows]
 
     def find_catalog_items(self, search_term: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        if not 1 <= limit <= 40:
+        if not 1 <= limit <= 500:
             raise ValueError("El límite de búsqueda debe estar entre 1 y 40.")
         term = search_term.strip()
         if not term:
             return []
-        normalized = unicodedata.normalize("NFKD", term.casefold())
-        normalized = "".join(
-            character for character in normalized if not unicodedata.combining(character)
+
+        query_tokens = _catalog_tokens(term)
+        normalized_term = _normalize(term)
+        family = next(
+            (
+                key
+                for key, aliases in _CATALOG_QUERY_ALIASES.items()
+                if any(re.search(rf"\b{re.escape(alias)}\b", normalized_term) for alias in aliases)
+            ),
+            None,
         )
-        tokens = list(dict.fromkeys(re.findall(r"[a-z0-9]+", normalized)))
-        stopwords = {
-            "busco", "comprar", "compra", "quiero", "necesito", "una", "un",
-            "para", "con", "de", "del", "por", "favor", "producto", "articulo",
-            "articulos", "opciones", "opcion", "pc", "computadora",
-        }
-        tokens = [token for token in tokens if token not in stopwords]
-        if not tokens:
+        categories = _CATALOG_CATEGORY_PREFIXES.get(family, ())
+        ignored_tokens = set(_CATALOG_STOPWORDS)
+        if family:
+            ignored_tokens.update(_CATALOG_FAMILY_WORDS[family])
+
+        # Form factor is a real filter for memory, not merely another text term.
+        if family == "ram":
+            if any(token in query_tokens for token in ("laptop", "notebook", "sodimm")):
+                categories = ("ram laptop",)
+            elif any(token in query_tokens for token in ("desktop", "udimm", "escritorio", "sobremesa")):
+                categories = ("ram desktop",)
+            ignored_tokens.update({"laptop", "notebook", "sodimm", "desktop", "udimm", "escritorio", "sobremesa"})
+
+        # Normalize equivalent unit spellings and keep numeric specs atomic.
+        tokens = list(dict.fromkeys(token for token in query_tokens if token not in ignored_tokens))
+        if not categories and not tokens:
             return []
 
-        conditions: list[str] = []
-        parameters: dict[str, Any] = {"limit": limit}
-        family = tokens[0]
-        if family == "ram":
-            conditions.append("category ILIKE 'RAM%'")
-            if any(token in tokens for token in ("laptop", "notebook", "sodimm")):
-                conditions.append("category ILIKE '%Laptop%'")
-            elif "desktop" in tokens:
-                conditions.append("category ILIKE '%Desktop%'")
-            tokens = [token for token in tokens if token not in {"ram", "desktop", "laptop", "notebook", "sodimm"}]
-        elif family in {"ssd", "disco", "almacenamiento"}:
-            conditions.append("category ILIKE '%Almacenamiento%'")
-            tokens = [token for token in tokens if token not in {"ssd", "disco", "almacenamiento"}]
-        elif family in {"procesador", "cpu"}:
-            conditions.append("category ILIKE '%Procesador%'")
-            tokens = [token for token in tokens if token not in {"procesador", "cpu"}]
-        elif family in {"gpu", "video", "grafica", "tarjeta"}:
-            conditions.append("category ILIKE '%Video%'")
-            tokens = [token for token in tokens if token not in {"gpu", "video", "grafica", "tarjeta"}]
-        for index, token in enumerate(tokens):
-            key = f"token_{index}"
-            conditions.append(
-                "("
-                "code ILIKE :" + key + " OR name ILIKE :" + key
-                + " OR COALESCE(category, '') ILIKE :" + key
-                + " OR COALESCE(description, '') ILIKE :" + key
-                + ")"
-            )
-            parameters[key] = f"%{token}%"
-        where = " AND ".join(conditions) if conditions else "TRUE"
+        # Exact normalized tokens avoid substring errors such as 32 GB matching
+        # 3200 MHz, while category aliases let "memoria RAM" find RAM-only names.
         query = text(
-            f"""
+            """
             SELECT id, code, name, category, description, unit_price, current_stock
             FROM spare_parts
             WHERE active IS TRUE
               AND current_stock > 0
               AND unit_price > 0
-              AND {where}
-            ORDER BY current_stock DESC, name
-            LIMIT :limit
             """
         )
         with self._session_factory() as session:
-            rows = session.execute(query, parameters).mappings()
-            return [dict(row) for row in rows]
+            rows = [dict(row) for row in session.execute(query).mappings()]
+
+        matches = []
+        for item in rows:
+            category_tokens = _catalog_tokens(item.get("category", ""))
+            category_text = " ".join(category_tokens)
+            if categories and not any(category_text.startswith(prefix) for prefix in categories):
+                continue
+            searchable = set(
+                _catalog_tokens(
+                    " ".join(
+                        str(item.get(field) or "")
+                        for field in ("code", "name", "category", "description")
+                    )
+                )
+            )
+            if all(token in searchable for token in tokens):
+                matches.append(item)
+
+        matches.sort(key=lambda item: (-int(item["current_stock"]), str(item["name"]).casefold()))
+        return matches[:limit]
 
     def find_spare_part_by_code(self, code: str) -> dict[str, Any] | None:
         query = text(
@@ -1471,3 +1744,92 @@ class ServiceRepository:
                     },
                 )
         return int(quote_id)
+
+    def request_refund(
+        self,
+        *,
+        customer_id: int,
+        payment_id: int,
+        amount: Decimal,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Register a pending refund request after a locked eligibility check.
+
+        This operation never updates a payment status or calls a payment provider.
+        """
+        with self._session_factory() as session, session.begin():
+            payment = session.execute(
+                text(
+                    """
+                    SELECT id, ticket_id, amount, status::text AS status
+                    FROM payments
+                    WHERE id = :payment_id AND customer_id = :customer_id
+                    FOR UPDATE
+                    """
+                ),
+                {"payment_id": payment_id, "customer_id": customer_id},
+            ).mappings().first()
+            if payment is None:
+                raise ValueError("No se encontró un pago completado de este cliente.")
+            if payment["status"] != "COMPLETED":
+                raise ValueError("Solo se puede solicitar el reembolso de un pago completado.")
+
+            unresolved = session.execute(
+                text(
+                    """
+                    SELECT 1 FROM refunds
+                    WHERE payment_id = :payment_id
+                      AND status::text IN ('REQUESTED', 'APPROVED')
+                    LIMIT 1
+                    """
+                ),
+                {"payment_id": payment_id},
+            ).first()
+            if unresolved:
+                raise ValueError("Ya existe una solicitud de reembolso pendiente para este pago.")
+
+            processed = session.execute(
+                text(
+                    """
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM refunds
+                    WHERE payment_id = :payment_id AND status::text = 'PROCESSED'
+                    """
+                ),
+                {"payment_id": payment_id},
+            ).scalar_one()
+            remaining = Decimal(str(payment["amount"])) - Decimal(str(processed or 0))
+            if amount > remaining:
+                raise ValueError("El importe supera el saldo aún reembolsable.")
+
+            inserted = session.execute(
+                text(
+                    """
+                    INSERT INTO refunds (payment_id, ticket_id, amount, reason, status)
+                    VALUES (:payment_id, :ticket_id, :amount, :reason,
+                            CAST('REQUESTED' AS refund_status_enum))
+                    RETURNING id, payment_id, ticket_id, amount, status::text AS status
+                    """
+                ),
+                {
+                    "payment_id": payment_id,
+                    "ticket_id": payment["ticket_id"],
+                    "amount": amount,
+                    "reason": reason,
+                },
+            ).mappings().one()
+        return dict(inserted)
+
+    def find_payment_id_by_code(self, customer_id: int, payment_code: str) -> int | None:
+        """Resolve a customer-owned payment reference without exposing other accounts."""
+        with self._session_factory() as session:
+            row = session.execute(
+                text(
+                    """
+                    SELECT id FROM payments
+                    WHERE payment_code = :payment_code AND customer_id = :customer_id
+                    """
+                ),
+                {"payment_code": payment_code, "customer_id": customer_id},
+            ).mappings().first()
+        return int(row["id"]) if row else None

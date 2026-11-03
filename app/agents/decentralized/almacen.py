@@ -1,5 +1,3 @@
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 from langchain_core.messages import (
     SystemMessage,
     HumanMessage,
@@ -8,6 +6,7 @@ from langchain_core.messages import (
 )
 
 from app.agents.decentralized.state import AgentState
+from app.config import create_chat_model
 from app.agents.decentralized.policy import handoff, ultimo_usuario, nombre_inventario, es_marcador
 from app.agents.decentralized.tools.almacen_tools import (
     consultar_inventario,
@@ -18,16 +17,7 @@ from app.agents.decentralized.tools.almacen_tools import (
 # CONFIGURACIÓN DEL MODELO
 # =========================================================
 
-load_dotenv()
-
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    reasoning_effort="low",
-    model_kwargs={
-        "parallel_tool_calls": False,
-    },
-)
+llm = create_chat_model()
 
 # =========================================================
 # HERRAMIENTAS

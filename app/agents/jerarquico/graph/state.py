@@ -22,6 +22,7 @@ class ServiceState(TypedDict, total=False):
         "pc_build",
         "warranty_status",
         "warranty_claim",
+        "refund_request",
         "logistics",
         "inventory_selection",
         "diagnosis_only",
@@ -66,9 +67,14 @@ class ServiceState(TypedDict, total=False):
     logistics_record_id: int | None
     payment_id: int | None
     payment_code: str
+    awaiting_refund_details: bool
+    refund_id: int | None
+    refund_status: str
     ticket_status: str
     awaiting_quote_confirmation: bool
     awaiting_inventory_selection: bool
+    awaiting_catalog_refinement: bool
+    catalog_refinement_request: dict[str, Any]
     quote_changed: bool
     ticket_id: int | None
     ticket_code: str

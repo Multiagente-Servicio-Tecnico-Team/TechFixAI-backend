@@ -36,7 +36,11 @@ class OrchestratorPattern(GraphPattern):
         elif result.get("ticket_cancelled"):
             status = "rejected"
         elif result.get("quote_id") is not None:
-            status = "saved"
+            status = (
+                "confirmed"
+                if result.get("ticket_status") == "PAYMENT_PENDING"
+                else "saved"
+            )
         else:
             return None
         if result.get("total") is None:

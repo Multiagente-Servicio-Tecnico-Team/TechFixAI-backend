@@ -26,6 +26,7 @@ from app.accounts.security import password_fingerprint, read_session
 
 SESSION_REQUIRED = "Inicia sesión para continuar."
 CUSTOMER_ONLY = "El chat es para clientes."
+ADMIN_ONLY = "Esta operación requiere una cuenta administradora."
 
 
 class SessionError(Exception):
@@ -92,6 +93,12 @@ class SessionGuard:
         if customer.role != Role.CUSTOMER.value:
             raise SessionError(403, CUSTOMER_ONLY, "customer_only")
         return customer
+
+    def require_admin(self, request: Request) -> SessionCustomer:
+        administrator = self.require_user(request)
+        if administrator.role != Role.ADMIN.value:
+            raise SessionError(403, ADMIN_ONLY, "admin_only")
+        return administrator
 
     @staticmethod
     def install(app: FastAPI) -> None:

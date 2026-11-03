@@ -49,6 +49,22 @@ Ver [`spec/06-integracion-patrones.md`](spec/06-integracion-patrones.md) y
 [`docs/06-integracion-patrones.md`](docs/06-integracion-patrones.md) para alcance,
 decisiones, validación y limitaciones del bloque.
 
+## Chat por voz (backend)
+
+`POST /api/chat/audio` recibe `multipart/form-data` autenticado por la misma cookie
+que el chat escrito. El backend transcribe con Groq `whisper-large-v3-turbo` y entrega
+el texto normalizado al caso de uso compartido de los tres patrones. No persiste el
+archivo; conserva respuestas exitosas para idempotencia durante diez minutos y aplica
+un limite de cinco envios por cliente por minuto.
+
+La funcion permanece desactivada hasta configurar `AUDIO_TRANSCRIPTION_ENABLED=true`.
+Usa el `GROQ_API_KEY` existente. Si LangSmith esta habilitado, ambas opciones
+`LANGSMITH_HIDE_INPUTS` y `LANGSMITH_HIDE_OUTPUTS` deben ser `true`. Los limites
+ajustables y sus valores por defecto estan en `.env.example`. El contrato HTTP
+canonico esta en
+[`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml);
+detalles de ejecucion en [`app/chat/README.md`](app/chat/README.md).
+
 ## Arquitectura
 
 ```text
@@ -171,6 +187,9 @@ Para los endpoints independientes, ver la documentación de sus módulos.
 
 ## Pruebas
 
+Para recorrer manualmente las capacidades disponibles desde el chat, consulta la
+[guía de pruebas del patrón jerárquico](docs/22-guia-pruebas-manuales-jerarquico.md).
+
 ```bash
 .venv/Scripts/python -m pytest -q
 ```
@@ -204,3 +223,9 @@ Para los endpoints independientes, ver la documentación de sus módulos.
 - Tickets, inventario y "Mis Tickets" del frontend usan datos de demostración.
 - `npm audit --omit=dev` reporta dos vulnerabilidades moderadas en React Router; el arreglo sugerido por npm
   salta a la versión 7 y requiere evaluar cambios incompatibles antes de aplicarlo.
+
+## Especificación de paridad multiagente (en progreso)
+
+La rama `feature/spec-kit` conserva las tres topologías para evaluación académica y centraliza el perfil del modelo. El RAG compartido registra fuentes, secciones, versiones y nivel de confianza; el FAQ con datos ficticios se etiqueta como demostrativo. Las compras a proveedores siguen no disponibles. El repositorio puede registrar solicitudes de reembolso pendientes tras validar titularidad y pago, pero el flujo conversacional aún no está conectado a los tres grafos.
+
+La paridad funcional todavía no está implementada: la Red Descentralizada conserva herramientas simuladas y faltan flujos del Orquestador. Consulta [las tareas pendientes](specs/001-patrones-multiagente-coherentes/tasks.md) y [la trazabilidad del esquema](docs/20-esquema-ampliado-y-trazabilidad.md).

@@ -39,7 +39,26 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Correo de recuperación (SMTP u outbox local) | `app/accounts/mailer.py`, `app/email/` | Listo | `test_accounts_recovery.py` |
 | Búsqueda en conocimiento (RAG) | `app/rag/`, retrievers por patrón | Listo | `test_retriever.py`, `test_knowledge_base.py` |
 
+| Chat autenticado por voz `POST /api/chat/audio` | `app/application/audio_chat.py`, `app/adapters/speech/`, `app/adapters/api/chat.py` | Backend implementado; desactivado por defecto | `test_audio_chat_api.py`, `test_audio_chat_patterns.py` |
+| Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
+
 ## Pendientes conocidos
+
+### Patrones multiagente coherentes (Spec Kit)
+
+### Asientos contables internos (Spec Kit)
+
+La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. La migración aditiva está en `sql/migrations/003_accounting_entries.sql`; se aplicó y verificó en la BD de prueba `multiagentedb` indicada explícitamente para la ejecución.
+
+Estado de esta iteración: en progreso en `feature/spec-kit`. Se conservan los tres grafos para comparación académica. El perfil Groq se centralizó y se añadieron escenarios/contratos iniciales.
+
+El cálculo Decimal de cotizaciones ahora tiene un único caso de uso compartido entre Jerárquico y Orquestador. La validación de consulta del catálogo se centralizó para Orquestador y la Red Descentralizada; la integración del mismo puerto en Jerárquico y la ejecución uniforme de cotizaciones todavía están pendientes.
+
+- El RAG común tiene manifiesto de fuentes, metadatos de confianza y procedencia, chunks deterministas y colección Chroma versionada. FAQ Jerárquico y recuperación técnica Orquestador llaman al contrato común. La recuperación técnica estructurada del Jerárquico todavía requiere integración de procedencia; la búsqueda semántica aún requiere validación con el modelo descargado.
+- Las FAQ del manual de Jerárquico están marcadas como demostrativas. Las respuestas no deben presentar ubicación, horarios, tarifas o medios de pago de ese archivo como datos reales.
+- La solicitud de reembolso puede registrarse transaccionalmente como `REQUESTED` tras validar titularidad, pago completado, saldo y duplicados. Falta conectar la conversación a esa operación en los tres patrones; no hay aprobación ni movimiento de dinero automático.
+- La compra externa permanece no disponible. No existe una relación de ofertas confiables proveedor-artículo-precio-plazo.
+- No se declara paridad de capacidades: la Red Descentralizada aún conserva herramientas simuladas y Orquestador no cubre todos los flujos de Jerárquico. El avance restante está enumerado en `specs/001-patrones-multiagente-coherentes/tasks.md`.
 
 - **Esquema SQL incompleto:** `sql/creacion_tablas_ingles_sin_inserciones.sql` no crea `quote_details.custom_item_name`, `diagnosis_type_enum` ni las columnas de diagnóstico. Efecto: «Mis Tickets» responde 503 con tickets presupuestados y el Jerárquico responde 503 al guardar el diagnóstico.
 - **Orquestador al aceptar:** `app/agents/orquestador/agentes/ventas.py` espera 4 valores de `create_ticket_with_quote` y `app/database/repository.py` devuelve 3 (`ValueError`, 502).

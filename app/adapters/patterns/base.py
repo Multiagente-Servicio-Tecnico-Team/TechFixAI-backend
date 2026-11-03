@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.adapters.llm.tracing import get_trace_context
+from app.adapters.llm.model_factory import model_profile
 from app.application.errors import PatternFailure, StorageUnavailable
 from app.domain.chat import PatternReply
 from app.settings import Settings, load_settings
@@ -68,11 +69,20 @@ class GraphPattern:
             return self._graph
 
     def config(self, conversation_id: str) -> dict[str, Any]:
+        settings = self._settings_factory()
         return {
             "configurable": {"thread_id": conversation_id},
             "run_name": f"techfix-{self.id}",
-            "tags": ["service-chat", f"pattern:{self.id}"],
-            "metadata": {"pattern": self.id, "conversation_id": conversation_id},
+            "tags": ["service-chat", f"pattern:{self.id}", "scenario:interactive"],
+            "metadata": {
+                "pattern_id": self.id,
+                "scenario_id": "interactive",
+                "model_profile_id": (
+                    model_profile(settings).identifier
+                    if settings.groq_model
+                    else "unconfigured"
+                ),
+            },
         }
 
     def reply(self, conversation_id: str, customer_id: int, message: str) -> PatternReply:

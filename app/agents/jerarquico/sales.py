@@ -1,11 +1,12 @@
-from decimal import Decimal
 from typing import Any
+from decimal import Decimal
 
 from langchain_core.messages import AIMessage
 
 from app.agents.jerarquico.graph.state import ServiceState
 from app.settings import Settings
 from app.agents.jerarquico.tools.quotes import calculate_quote
+from app.application.quotes import quote_changed
 
 
 def make_sales_agent(settings: Settings):
@@ -30,33 +31,7 @@ def make_sales_agent(settings: Settings):
         quote["quote_type"] = quote_type
         if state.get("route") == "confirm" and state.get("quote"):
             previous = state["quote"]
-            previous_parts = {
-                part["id"]: (
-                    part["quantity"],
-                    Decimal(str(part["unit_price"])),
-                    part["current_stock"],
-                )
-                for part in previous["parts"]
-            }
-            current_parts = {
-                part["id"]: (
-                    part["quantity"],
-                    Decimal(str(part["unit_price"])),
-                    part["current_stock"],
-                )
-                for part in quote["parts"]
-            }
-            financial_fields = (
-                "quote_type",
-                "labor_task_type",
-                "labor_cost",
-                "parts_cost",
-                "total_amount",
-            )
-            if previous_parts != current_parts or any(
-                previous.get(field, "REPAIR") != quote.get(field, "REPAIR")
-                for field in financial_fields
-            ):
+            if quote_changed(previous, quote):
                 return {
                     "quote": quote,
                     "route": "service",

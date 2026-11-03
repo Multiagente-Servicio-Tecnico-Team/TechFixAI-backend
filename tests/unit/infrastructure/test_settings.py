@@ -90,6 +90,29 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "LANGSMITH_TRACING"):
             self.load_from_environment({"LANGSMITH_TRACING": "sometimes"})
 
+    def test_audio_is_disabled_by_default_and_limits_have_expected_values(self):
+        settings = self.load_from_environment({})
+        self.assertFalse(settings.audio_transcription_enabled)
+        self.assertEqual(settings.audio_transcription_timeout_seconds, 30)
+        self.assertEqual(settings.audio_max_bytes, 25_000_000)
+        self.assertEqual(settings.audio_max_duration_ms, 120_000)
+        self.assertEqual(settings.audio_requests_per_minute, 5)
+
+    def test_audio_with_visible_langsmith_payload_is_rejected(self):
+        settings = self.load_from_environment({
+            "AUDIO_TRANSCRIPTION_ENABLED": "true",
+            "LANGSMITH_TRACING": "true",
+            "LANGSMITH_API_KEY": "secret",
+            "LANGSMITH_HIDE_INPUTS": "false",
+        })
+        with self.assertRaisesRegex(RuntimeError, "LANGSMITH_HIDE_INPUTS"):
+            settings.validate_audio_privacy()
+
+    def test_rejects_invalid_audio_timeout_or_limits(self):
+        for name, value in (("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", "0"), ("AUDIO_MAX_BYTES", "-1"), ("AUDIO_REQUESTS_PER_MINUTE", "many")):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, name):
+                self.load_from_environment({name: value})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 """Contrato común de POST /api/chat para todos los patrones LangGraph del equipo."""
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
 
 
 class ChatIn(BaseModel):
@@ -9,8 +9,9 @@ class ChatIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     conversation_id: str | None = Field(default=None, max_length=64)
+    proposal_id: str | None = Field(default=None, max_length=128)
     message: str | None = Field(default=None, max_length=2000)
-    action: Literal["accept_quote", "reject_quote"] | None = None
+    action: Literal["accept_quote", "reject_quote", "resume_payment", "resume_logistics", "resume_warranty"] | None = None
     pattern: Literal["hierarchical", "orchestrator", "decentralized"] = "hierarchical"
 
     @model_validator(mode="after")
@@ -28,10 +29,19 @@ class QuoteLine(BaseModel):
 
 
 class QuoteOut(BaseModel):
+    proposal_id: str | None = Field(default=None, max_length=128)
     status: Literal["proposed", "saved", "confirmed", "rejected"]
     lines: list[QuoteLine]
     total: str
     currency: str = "PEN"
+
+
+    @model_serializer(mode="wrap")
+    def serialize_quote(self, handler):
+        data = handler(self)
+        if self.proposal_id is None:
+            data.pop("proposal_id", None)
+        return data
 
 
 class TicketOut(BaseModel):

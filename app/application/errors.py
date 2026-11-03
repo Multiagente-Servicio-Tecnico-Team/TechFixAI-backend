@@ -142,3 +142,10 @@ class AccountingStorageUnavailable(AccountingError):
 
     def __init__(self):
         super().__init__(self.detail)
+
+
+class ConversationActionError(ApplicationError):
+    """Safe conversation/recovery error shared by text and audio adapters."""
+    def __init__(self, status_code: int, detail: str, code: str = "conversation_conflict"):
+        self.status_code, self.detail, self.code = status_code, detail, code
+        super().__init__(detail)

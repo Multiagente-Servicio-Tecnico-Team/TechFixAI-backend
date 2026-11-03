@@ -22,10 +22,12 @@ class SendChatMessage:
         patterns: Mapping[str, ChatPattern],
         conversations: ConversationRegistry,
         limiter: AttemptLimiter,
+        durable_conversations=None,
     ) -> None:
         self._patterns = patterns
         self._conversations = conversations
         self._limiter = limiter
+        self._durable = durable_conversations
 
     def execute(
         self,
@@ -35,6 +37,7 @@ class SendChatMessage:
         message: str | None = None,
         action: str | None = None,
         conversation_id: str | None = None,
+        proposal_id: str | None = None,
     ) -> ChatTurn:
         # El límite cuenta cada envío del cliente, aunque después falle.
         key = str(customer_id)
@@ -42,6 +45,15 @@ class SendChatMessage:
             raise RateLimited()
         self._limiter.fail(key)
 
+        if self._durable is not None:
+            if pattern == "decentralized":
+                cid, reply = self._durable.execute(customer_id=customer_id, message=message,
+                    conversation_id=conversation_id, action=action, proposal_id=proposal_id)
+                return ChatTurn(conversation_id=cid, pattern=pattern, reply=reply)
+            self._durable.check_other_pattern(conversation_id, customer_id)
+        if action in {"resume_payment", "resume_logistics", "resume_warranty"}:
+            from app.application.errors import ConversationActionError
+            raise ConversationActionError(409, "Accion no disponible para este patron.")
         conversation = self._conversations.open(conversation_id, customer_id, pattern)
         chat_pattern = self._patterns[pattern]
         if action and (not chat_pattern.supports_quotes or not conversation.pending_quote):

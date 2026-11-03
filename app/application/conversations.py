@@ -38,3 +38,16 @@ class ConversationRegistry:
             if conversation.pattern != pattern:
                 raise PatternLocked()
             return conversation
+
+    def known_pattern(self, conversation_id: str, customer_id: int) -> str | None:
+        with self._lock:
+            item = self._items.get(conversation_id)
+            return item.pattern if item is not None and item.customer_id == customer_id else None
+
+    def remember(self, conversation_id: str, customer_id: int, pattern: str) -> None:
+        """Indexa una identidad ya autorizada; no reemplaza al ownership durable."""
+        with self._lock:
+            if conversation_id in self._items:
+                self.open(conversation_id, customer_id, pattern)
+            else:
+                self._items[conversation_id] = Conversation(conversation_id, customer_id, pattern)

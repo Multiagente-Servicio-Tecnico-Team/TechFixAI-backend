@@ -12,7 +12,7 @@ from app.application.audio_chat import SendAudioChatMessage
 from app.application.errors import (
     AudioIdempotencyConflict, AudioQuotaExceeded, AudioRequestError,
     AudioTranscriptionTimeout, AudioUnavailable,
-    PatternFailure, RateLimited, StorageUnavailable,
+    PatternFailure, RateLimited, StorageUnavailable, ConversationActionError,
 )
 from app.application.tickets import ListCustomerTickets
 from app.chat.contract import AudioChatOut, ChatIn, ChatOut, QuoteLine, QuoteOut, TicketOut
@@ -55,7 +55,10 @@ def create_chat_router(
                 message=body.message,
                 action=body.action,
                 conversation_id=body.conversation_id,
+                proposal_id=body.proposal_id,
             )
+        except ConversationActionError as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
         except RateLimited as exc:
             return JSONResponse(status_code=429, content={"detail": exc.detail})
         except DomainError as exc:
@@ -114,6 +117,8 @@ def create_chat_router(
             )
         except (AudioRequestError, AudioIdempotencyConflict) as exc:
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
+        except ConversationActionError as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
         except RateLimited as exc:
             return JSONResponse(status_code=429, content={"detail": exc.detail, "code": "rate_limited"})
         except DomainError as exc:
@@ -145,6 +150,7 @@ def chat_out(conversation_id: str, pattern: str, reply: PatternReply) -> ChatOut
                 lines=[QuoteLine(label=line.label, amount=money_text(line.amount)) for line in quote.lines],
                 total=money_text(quote.total),
                 currency=quote.currency,
+                proposal_id=quote.proposal_id,
             )
             if quote
             else None

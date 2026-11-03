@@ -39,18 +39,25 @@ def create_app(
     trace_context_factory: TraceContextFactory | None = None,
     ticket_repository_factory: Callable[[], Any] | None = None,
     accounting_repository_factory: Callable[[], Any] | None = None,
+    checkpoint_resources_factory=None,
+    financial_repository=None,
+    conversation_owners_repository=None,
+    conversation_locks=None,
+    test_without_auth_routes: bool = False,
 ) -> FastAPI:
     load_dotenv()
     account_settings = settings or (session_guard.settings if session_guard else AccountSettings.from_env())
-    accounts_app = create_accounts_app(
-        settings=account_settings,
-        session_factory=session_factory or (session_guard.session_factory if session_guard else None),
-        mailer=mailer,
-    )
-    shared_guard = session_guard or SessionGuard(
-        account_settings,
-        accounts_app.state.session_factory,
-    )
+    factory = session_factory or getattr(session_guard, "session_factory", None)
+    accounts_app = None
+    # La omision de rutas de cuentas exige dobles de prueba explicitos.
+    if test_without_auth_routes:
+        if session_guard is None or graph_factories is None:
+            raise ValueError("Omitir /auth requiere session_guard y graph_factories de prueba.")
+    elif session_guard is not None and factory is None:
+        raise ValueError("session_guard requiere session_factory; use el modo de prueba explicito si corresponde.")
+    if not test_without_auth_routes:
+        accounts_app = create_accounts_app(settings=account_settings, session_factory=factory, mailer=mailer)
+    shared_guard = session_guard or SessionGuard(account_settings, accounts_app.state.session_factory)
     application = chat_app or build_chat_app(
         session_guard=shared_guard,
         graph_factories=graph_factories,
@@ -58,8 +65,13 @@ def create_app(
         trace_context_factory=trace_context_factory,
         ticket_repository_factory=ticket_repository_factory,
         accounting_repository_factory=accounting_repository_factory,
+        checkpoint_resources_factory=checkpoint_resources_factory,
+        financial_repository=financial_repository,
+        conversation_owners_repository=conversation_owners_repository,
+        conversation_locks=conversation_locks,
     )
-    application.mount("/auth", accounts_app)
+    if accounts_app is not None:
+        application.mount("/auth", accounts_app)
     return application
 
 

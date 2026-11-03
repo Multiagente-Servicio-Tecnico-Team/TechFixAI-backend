@@ -51,7 +51,7 @@ def agent(monkeypatch, request):
         module = ModuleType(name)
         module.__dict__.update(attributes)
         monkeypatch.setitem(sys.modules, name, module)
-    path = Path(__file__).resolve().parents[2] / "app/agents/decentralized/software.py"
+    path = Path(__file__).resolve().parents[2] / "app/agents/decentralized/agents/software.py"
     spec = importlib.util.spec_from_file_location("isolated_software", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

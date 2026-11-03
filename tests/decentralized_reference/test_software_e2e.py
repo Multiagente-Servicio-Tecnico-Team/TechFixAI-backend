@@ -89,10 +89,18 @@ def network(monkeypatch):
                  "app.agents.decentralized.support", "app.agents.decentralized.hardware",
                  "app.agents.decentralized.software", "app.agents.decentralized.sales",
                  "app.agents.decentralized.warehouse", "app.agents.decentralized.graph"):
-        path = ROOT / (name.replace(".", "/") + ".py")
-        spec = importlib.util.spec_from_file_location(name, path)
+        destinations = {'app.agents.decentralized.support': 'app.agents.decentralized.agents.support', 'app.agents.decentralized.hardware': 'app.agents.decentralized.agents.hardware', 'app.agents.decentralized.sales': 'app.agents.decentralized.agents.sales', 'app.agents.decentralized.warehouse': 'app.agents.decentralized.agents.warehouse', 'app.agents.decentralized.software': 'app.agents.decentralized.agents.software', 'app.agents.decentralized.purchasing': 'app.agents.decentralized.agents.purchasing', 'app.agents.decentralized.billing': 'app.agents.decentralized.agents.billing', 'app.agents.decentralized.logistics': 'app.agents.decentralized.agents.logistics', 'app.agents.decentralized.warranty': 'app.agents.decentralized.agents.warranty', 'app.agents.decentralized.graph': 'app.agents.decentralized.workflow.graph', 'app.agents.decentralized.state': 'app.agents.decentralized.workflow.state', 'app.agents.decentralized.handoffs': 'app.agents.decentralized.workflow.handoffs', 'app.agents.decentralized.conversation': 'app.agents.decentralized.workflow.conversation', 'app.agents.decentralized.policy': 'app.agents.decentralized.policies.policy', 'app.agents.decentralized.data_compat': 'app.agents.decentralized.compatibility.data_compat', 'app.agents.decentralized.ticket_intake': 'app.agents.decentralized.operations.ticket_intake', 'app.agents.decentralized.ticket_operations': 'app.agents.decentralized.operations.ticket_operations', 'app.agents.decentralized.quote_operations': 'app.agents.decentralized.operations.quote_operations', 'app.agents.decentralized.payment_operations': 'app.agents.decentralized.operations.payment_operations', 'app.agents.decentralized.logistics_operations': 'app.agents.decentralized.operations.logistics_operations', 'app.agents.decentralized.warranty_operations': 'app.agents.decentralized.operations.warranty_operations'}
+        implementation = destinations.get(name, name)
+        path = ROOT / (implementation.replace(".", "/") + ".py")
+        spec = importlib.util.spec_from_file_location(implementation, path)
         module = importlib.util.module_from_spec(spec)
         monkeypatch.setitem(sys.modules, name, module)
+        monkeypatch.setitem(sys.modules, implementation, module)
+        package_name, attribute = implementation.rsplit(".", 1)
+        package = importlib.import_module(package_name)
+        monkeypatch.setattr(package, attribute, module, raising=False)
+        package = importlib.import_module(name.rsplit(".", 1)[0])
+        monkeypatch.setattr(package, name.rsplit(".", 1)[-1], module, raising=False)
         spec.loader.exec_module(module)
         if name == "app.agents.decentralized.tools.warehouse_tools":
             monkeypatch.setattr(module, "lookup_inventory", inventory)

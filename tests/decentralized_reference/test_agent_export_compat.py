@@ -99,6 +99,7 @@ def test_loading_original_path_exports_both_names_without_duplicate_model_initia
         path = path.with_name("logistics.py")
     elif role == "garantia":
         path = path.with_name("warranty.py")
+    path = path.parent / "agents" / path.name
     spec=importlib.util.spec_from_file_location("isolated_export_"+role,path)
     module=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

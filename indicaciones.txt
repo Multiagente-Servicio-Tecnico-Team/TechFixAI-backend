@@ -1,0 +1,23 @@
+Descripción de los Agentes del Sistema
+Agente de Atención al Cliente: Constituye la interfaz primaria conversacional. Recibe la consulta inicial del cliente, extrae entidades clave (cliente, tipo de equipo, síntomas) y clasifica la intención. Si la información enviada es ambigua, realiza preguntas de aclaración multiturno antes de derivar el caso.
+Agente de Soporte Técnico: Procesa los síntomas estructurados por el Agente de Atención. Interpreta las fallas, valida la compatibilidad de componentes, emite un diagnóstico provisional y determina los requerimientos técnicos (mano de obra estimada y repuestos necesarios).
+Agente de Almacén y Logística: Encargado de la interacción con la base de datos de inventario. Recibe la lista de repuestos solicitados por el Agente Técnico y consulta directamente en la BD la disponibilidad física, cantidad de stock y precio actualizado de las piezas.
+Agente de Ventas: Recibe el costo de mano de obra calculado por el técnico y la cotización de repuestos confirmada por el almacén. Estructura la propuesta comercial calculando el importe total y desglosando los conceptos de servicio y repuestos de forma coherente.
+
+2. Flujo de Funcionamiento de Inicio a Fin
+Recepción del Problema (Atención al Cliente):
+El cliente escribe en la interfaz describiendo una falla en su equipo (ej. "Mi laptop HP calienta mucho y se apaga sola").
+El Agente de Atención identifica el motivo de consulta, crea el registro en la tabla Conversaciones y abre un ticket inicial en la BD con estado En Análisis.
+Generación del Diagnóstico Provisional (Soporte Técnico):
+El Agente de Soporte Técnico toma los detalles del síntoma registrado.
+Elabora un diagnóstico técnico estimado (ej. "Falla en el sistema de disipación por acumulación de polvo y desgaste de ventilador").
+Define que se requiere mano de obra y el repuesto "Ventilador interno HP".
+Consulta de Inventario en BD (Almacén y Logística):
+El Agente de Almacén invoca la función de consulta a la BD (Repuestos) para el artículo "Ventilador interno HP".
+Comprueba que existen unidades en stock y obtiene su precio unitario en el inventario.
+Elaboración de la Cotización (Ventas):
+El Agente de Ventas combina el valor de la mano de obra propuesta por el técnico y el precio del ventilador validado por el almacén.
+Construye la propuesta comercial estructurada con el desglose de importes.
+Respuesta Final al Cliente:
+El Agente de Atención presenta al usuario en el chat el diagnóstico provisional y el desglose del presupuesto generado para que sea aceptado.
+Le confirma que tanto la evaluación técnica como la cotización han quedado guardadas en el sistema para que pueda revisarlas en cualquier momento.

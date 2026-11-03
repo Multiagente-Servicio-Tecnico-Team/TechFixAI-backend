@@ -13,8 +13,8 @@ SUBJECT = "Restablece tu contraseña de TechFix.AI"
 _env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=True)
 
 
-def render_password_reset(nombre: str, enlace: str, minutos: int) -> str:
-    return _env.get_template("password_reset.html").render(nombre=nombre, enlace=enlace, minutos=minutos)
+def render_password_reset(name: str, link: str, minutes: int) -> str:
+    return _env.get_template("password_reset.html").render(name=name, link=link, minutes=minutes)
 
 
 class OutboxMailer:
@@ -25,7 +25,7 @@ class OutboxMailer:
 
     def send(self, to: str, subject: str, html: str) -> Path:
         self.directory.mkdir(parents=True, exist_ok=True)
-        path = self.directory / f"{datetime.now():%Y%m%d-%H%M%S-%f}-restablecer.html"
+        path = self.directory / f"{datetime.now():%Y%m%d-%H%M%S-%f}-password-reset.html"
         path.write_text(f"<!-- Para: {to} | Asunto: {subject} -->\n{html}", encoding="utf-8")
         return path
 
@@ -43,9 +43,9 @@ def build_mailer(mode: str, outbox_dir: str):
     return SmtpMailer() if mode == "smtp" else OutboxMailer(outbox_dir)
 
 
-def send_password_reset(mailer, to: str, nombre: str, enlace: str, minutos: int) -> None:
+def send_password_reset(mailer, to: str, name: str, link: str, minutes: int) -> None:
     """Se ejecuta en segundo plano. Un fallo se registra sin correo, enlace ni token."""
     try:
-        mailer.send(to, SUBJECT, render_password_reset(nombre, enlace, minutos))
+        mailer.send(to, SUBJECT, render_password_reset(name, link, minutes))
     except Exception:  # noqa: BLE001 - el usuario ya recibió la respuesta genérica
-        logger.error("No se pudo enviar el correo de restablecimiento.")
+        logger.error("Could not send the password reset email.")

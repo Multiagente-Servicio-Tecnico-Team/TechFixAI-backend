@@ -1,4 +1,5 @@
 from langchain_core.tools import tool
+from typing import Literal
 
 
 @tool
@@ -41,9 +42,53 @@ def diagnosticar_problema(sintoma: str) -> str:
     )
 
 @tool
-def transferir_a_ventas(motivo: str) -> str:
+def transferir_a_ventas(
+    motivo: str,
+    alcance: Literal["solo_servicio", "repuestos", "sin_determinar"],
+    nombre_repuesto: str = "",
+    cantidad: int = 1,
+) -> dict:
     """
-    Transfiere una solicitud al agente de Ventas cuando el usuario
-    requiere información sobre precios o una cotización.
+    Solicita cotización declarando su alcance para validar la ruta.
+
+    solo_servicio: únicamente revisión, diagnóstico o mano de obra sin repuestos.
+    repuestos: reemplazo o reparación con componentes; requiere Almacén primero.
+    sin_determinar: falta definir qué se cotiza. No equivale a solo_servicio.
+    Si no conoces el repuesto exacto, deja nombre_repuesto vacío; no lo inventes.
     """
-    return f"TRANSFERIR_VENTAS: {motivo}"
+    if type(cantidad) is not int or cantidad <= 0:
+        raise ValueError("La cantidad debe ser un entero positivo")
+    return {"accion": "SOLICITAR_COTIZACION", "motivo": motivo,
+            "alcance": alcance, "nombre_repuesto": nombre_repuesto.strip(),
+            "cantidad": cantidad}
+
+@tool
+def transferir_a_almacen(
+    motivo: str,
+    nombre_repuesto: str,
+    cantidad: int = 1,
+) -> dict:
+    """
+    Solicita verificar un repuesto identificado
+    para una reparación.
+
+    nombre_repuesto: nombre exacto del repuesto.
+    cantidad: unidades requeridas.
+    """
+
+    if not nombre_repuesto.strip():
+        return {
+            "error": "El nombre del repuesto es obligatorio."
+        }
+
+    if type(cantidad) is not int or cantidad <= 0:
+        return {
+            "error": "La cantidad debe ser un entero positivo."
+        }
+
+    return {
+        "accion": "TRANSFERIR_ALMACEN",
+        "motivo": motivo,
+        "nombre_repuesto": nombre_repuesto.strip(),
+        "cantidad": cantidad,
+    }

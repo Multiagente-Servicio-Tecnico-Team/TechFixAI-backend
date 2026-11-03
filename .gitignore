@@ -7,6 +7,8 @@
 
 # Entorno virtual de Python
 .venv/
+venv/
+*.egg-info/
 
 # Variables de entorno y credenciales
 .env
@@ -14,8 +16,24 @@
 # Caché de Python
 __pycache__/
 *.pyc
+
+#librerias
+node_modules/
+.local
+dist/
+
+
 # Cobertura de pruebas
 .coverage
-
 .local/
 .pytest_cache/
+
+# Base vectorial RAG
+data/chroma/
+
+#contexto
+contexto/
+
+#specify
+.agents/
+.specify/

@@ -2,7 +2,7 @@
 
 Servicio Python que registra clientes en la tabla `users` de PostgreSQL con la contraseña protegida por hash
 bcrypt, abre sesión con una cookie firmada y permite restablecer la contraseña con un enlace temporal enviado
-por correo (tabla `recovery_tokens`). Lo usa el frontend (`landing/`) para las pantallas de registro, inicio de
+por correo (tabla `recovery_tokens`). Lo usa el frontend ([TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) para las pantallas de registro, inicio de
 sesión, recuperación y restablecimiento.
 
 ## Frameworks y librerías
@@ -40,7 +40,7 @@ postman/techfix-auth.postman_collection.json   # Pruebas de API con Postman
 
 | Método y ruta | Cuerpo | Respuestas |
 | --- | --- | --- |
-| `POST /registro` | `{ nombre, apellido?, email, telefono, password }` | `201 { usuario }` · `409` correo ya registrado · `422` datos inválidos |
+| `POST /registro` | `{ nombre, apellido?, email, telefono, password }` | `201 { usuario }` + cookie `techfix_session` · `409` correo ya registrado · `422` datos inválidos |
 | `POST /login` | `{ email, password }` | `200 { usuario }` + cookie `techfix_session` · `401` credenciales · `429` demasiados intentos |
 | `POST /logout` | — | `204` y borra la cookie |
 | `GET /me` | — | `200 { usuario }` con sesión válida · `401` sin sesión |
@@ -50,6 +50,9 @@ postman/techfix-auth.postman_collection.json   # Pruebas de API con Postman
 
 `usuario` = `{ id, nombre, apellido, email, rol }`. El rol viene de la columna `role` (`CUSTOMER`,
 `TECHNICIAN`, `ADMIN`); el registro público siempre crea `CUSTOMER`.
+
+El código está en inglés (`RegisterIn.first_name`, `last_name`, `phone`; `UserOut.role`; `SessionCustomer.first_name`)
+y los alias de Pydantic mantienen las claves JSON en español de esta tabla, así que el contrato no cambia.
 
 ## Reglas principales
 
@@ -76,6 +79,17 @@ postman/techfix-auth.postman_collection.json   # Pruebas de API con Postman
   archivo HTML en `OUTBOX_DIR` (`.local/outbox`, ignorada por git) para probar sin una cuenta de correo.
 
 ## Ejecución local
+
+Para ejecutar cuentas y chat juntos (opción recomendada para que compartan el
+mismo host y cookie), inicia el punto de entrada unificado desde la raíz:
+
+```bash
+.venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
+```
+
+En esta modalidad, todas las rutas de esta API llevan el prefijo `/auth`
+(por ejemplo, `POST /auth/login` y `GET /auth/me`). La API puede ejecutarse por
+separado con las rutas sin prefijo descritas arriba:
 
 1. Crear la base de datos y aplicar el script del equipo:
 
@@ -104,14 +118,14 @@ postman/techfix-auth.postman_collection.json   # Pruebas de API con Postman
 
    `AUTH_SECRET` se puede generar con `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
-4. Iniciar la API:
+4. Iniciar solo la API de cuentas:
 
    ```bash
    .venv/Scripts/python -m uvicorn app.accounts.api:create_app --factory --host localhost --port 8000
    ```
 
-5. Conectar el frontend con `VITE_API_URL=http://localhost:8000` en `landing/.env` y ejecutar
-   `npm --prefix landing run dev`.
+5. Conectar el frontend con `VITE_API_URL=http://localhost:8000` en el `.env` del repositorio TechFixAI-frontend y ejecutar
+   `npm run dev` allí.
 
 Usar `localhost` (no `127.0.0.1`) tanto en la API como en el frontend: así el navegador trata ambos puertos como
 el mismo sitio y envía la cookie de sesión.

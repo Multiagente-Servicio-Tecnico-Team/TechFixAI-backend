@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.accounts.models import RecoveryToken, User
-from app.accounts.schemas import RegistroIn, UsuarioOut
+from app.accounts.schemas import RegisterIn, UserOut
 from app.accounts.security import hash_password, hash_reset_token, new_reset_token, verify_password
 
 
@@ -14,25 +14,25 @@ class EmailAlreadyRegistered(Exception):
     pass
 
 
-def to_out(user: User) -> UsuarioOut:
+def to_out(user: User) -> UserOut:
     role = user.role.value if hasattr(user.role, "value") else str(user.role)
-    return UsuarioOut(id=user.id, nombre=user.name, apellido=user.last_name, email=user.email, rol=role)
+    return UserOut(id=user.id, first_name=user.name, last_name=user.last_name, email=user.email, role=role)
 
 
 def find_by_email(db: Session, email: str) -> User | None:
     return db.scalar(select(User).where(func.lower(User.email) == email.lower()))
 
 
-def register_user(db: Session, data: RegistroIn, rounds: int) -> User:
+def register_user(db: Session, data: RegisterIn, rounds: int) -> User:
     """Crea un cliente. El rol queda en CUSTOMER por el valor por defecto de la tabla."""
     if find_by_email(db, data.email):
         raise EmailAlreadyRegistered()
     user = User(
         email=data.email,
-        phone=data.telefono,
+        phone=data.phone,
         password_hash=hash_password(data.password, rounds),
-        name=data.nombre,
-        last_name=data.apellido,
+        name=data.first_name,
+        last_name=data.last_name,
     )
     db.add(user)
     try:

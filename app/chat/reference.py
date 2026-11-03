@@ -31,26 +31,34 @@ from app.chat.models import Ticket, TicketStatus
 
 logger = logging.getLogger(__name__)
 
+# Palabras clave del cliente: el chat es en español, por eso los términos se buscan en español.
 STORAGE_WORDS = ("ssd", "disco", "almacenamiento", "no detecta", "lento", "lentitud")
 
 
 class ChatState(TypedDict, total=False):
     message: str
-    nombre: str
+    name: str
     diagnosis: str
     items: list[dict]
     quote: dict
     reply: str
 
 
-def atencion(state: ChatState) -> dict:
+def attention(state: ChatState) -> dict:
     """Agente de atención: pide más datos si el mensaje no describe equipo y síntoma."""
     if len(state["message"].split()) < 4:
-        return {"reply": f"Hola {state['nombre']}. Cuéntame qué equipo tienes (marca y modelo) y qué falla presenta."}
+        return {
+            "reply": (
+                f"Hola {state['name']}. Soy TechFix Copilot. Puedo orientarte con "
+                "soporte y reparaciones, consultar componentes y cotizaciones, "
+                "ayudarte a armar una PC según tu presupuesto y responder consultas "
+                "de garantía o logística. ¿Qué necesitas hoy?"
+            )
+        }
     return {}
 
 
-def soporte_tecnico(state: ChatState) -> dict:
+def technical_support(state: ChatState) -> dict:
     """Agente técnico de referencia: diagnóstico provisional por palabras clave."""
     text = state["message"].lower()
     if any(word in text for word in STORAGE_WORDS):
@@ -62,18 +70,18 @@ def soporte_tecnico(state: ChatState) -> dict:
 def build_reference_graph(sales_graph=None):
     sales_graph = sales_graph or build_sales_graph()
 
-    def ventas(state: ChatState) -> dict:
+    def sales(state: ChatState) -> dict:
         request = {"equipment": state["message"][:200], "diagnosis": state["diagnosis"], "items": state["items"]}
         return {"quote": sales_graph.invoke({"request": request})["quote"]}
 
     builder = StateGraph(ChatState)
-    builder.add_node("atencion", atencion)
-    builder.add_node("soporte_tecnico", soporte_tecnico)
-    builder.add_node("ventas", ventas)
-    builder.add_edge(START, "atencion")
-    builder.add_conditional_edges("atencion", lambda s: END if s.get("reply") else "soporte_tecnico")
-    builder.add_edge("soporte_tecnico", "ventas")
-    builder.add_edge("ventas", END)
+    builder.add_node("attention", attention)
+    builder.add_node("technical_support", technical_support)
+    builder.add_node("sales", sales)
+    builder.add_edge(START, "attention")
+    builder.add_conditional_edges("attention", lambda s: END if s.get("reply") else "technical_support")
+    builder.add_edge("technical_support", "sales")
+    builder.add_edge("sales", END)
     return builder.compile(name="chat_reference_graph")
 
 
@@ -110,7 +118,7 @@ def create_reference_app(settings: Settings | None = None, session_factory: sess
 
     @app.exception_handler(OperationalError)
     async def on_db_unavailable(_request: Request, _exc: OperationalError):
-        logger.error("Base de datos no disponible")
+        logger.error("Database unavailable")
         return JSONResponse(status_code=503, content={"detail": "El asistente no está disponible. Inténtalo en unos minutos."})
 
     def set_ticket_status(ticket_id: int, customer_id: int, status: TicketStatus) -> None:
@@ -155,7 +163,7 @@ def create_reference_app(settings: Settings | None = None, session_factory: sess
             return ChatOut(conversation_id=conversation_id, quote=quote, ticket=ticket,
                            reply="Tienes un presupuesto pendiente. Acéptalo o recházalo para continuar.")
 
-        result = graph.invoke({"message": body.message, "nombre": customer.nombre})
+        result = graph.invoke({"message": body.message, "name": customer.first_name})
         if result.get("reply"):
             return ChatOut(conversation_id=conversation_id, reply=result["reply"])
 
@@ -170,7 +178,7 @@ def create_reference_app(settings: Settings | None = None, session_factory: sess
             ticket = TicketOut(code=row.code, status=TicketStatus.QUOTED.value)
             conv.update(quote=quote, ticket=ticket, ticket_id=row.id)
 
-        reply = (f"Gracias, {customer.nombre}. Diagnóstico provisional: {result['diagnosis']} "
+        reply = (f"Gracias, {customer.first_name}. Diagnóstico provisional: {result['diagnosis']} "
                  f"Registré el ticket {ticket.code} y preparé este presupuesto con el catálogo de prueba. "
                  "Revísalo y acéptalo para iniciar la reparación.")
         return ChatOut(conversation_id=conversation_id, reply=reply, quote=quote, ticket=ticket)

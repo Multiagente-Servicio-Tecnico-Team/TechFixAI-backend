@@ -5,20 +5,47 @@ from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict, total=False):
-    # Historial compartido entre los agentes
+    # Historial compartido entre agentes
     messages: Annotated[list[AnyMessage], add_messages]
+    customer_id: int
+    conversation_id: str
 
-    # Agente que ejecutó la última acción
+    # Inicio del turno actual, para no confundir herramientas de turnos anteriores.
+    turn_start_index: int
+    quote_scope: str
+    quote_type: str
+    quote_task_type: str
+    quote_status: str
+    quote: dict[str, Any]
+    ticket_id: int
+    ticket_code: str
+    ticket_status: str
+    payment_code: str
+    awaiting_refund_details: bool
+    refund_id: int
+    refund_status: str
+    outcome: str
+    inventory_query: str | None
+
+    # Agente actual y siguiente
     current_agent: str
-
-    # Agente al que se solicita transferir el control
     next_agent: str | None
 
-    # Registro de transferencias realizadas
+    # Control de transferencias
     handoff_history: list[dict[str, Any]]
-
-    # Número de transferencias de la solicitud
     handoff_count: int
 
-    # Errores controlados durante la ejecución
+    # Control de herramientas
+    tool_iterations: dict[str, int]
+
+    # Repuestos identificados para la reparación
+    required_parts: list[dict[str, Any]]
+
+    # Indica si falta verificar el inventario
+    inventory_pending: bool
+
+    # Resultados obtenidos de PostgreSQL
+    inventory_results: list[dict[str, Any]]
+
+    # Errores registrados
     errors: list[str]

@@ -1,6 +1,6 @@
 # Chat del portal — sesión del login y contrato común
 
-El chat del portal (`/portal/asistente` en `landing/`) habla con el patrón LangGraph del equipo mediante
+El chat del portal (`/portal/asistente` en [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) habla con el patrón LangGraph del equipo mediante
 `POST /api/chat`. El cliente se identifica con la cookie de sesión de la API de cuentas, nunca con un correo
 escrito en el chat.
 
@@ -9,18 +9,27 @@ escrito en el chat.
 | `app/accounts/session.py` | `SessionGuard`: dependencias `require_customer` y `require_user` para FastAPI |
 | `app/chat/contract.py` | Modelos del contrato: `ChatIn`, `ChatOut`, `QuoteOut`, `TicketOut` |
 | `app/chat/models.py` | Mapeo de la tabla `tickets` del script de BD |
-| `app/chat/reference.py` | Patrón de referencia (grafo atención → soporte técnico → ventas) para probar sin Groq |
+| `app/main.py` | Punto único de entrada; monta cuentas y chat con la raíz de composición |
+| `app/adapters/patterns/` | Un adaptador por patrón LangGraph (puerto `ChatPattern`); para sumar un patrón se agrega su adaptador al registro |
+| `app/chat/reference.py` | API de referencia independiente para probar el contrato |
+
+| `app/application/audio_chat.py` | Transcribe y delega en el mismo caso de uso del chat escrito |
+| `app/adapters/speech/groq.py` | Adaptador Groq Whisper con errores seguros |
+| `app/infrastructure/request_limits.py` | Limite incremental del cuerpo multipart |
 
 ## Contrato `POST /api/chat`
 
 Petición (cookie `techfix_session` obligatoria):
 
 ```json
-{ "conversation_id": null, "message": "Mi laptop HP no detecta el disco", "action": null }
+{ "conversation_id": null, "message": "Mi laptop HP no detecta el disco", "action": null, "pattern": "hierarchical" }
 ```
 
-`action` puede ser `"accept_quote"` o `"reject_quote"` (botones de la tarjeta de presupuesto). Campos como
-`email` o `customer_id` en el cuerpo se ignoran.
+`pattern` puede ser `hierarchical`, `orchestrator` o `decentralized`; si se omite,
+el backend usa `hierarchical`. El patrón no se puede cambiar en una conversación
+existente. `action` puede ser `"accept_quote"` o `"reject_quote"` (botones de la
+tarjeta de propuesta). Campos como `email` o `customer_id` en el cuerpo se ignoran.
+`GET /api/chat/patterns` lista los patrones y requiere la misma sesión.
 
 Respuesta `200`:
 
@@ -41,44 +50,72 @@ Respuesta `200`:
 | `409` | Acción sin presupuesto pendiente |
 | `422` | Cuerpo inválido (no se repite el mensaje) |
 | `429` | Más de 20 mensajes por minuto |
-| `503` | Base de datos o modelo no disponibles |
+| `502` | Error procesando con el proveedor LLM o el patrón |
+| `503` | Base de datos o almacenamiento no disponibles |
 
-## Cómo adoptarlo en un patrón (Orquestador, Jerárquico o Red descentralizada)
+## Contrato de audio `POST /api/chat/audio`
 
-1. Instalar `requirements-auth.txt` y usar el mismo `AUTH_SECRET` y `DATABASE_URL` que la API de cuentas.
-2. Crear la guarda e instalar su manejador de errores:
+La ruta usa la misma sesion autenticada y acepta `audio`, `duration_ms`, `pattern`,
+`request_id` y opcionalmente `conversation_id` como `multipart/form-data`. El resultado
+agrega `transcript` a los campos habituales de `ChatOut`. Solo admite audio hasta 25 MB
+y 120 segundos; una cuota de cinco envios por minuto y la idempotencia por cliente
+protegen las llamadas a Groq. El arranque exige ocultar inputs y outputs de LangSmith
+si el tracing esta activo.
 
-   ```python
-   from app.accounts.session import SessionCustomer, SessionGuard
-   from app.chat.contract import ChatIn, ChatOut
+`AUDIO_TRANSCRIPTION_ENABLED` vale `false` por defecto. Para activar voz, configura
+esa bandera y `GROQ_API_KEY`; revisa timeout y limites en `.env.example`. El archivo
+se procesa temporalmente y se cierra al terminar. El endpoint no cambia `POST /api/chat`.
 
-   guard = SessionGuard.from_env()
-   guard.install(app)
+El contrato canonico es
+[`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](../../specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml).
+La tarea frontend se implementa y valida en el repositorio hermano.
 
-   @app.post("/api/chat", response_model=ChatOut, response_model_exclude_none=True)
-   def chat(body: ChatIn, customer: SessionCustomer = Depends(guard.require_customer)):
-       ...  # usar customer.id en tickets.customer_id y customer.nombre en el saludo
-   ```
+## API integrada
 
-3. Quitar el campo de correo del cuerpo del chat. En el patrón jerárquico, reemplazar la búsqueda por correo
-   (`find_customer`) por el `customer` de la sesión.
-4. Responder con `ChatOut`: `reply` siempre; `quote` y `ticket` cuando el grafo los produzca. Importes como texto
-   con dos decimales calculados con `Decimal`.
-5. CORS con `allow_credentials=True` para los orígenes de `FRONTEND_ORIGINS`.
-6. En LangSmith, etiquetar con `customer_id` y `conversation_id`; no enviar correo, nombre ni contraseñas.
+El punto de entrada recomendado ejecuta cuentas y chat en el mismo servidor:
 
-## Patrón de referencia
+```bash
+.venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
+```
+
+## API administrativa de tickets
+
+- `GET /api/admin/customers?email=...`: busca una cuenta cliente activa para asociarla al alta manual.
+- `GET /api/admin/tickets`: lista tickets; admite filtros `status`, `request_type`, `search`, `limit` y `offset`.
+- `GET /api/admin/tickets/{id}`: obtiene detalle.
+- `POST /api/admin/tickets`: crea un ticket asociado a `customer_email`.
+- `PATCH /api/admin/tickets/{id}`: actualiza solo los campos enviados.
+- `DELETE /api/admin/tickets/{id}`: elimina físicamente el ticket y las relaciones con borrado en cascada.
+
+Todas las rutas requieren sesión `techfix_session` de usuario activo con rol `ADMIN`; rol `TECHNICIAN` no concede acceso. La guía paso a paso para Postman está en `contexto/CRUD-tickets-admin-postman.md`.
+
+Las rutas de cuentas quedan bajo `/auth/*`; el chat conserva `/api/chat` y
+`/api/chat/patterns`. Este es el punto de entrada recomendado para el backend
+completo; para pruebas aisladas se inyectan fábricas y dependencias a `create_app`.
+
+El portal comparte el contrato, pero los motores no tienen la misma paridad de
+persistencia: Jerárquico y Orquestador conectan sus herramientas de negocio a
+PostgreSQL; Red Descentralizada sigue siendo un prototipo con herramientas
+simuladas, sin lectura de inventario ni persistencia de tickets/presupuestos.
+El selector se bloquea al iniciar una conversación; iniciar otra crea un nuevo
+`thread_id` y permite elegir otro patrón.
+
+LangSmith es controlado por `LANGSMITH_TRACING`, `LANGSMITH_API_KEY` y
+`LANGSMITH_PROJECT`; inputs y outputs se ocultan mediante
+`LANGSMITH_HIDE_INPUTS`/`LANGSMITH_HIDE_OUTPUTS`. Los metadatos explícitos
+contienen el patrón y UUID de conversación, no ID de cliente, correo ni mensaje.
+
+## API de referencia
 
 ```bash
 .venv/Scripts/python -m uvicorn app.chat.reference:create_reference_app --factory --host localhost --port 8001
 ```
 
-Usa el agente de ventas del repositorio (`app/agents/sales.py`) y su catálogo de prueba. Con un mensaje que
-describe el equipo y la falla, crea el ticket en `QUOTED` con el `customer_id` de la sesión; aceptar lo pasa a
-`IN_REPAIR` y rechazar a `CANCELLED`. Las conversaciones viven en memoria del proceso.
+La API de referencia es independiente y no es el punto de entrada usado por el
+selector de patrones.
 
-En el frontend, definir `VITE_CHAT_URL=http://localhost:8001` en `landing/.env` (además de `VITE_API_URL`).
-Frontend, API de cuentas y chat deben usar el host `localhost` para que el navegador envíe la cookie.
+En el frontend, definir `VITE_API_URL=http://localhost:8000/auth` y
+`VITE_CHAT_URL=http://localhost:8000` en el `.env` del frontend.
 
 ## Pruebas
 

@@ -31,7 +31,7 @@ async function load() {
   $('welcome').textContent = `Hola, ${data.username}`;
   $('messages').replaceChildren();
   if (!data.messages.length) {
-    const empty = document.createElement('p'); empty.id = 'empty'; empty.textContent = 'Cuéntanos: ¿qué equipo tienes y qué falla presenta?'; $('messages').append(empty);
+    const empty = document.createElement('p'); empty.id = 'empty'; empty.textContent = '¿Qué necesitas hoy? Puedo ayudarte con soporte técnico, componentes, cotizaciones o garantías.'; $('messages').append(empty);
   }
   data.messages.forEach(render);
 }

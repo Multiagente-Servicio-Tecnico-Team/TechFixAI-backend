@@ -1,10 +1,21 @@
-# 02 — Trazabilidad
+# 02 — Trazabilidad del patrón jerárquico
 
-`invoke_traced` ejecuta los grafos con callbacks locales en `.local/traces.jsonl`.
-Cada línea contiene fecha UTC, ejecución, llamada, padre, nombre permitido, tipo y resultado (`start`, `success`, `error`). El resultado registrado es el estado de la llamada; el presupuesto se devuelve al consumidor, no al log.
+El módulo `app/agents/jerarquico/trace.py` registra nodos y operaciones de
+base de datos en JSONL. El nodo supervisor raíz genera un UUID aleatorio
+`execution_id`; el estado lo propaga a los siguientes nodos y herramientas.
 
-No se serializan mensajes, parámetros, salidas, metadatos arbitrarios ni excepciones. El contexto desactiva la exportación automática a LangSmith, incluso si el entorno la activa. Usar este punto de entrada para ejecuciones de aplicación.
+Los nombres se validan con allowlists. Los registros omiten estado LangGraph,
+mensajes, parámetros de consulta, resultados, correos, IDs de cliente/ticket y
+texto de excepciones. Los fallos de los nodos/herramientas se vuelven a lanzar
+después de anotar solo el evento `error`.
 
-Pruebas: `python -m pytest tests/test_tracing.py -q`. Incluyen fallo controlado dentro del grafo y ejecuciones concurrentes.
+Ruta local por defecto: `.local/hierarchical-traces.jsonl`; se puede seleccionar
+otra ubicación mediante `HIERARCHICAL_TRACE_PATH`. La escritura JSONL usa un
+bloqueo de proceso. Para despliegue con múltiples procesos/instancias, se requiere
+un backend de eventos compartido y rotación/retención; no exponer el archivo por
+HTTP.
 
-El JSONL es local a una instancia. En despliegue, aplicar permisos del sistema y rotación de archivos; no exponerlo mediante HTTP.
+Prueba: `tests/test_hierarchical_tracing.py`. La suite jerárquica enfocada
+incluye **48 pruebas aprobadas** en total.
+
+Checkpoint de commit del usuario: ____________________

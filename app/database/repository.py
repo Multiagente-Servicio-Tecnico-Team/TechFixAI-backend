@@ -510,23 +510,25 @@ class ServiceRepository:
         offset: int = 0,
         status: str | None = None,
         request_type: str | None = None,
+        origin: str | None = None,
         search: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         query = text(
             """
-            SELECT t.id, t.code, t.customer_id, t.technician_id, t.title,
+            SELECT t.id, t.code, t.customer_id, t.technician_id, t.origin, t.contact_name, t.contact_phone, t.contact_email,
+                   t.advance_amount, t.advance_payment_method, t.title,
                    t.failure_description, t.request_type::text AS request_type,
                    t.diagnosis_type::text AS diagnosis_type,
                    t.status::text AS status, t.hardware_diagnosis,
                    t.software_diagnosis, t.estimated_labor_hours,
                    t.is_remote_service, t.created_at, t.updated_at,
                    u.name AS customer_first_name, u.last_name AS customer_last_name,
-                   u.email AS customer_email, u.phone AS customer_phone,
+                   COALESCE(t.contact_email,u.email) AS customer_email, COALESCE(t.contact_phone,u.phone) AS customer_phone,
                    q.total_amount AS quote_total, q.status::text AS quote_status,
                    p.status::text AS payment_status,
                    p.payment_method::text AS payment_method, p.amount AS payment_amount
             FROM tickets t
-            JOIN users u ON u.id = t.customer_id
+            LEFT JOIN users u ON u.id = t.customer_id
             LEFT JOIN LATERAL (
                 SELECT id, total_amount, status
                 FROM quotes WHERE ticket_id = t.id
@@ -537,15 +539,17 @@ class ServiceRepository:
                 FROM payments WHERE ticket_id = t.id
                 ORDER BY created_at DESC, id DESC LIMIT 1
             ) p ON TRUE
-            WHERE (:status IS NULL OR t.status::text = :status)
-              AND (:request_type IS NULL OR t.request_type::text = :request_type)
+            WHERE (CAST(:status AS text) IS NULL OR t.status::text = CAST(:status AS text))
+              AND (CAST(:request_type AS text) IS NULL OR t.request_type::text = CAST(:request_type AS text))
+              AND (CAST(:origin AS text) IS NULL OR t.origin = CAST(:origin AS text))
               AND (
-                :search IS NULL OR t.code ILIKE :search_pattern
-                OR t.title ILIKE :search_pattern
-                OR t.failure_description ILIKE :search_pattern
-                OR u.name ILIKE :search_pattern
-                OR COALESCE(u.last_name, '') ILIKE :search_pattern
-                OR u.email ILIKE :search_pattern
+                CAST(:search AS text) IS NULL OR t.code ILIKE CAST(:search_pattern AS text)
+                OR t.title ILIKE CAST(:search_pattern AS text)
+                OR t.failure_description ILIKE CAST(:search_pattern AS text)
+                OR COALESCE(t.contact_name, u.name) ILIKE CAST(:search_pattern AS text)
+                OR COALESCE(u.last_name, '') ILIKE CAST(:search_pattern AS text)
+                OR COALESCE(t.contact_email,u.email) ILIKE CAST(:search_pattern AS text)
+                OR COALESCE(t.contact_phone,u.phone) ILIKE CAST(:search_pattern AS text)
               )
             ORDER BY t.created_at DESC NULLS LAST, t.id DESC
             LIMIT :limit OFFSET :offset
@@ -554,32 +558,47 @@ class ServiceRepository:
         params = {
             "status": status,
             "request_type": request_type,
+            "origin": origin,
             "search": search,
             "search_pattern": f"%{search}%" if search else None,
             "limit": limit,
             "offset": offset,
         }
+        count_query = text("""SELECT COUNT(*) FROM tickets t LEFT JOIN users u ON u.id=t.customer_id
+            WHERE (CAST(:status AS text) IS NULL OR t.status::text=CAST(:status AS text))
+              AND (CAST(:request_type AS text) IS NULL OR t.request_type::text=CAST(:request_type AS text))
+              AND (CAST(:origin AS text) IS NULL OR t.origin=CAST(:origin AS text))
+              AND (CAST(:search AS text) IS NULL OR t.code ILIKE CAST(:search_pattern AS text) OR t.title ILIKE CAST(:search_pattern AS text)
+                OR t.failure_description ILIKE CAST(:search_pattern AS text) OR COALESCE(t.contact_name,u.name) ILIKE CAST(:search_pattern AS text)
+                OR COALESCE(u.last_name,'') ILIKE CAST(:search_pattern AS text) OR COALESCE(t.contact_email,u.email) ILIKE CAST(:search_pattern AS text)
+                OR COALESCE(t.contact_phone,u.phone) ILIKE CAST(:search_pattern AS text))""")
         with self._session_factory() as session:
-            return [dict(row) for row in session.execute(query, params).mappings()]
+            count_params = {key: value for key, value in params.items() if key not in {"limit", "offset"}}
+            total = int(session.execute(count_query, count_params).scalar_one())
+            rows = [dict(row) for row in session.execute(query, params).mappings()]
+            return {"items": rows, "total": total}
 
     def get_admin_ticket(self, ticket_id: int) -> dict[str, Any] | None:
         # Fetch by primary key with the same related quote/payment projection.
         query = text(
             """
-            SELECT t.id, t.code, t.customer_id, t.technician_id, t.title,
+            SELECT t.id, t.code, t.customer_id, t.technician_id, t.origin, t.contact_name, t.contact_phone, t.contact_email,
+                   t.advance_amount, t.advance_payment_method, t.title,
                    t.failure_description, t.request_type::text AS request_type,
                    t.diagnosis_type::text AS diagnosis_type,
                    t.status::text AS status, t.hardware_diagnosis,
                    t.software_diagnosis, t.estimated_labor_hours,
                    t.is_remote_service, t.created_at, t.updated_at,
                    u.name AS customer_first_name, u.last_name AS customer_last_name,
-                   u.email AS customer_email, u.phone AS customer_phone,
-                   q.total_amount AS quote_total, q.status::text AS quote_status,
+                   COALESCE(t.contact_email,u.email) AS customer_email, COALESCE(t.contact_phone,u.phone) AS customer_phone,
+                   q.id AS quote_id, q.quote_type::text AS quote_type, q.labor_cost AS quote_labor_cost,
+                   q.parts_cost AS quote_parts_cost, q.total_amount AS quote_total, q.status::text AS quote_status,
+                   q.observations AS quote_observations, q.created_at AS quote_created_at,
                    p.status::text AS payment_status,
                    p.payment_method::text AS payment_method, p.amount AS payment_amount
-            FROM tickets t JOIN users u ON u.id = t.customer_id
+            FROM tickets t LEFT JOIN users u ON u.id = t.customer_id
             LEFT JOIN LATERAL (
-                SELECT id, total_amount, status FROM quotes WHERE ticket_id = t.id
+                SELECT id, quote_type, labor_cost, parts_cost, total_amount, status, observations, created_at FROM quotes WHERE ticket_id = t.id
                 ORDER BY created_at DESC, id DESC LIMIT 1
             ) q ON TRUE
             LEFT JOIN LATERAL (
@@ -603,14 +622,14 @@ class ServiceRepository:
             row = session.execute(query, {"email": email.strip()}).mappings().first()
         return dict(row) if row else None
 
-    def create_admin_ticket(self, *, values: dict[str, Any], code: str) -> int:
+    def create_admin_ticket(self, *, values: dict[str, Any], code: str, actor_id: int | None = None) -> int:
         query = text(
             """INSERT INTO tickets (
-                   code, customer_id, technician_id, title, failure_description,
+                   code, customer_id, technician_id, title, failure_description, origin, contact_name, contact_phone, contact_email, advance_amount, advance_payment_method,
                    request_type, diagnosis_type, status, hardware_diagnosis,
                    software_diagnosis, estimated_labor_hours, is_remote_service
                ) VALUES (
-                   :code, :customer_id, :technician_id, :title, :failure_description,
+                   :code, :customer_id, :technician_id, :title, :failure_description, :origin, :contact_name, :contact_phone, :contact_email, :advance_amount, :advance_payment_method,
                    CAST(:request_type AS request_type_enum),
                    CAST(:diagnosis_type AS diagnosis_type_enum),
                    CAST(:status AS ticket_status_enum), :hardware_diagnosis,
@@ -618,7 +637,10 @@ class ServiceRepository:
                ) RETURNING id"""
         )
         with self._session_factory() as session, session.begin():
-            return int(session.execute(query, {**values, "code": code}).scalar_one())
+            ticket_id = int(session.execute(query, {**values, "code": code}).scalar_one())
+            if actor_id is not None:
+                session.execute(text("INSERT INTO ticket_audit_events(ticket_id,actor_user_id,event_type,changed_fields) VALUES (:id,:actor,'CREATED',CAST(:fields AS jsonb))"), {"id": ticket_id, "actor": actor_id, "fields": '{"origin":"MANUAL"}'})
+            return ticket_id
 
     def update_admin_ticket(self, ticket_id: int, values: dict[str, Any]) -> bool:
         if not values:
@@ -626,7 +648,7 @@ class ServiceRepository:
         allowed = {
             "technician_id", "title", "failure_description", "request_type",
             "diagnosis_type", "status", "hardware_diagnosis",
-            "software_diagnosis", "estimated_labor_hours", "is_remote_service",
+            "software_diagnosis", "estimated_labor_hours", "is_remote_service", "contact_name", "contact_phone", "contact_email", "advance_amount", "advance_payment_method",
         }
         if set(values) - allowed:
             raise ValueError("El ticket contiene campos que no se pueden actualizar.")
@@ -647,11 +669,70 @@ class ServiceRepository:
             result = session.execute(query, params).scalar_one_or_none()
         return result is not None
 
-    def delete_admin_ticket(self, ticket_id: int) -> bool:
-        query = text("DELETE FROM tickets WHERE id = :ticket_id RETURNING id")
+    def update_admin_ticket_audited(self, ticket_id: int, values: dict[str, Any], actor_id: int) -> bool:
+        import json
+        if not values:
+            return self.get_admin_ticket(ticket_id) is not None
+        allowed = {"technician_id", "title", "failure_description", "request_type", "diagnosis_type", "status", "hardware_diagnosis", "software_diagnosis", "estimated_labor_hours", "is_remote_service", "contact_name", "contact_phone", "contact_email", "advance_amount", "advance_payment_method"}
+        if set(values) - allowed:
+            raise ValueError("El ticket contiene campos no editables.")
+        enum_columns = {"request_type": "request_type_enum", "diagnosis_type": "diagnosis_type_enum", "status": "ticket_status_enum"}
+        assignments, params = [], {"ticket_id": ticket_id}
+        for name, value in values.items():
+            assignments.append(f"{name} = CAST(:{name} AS {enum_columns[name]})" if name in enum_columns else f"{name} = :{name}")
+            params[name] = value
+        assignments.append("updated_at = CURRENT_TIMESTAMP")
         with self._session_factory() as session, session.begin():
-            result = session.execute(query, {"ticket_id": ticket_id}).scalar_one_or_none()
-        return result is not None
+            previous = session.execute(text("SELECT status::text FROM tickets WHERE id=:id FOR UPDATE"), {"id": ticket_id}).scalar_one_or_none()
+            if previous is None:
+                return False
+            session.execute(text(f"UPDATE tickets SET {', '.join(assignments)} WHERE id=:ticket_id"), params)
+            status_changed = "status" in values and values["status"] != previous
+            event = "CANCELLED" if values.get("status") == "CANCELLED" else "STATUS_CHANGED" if status_changed else "UPDATED"
+            fields = {key: (str(value) if value is not None else None) for key, value in values.items()}
+            if status_changed:
+                fields["status"] = {"from": previous, "to": values["status"]}
+            session.execute(text("INSERT INTO ticket_audit_events(ticket_id,actor_user_id,event_type,changed_fields) VALUES (:id,:actor,:event,CAST(:fields AS jsonb))"), {"id": ticket_id, "actor": actor_id, "event": event, "fields": json.dumps(fields)})
+        return True
+
+    def list_ticket_audit_events(self, ticket_id: int) -> list[dict[str, Any]]:
+        query = text("SELECT event_type, actor_user_id, changed_fields, created_at FROM ticket_audit_events WHERE ticket_id=:id ORDER BY created_at,id")
+        with self._session_factory() as session:
+            return [dict(row) for row in session.execute(query, {"id": ticket_id}).mappings()]
+
+    def create_admin_ticket_quote(self, *, ticket_id: int, actor_id: int, quote_type: str, labor_cost: Any, labor_task_type: str, parts: list[dict[str, int]], observations: str | None = None) -> dict[str, Any] | None:
+        from decimal import Decimal
+        with self._session_factory() as session, session.begin():
+            ticket = session.execute(text("SELECT request_type::text,status::text FROM tickets WHERE id=:id FOR UPDATE"), {"id": ticket_id}).mappings().first()
+            if ticket is None:
+                return None
+            if ticket["status"] == "CANCELLED":
+                raise ValueError("No se puede cotizar un ticket cancelado.")
+            expected = {"REPAIR": "REPAIR", "SUPPORT": "REPAIR", "WARRANTY_CLAIM": "REPAIR", "SALE": "DIRECT_SALE", "PC_BUILD": "PC_BUILD"}[ticket["request_type"]]
+            if expected != quote_type:
+                raise ValueError("El tipo de cotización no corresponde al tipo de ticket.")
+            labor = Decimal(str(labor_cost)).quantize(Decimal("0.01"))
+            parts_total = Decimal("0.00")
+            lines = []
+            for part in parts:
+                row = session.execute(text("SELECT id,name,unit_price,current_stock,active FROM spare_parts WHERE id=:id FOR SHARE"), {"id": part["spare_part_id"]}).mappings().first()
+                if row is None or not row["active"] or int(row["current_stock"]) < part["quantity"]:
+                    raise ValueError("El repuesto no está disponible en la cantidad indicada.")
+                price = Decimal(str(row["unit_price"]))
+                subtotal = (price * part["quantity"]).quantize(Decimal("0.01"))
+                parts_total += subtotal
+                lines.append({"row": row, "quantity": part["quantity"], "price": price, "subtotal": subtotal})
+            total = labor + parts_total
+            quote_id = session.execute(text("""INSERT INTO quotes(ticket_id,quote_type,labor_cost,parts_cost,total_amount,status,observations)
+                VALUES (:ticket,CAST(:type AS quote_type_enum),:labor,:parts,:total,'PENDING',:obs) RETURNING id"""), {"ticket": ticket_id, "type": quote_type, "labor": labor, "parts": parts_total, "total": total, "obs": observations}).scalar_one()
+            created_at = session.execute(text("SELECT created_at FROM quotes WHERE id=:id"), {"id": quote_id}).scalar_one()
+            for line in lines:
+                session.execute(text("INSERT INTO quote_details(quote_id,spare_part_id,custom_item_name,quantity,unit_price,subtotal) VALUES (:quote,:part,:name,:qty,:price,:subtotal)"), {"quote": quote_id, "part": line["row"]["id"], "name": line["row"]["name"], "qty": line["quantity"], "price": line["price"], "subtotal": line["subtotal"]})
+            session.execute(text("INSERT INTO ticket_audit_events(ticket_id,actor_user_id,event_type,changed_fields) VALUES (:id,:actor,'QUOTE_CREATED',CAST(:fields AS jsonb))"), {"id": ticket_id, "actor": actor_id, "fields": '{"quote_id":' + str(quote_id) + ',"status":"PENDING"}'})
+            return {"id": int(quote_id), "ticket_id": ticket_id, "quote_type": quote_type, "labor_task_type": labor_task_type, "labor_cost": labor, "parts_cost": parts_total, "total_amount": total, "status": "PENDING", "observations": observations, "created_at": created_at}
+
+    def delete_admin_ticket(self, ticket_id: int) -> bool:
+        return False
     def lookup_inventory(
         self, requested_name: str, quantity: int
     ) -> dict[str, object]:
@@ -761,19 +842,8 @@ class ServiceRepository:
     ) -> int:
         if request_type not in {"REPAIR", "SUPPORT", "SALE", "PC_BUILD", "WARRANTY_CLAIM"}:
             raise ValueError("Tipo de ticket no admitido por el esquema.")
-        query = text(
-            """
-            INSERT INTO tickets (
-                code, customer_id, title, failure_description, request_type, status
-            )
-            VALUES (
-                :code, :customer_id, :title, :failure_description,
-                CAST(:request_type AS request_type_enum),
-                CAST('NEW' AS ticket_status_enum)
-            )
-            RETURNING id
-            """
-        )
+        query = text("""INSERT INTO tickets (code, customer_id, title, failure_description, request_type, status, origin)
+            VALUES (:code, :customer_id, :title, :failure_description, CAST(:request_type AS request_type_enum), CAST('NEW' AS ticket_status_enum), 'ONLINE') RETURNING id""")
         with self._session_factory() as session, session.begin():
             ticket_id = session.execute(
                 query,
@@ -785,6 +855,7 @@ class ServiceRepository:
                     "request_type": request_type,
                 },
             ).scalar_one()
+            session.execute(text("INSERT INTO ticket_audit_events(ticket_id,actor_user_id,event_type,changed_fields) VALUES (:id,:actor,'CREATED','{\"origin\":\"ONLINE\"}'::jsonb)"), {"id": ticket_id, "actor": customer_id})
         return int(ticket_id)
 
     def update_ticket_diagnosis(

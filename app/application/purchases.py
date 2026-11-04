@@ -22,6 +22,14 @@ class SupplierPurchaseService:
     def list_suppliers(self, *, active: bool | None, search: str | None, limit: int, offset: int):
         return self.repository.list_suppliers(active=active, search=search, limit=limit, offset=offset)
 
+    def get_supplier(self, supplier_id: int):
+        if supplier_id < 1:
+            raise PurchaseError("El identificador de proveedor no es válido.", field="supplier_id")
+        supplier = self.repository.get_supplier(supplier_id)
+        if supplier is None:
+            raise SupplierNotFound()
+        return supplier
+
     def create_supplier(self, values: Mapping[str, object]):
         try:
             return self.repository.create_supplier(validate_supplier(values))

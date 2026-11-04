@@ -63,6 +63,21 @@ paths:
         name: supplier_id
         required: true
         schema: {type: integer, minimum: 1}
+    get:
+      operationId: getSupplier
+      summary: Consultar un proveedor, activo o inactivo
+      responses:
+        '200':
+          description: Proveedor encontrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [supplier]
+                properties: {supplier: {$ref: '#/components/schemas/Supplier'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
     patch:
       operationId: updateSupplier
       summary: Actualizar o desactivar proveedor sin borrar su historial

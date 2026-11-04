@@ -75,6 +75,14 @@ class SupplierPurchaseRepositoryAdapter:
         except SQLAlchemyError as exc:
             raise self._storage_error(exc) from exc
 
+    def get_supplier(self, supplier_id):
+        try:
+            with self._session_factory() as session:
+                row = session.execute(text("SELECT id,name,tax_id,contact_name,contact_email,phone,address,delivery_lead_days,active,created_at FROM suppliers WHERE id=:id"), {"id": supplier_id}).mappings().first()
+            return self._supplier(row)
+        except SQLAlchemyError as exc:
+            raise self._storage_error(exc) from exc
+
     def create_supplier(self, values):
         try:
             with self._session_factory() as session, session.begin():

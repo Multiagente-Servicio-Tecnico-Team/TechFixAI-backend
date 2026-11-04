@@ -127,6 +127,13 @@ def create_supplier_purchase_router(
         except (PurchaseError, SQLAlchemyError) as exc:
             return error_response(exc)
 
+    @router.get("/api/admin/suppliers/{supplier_id}")
+    def get_supplier(supplier_id: int, _actor: SessionCustomer = Depends(require_admin)):
+        try:
+            return {"supplier": service().get_supplier(supplier_id)}
+        except (PurchaseError, SQLAlchemyError) as exc:
+            return error_response(exc)
+
     @router.patch("/api/admin/suppliers/{supplier_id}")
     def update_supplier(supplier_id: int, body: SupplierPatch, _actor: SessionCustomer = Depends(require_admin)):
         try:

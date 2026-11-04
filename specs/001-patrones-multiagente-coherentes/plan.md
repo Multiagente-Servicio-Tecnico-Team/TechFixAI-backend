@@ -106,7 +106,7 @@ tests/
 
 ## Data and Schema Strategy
 
-- Canonical reference: `contexto/tablas postgres v2.sql`, excluding its destructive `DROP ... CASCADE` bootstrap section.
+- Canonical schema rebuild script: `contexto/tablas postgres v2.sql`, generated from `multiagentedb` with schema-only clean output. It drops and recreates exported `public` objects and is only for a resettable target; existing databases use versioned migrations.
 - The configured test database was inspected read-only on 2026-11-02. Its public tables, relevant columns and enum labels match the expanded reference, including `refunds`, `payments`, `purchase_orders`, `purchase_order_items`, `quote_details.custom_item_name`, and separate diagnosis fields.
 - No database writes or DDL were performed during inspection. The feature currently needs no schema change to register pending refund requests.
 - If implementation finds a required missing column/constraint, add a numbered additive SQL migration plus a change record before applying it to the test DB. Never recreate populated tables as a migration.

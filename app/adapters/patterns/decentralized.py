@@ -91,4 +91,5 @@ class DecentralizedPattern(GraphPattern):
             quote=quote,
             ticket=ticket,
             pending_quote=quote_status == "proposed",
+            quote_id=result.get("quote_id"),
         )

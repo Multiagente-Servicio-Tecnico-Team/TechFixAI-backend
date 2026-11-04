@@ -1,0 +1,595 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Customer and Commerce API Contract
+  version: 1.0.0
+  description: >-
+    Backend contract for separating authenticated users from commercial
+    customers and service tickets from direct sales. Implementation is being
+    delivered incrementally; endpoints become available with their migrations.
+servers:
+  - url: /
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: techfix_session
+      description: Existing signed session; authorization is determined by route.
+  schemas:
+    Origin:
+      type: string
+      enum: [MANUAL, PORTAL]
+    CustomerWrite:
+      type: object
+      additionalProperties: false
+      required: [display_name, phone]
+      properties:
+        display_name: { type: string, minLength: 2, maxLength: 200 }
+        phone: { type: string, minLength: 7, maxLength: 30 }
+        email: { type: [string, 'null'], format: email, maxLength: 255 }
+    CustomerPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        display_name: { type: string, minLength: 2, maxLength: 200 }
+        phone: { type: string, minLength: 7, maxLength: 30 }
+        email: { type: [string, 'null'], format: email, maxLength: 255 }
+    Customer:
+      type: object
+      required: [id, display_name, phone, email, origin, account_linked, active, created_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        display_name: { type: string }
+        phone: { type: string }
+        email: { type: [string, 'null'] }
+        origin: { $ref: '#/components/schemas/Origin' }
+        account_linked: { type: boolean }
+        active: { type: boolean }
+        created_by_user_id: { type: [integer, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: [string, 'null'], format: date-time }
+    CustomerPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Customer' } }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        offset: { type: integer, minimum: 0 }
+    RequestType:
+      type: string
+      enum: [REPAIR, SUPPORT, PC_BUILD, WARRANTY_CLAIM]
+    CreateServiceTicket:
+      type: object
+      additionalProperties: false
+      required: [title, failure_description, request_type]
+      properties:
+        customer_id: { type: integer, minimum: 1, description: Required for ADMIN-created tickets; omitted for portal requests and resolved from session. }
+        contact_name: { type: string, minLength: 3, maxLength: 200, description: Required snapshot for manual intake; may seed a new manual customer when customer_id is omitted. }
+        contact_phone: { type: string, minLength: 7, maxLength: 30, description: Required snapshot for manual intake. }
+        contact_email: { type: [string, 'null'], format: email, maxLength: 255 }
+        title: { type: string, minLength: 2, maxLength: 200 }
+        failure_description: { type: string, minLength: 5, maxLength: 10000 }
+        request_type: { $ref: '#/components/schemas/RequestType' }
+    CreatePortalServiceTicket:
+      type: object
+      additionalProperties: false
+      required: [title, failure_description, request_type]
+      properties:
+        title: { type: string, minLength: 2, maxLength: 200 }
+        failure_description: { type: string, minLength: 5, maxLength: 10000 }
+        request_type: { $ref: '#/components/schemas/RequestType' }
+    ServiceTicket:
+      type: object
+      required: [id, code, customer_id, title, failure_description, request_type, status, quotes]
+      properties:
+        id: { type: integer, minimum: 1 }
+        code: { type: string }
+        customer_id: { type: integer, minimum: 1 }
+        title: { type: string }
+        failure_description: { type: string }
+        request_type: { $ref: '#/components/schemas/RequestType' }
+        origin: { type: string, enum: [MANUAL, ONLINE] }
+        status: { type: string }
+        quotes:
+          type: array
+          items:
+            type: object
+            required: [id, ticket_id, status, total_amount, lines]
+            properties:
+              id: { type: integer, minimum: 1 }
+              ticket_id: { type: integer, minimum: 1 }
+              status: { type: string }
+              total_amount: { type: string, pattern: '^[0-9]+\\.[0-9]{2}$' }
+              lines: { type: array, items: { $ref: '#/components/schemas/QuoteLine' } }
+        quote: { type: [object, 'null'], description: Legacy compatibility field containing the latest service quote. }
+    QuoteKind:
+      type: string
+      enum: [REPAIR, DIRECT_SALE, PC_BUILD]
+    QuoteStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, REJECTED, EXPIRED, CANCELLED]
+    PaymentStatus:
+      type: string
+      enum: [PENDING, COMPLETED, FAILED, REFUNDED, PARTIALLY_REFUNDED]
+    SaleStatus:
+      type: string
+      enum: [PAID, PREPARING, FULFILLED, CANCELLED]
+    QuoteLineWrite:
+      type: object
+      additionalProperties: false
+      required: [spare_part_id, quantity]
+      properties:
+        spare_part_id: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1, maximum: 1000 }
+    QuoteLine:
+      type: object
+      required: [quantity, name_snapshot, unit_price, subtotal]
+      properties:
+        spare_part_id: { type: [integer, 'null'], minimum: 1 }
+        quantity: { type: integer, minimum: 1 }
+        name_snapshot: { type: string }
+        code_snapshot: { type: [string, 'null'] }
+        unit_price: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        subtotal: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+    Quote:
+      type: object
+      required: [id, customer_id, kind, ticket_id, status, total_amount, lines, inventory_reservation_status, created_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        customer_id: { type: integer, minimum: 1 }
+        kind: { $ref: '#/components/schemas/QuoteKind' }
+        ticket_id: { type: [integer, 'null'], minimum: 1, description: Required for service quotations; null for direct product sales. }
+        status: { $ref: '#/components/schemas/QuoteStatus' }
+        total_amount: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        lines: { type: array, items: { $ref: '#/components/schemas/QuoteLine' } }
+        payment_status: { oneOf: [{ $ref: '#/components/schemas/PaymentStatus' }, { type: 'null' }] }
+        inventory_reservation_status: { type: string, enum: [NOT_APPLICABLE, NOT_RESERVED, RESERVED, RELEASED, CONSUMED] }
+        expires_at: { type: [string, 'null'], format: date-time, description: Sales quotes must have an expiry while inventory is reserved. }
+        created_by_user_id: { type: [integer, 'null'] }
+        created_at: { type: string, format: date-time }
+    ChatQuoteReference:
+      type: object
+      required: [quote_id, quote]
+      properties:
+        quote_id: { type: [integer, 'null'], minimum: 1, description: Present when the chat has persisted a commercial quotation. }
+        quote:
+          type: [object, 'null']
+          description: Display summary for the persisted quotation; status is separate from payment status.
+          properties:
+            status: { type: string, enum: [proposed, saved, confirmed, rejected] }
+            total: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+            currency: { type: string, enum: [PEN] }
+    ChatRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        conversation_id: { type: [string, 'null'], maxLength: 64 }
+        message: { type: [string, 'null'], maxLength: 2000 }
+        action: { type: [string, 'null'], enum: [accept_quote, reject_quote, null] }
+        pattern: { type: string, enum: [hierarchical, orchestrator, decentralized], default: hierarchical }
+    ChatResponse:
+      type: object
+      required: [conversation_id, reply, pattern, quote, quote_id, ticket]
+      properties:
+        conversation_id: { type: string }
+        reply: { type: string }
+        pattern: { type: string, enum: [hierarchical, orchestrator, decentralized] }
+        quote_id: { type: [integer, 'null'], minimum: 1 }
+        quote: { $ref: '#/components/schemas/ChatQuoteReference/properties/quote' }
+        ticket: { type: [object, 'null'] }
+    CreateSalesQuote:
+      type: object
+      additionalProperties: false
+      required: [customer_id, lines, expires_at]
+      properties:
+        customer_id: { type: integer, minimum: 1, description: Accepted only for ADMIN requests; portal identity is session-derived. }
+        lines: { type: array, minItems: 1, maxItems: 50, items: { $ref: '#/components/schemas/QuoteLineWrite' } }
+        observations: { type: [string, 'null'], maxLength: 2000 }
+        expires_at: { type: string, format: date-time, description: Required because accepting the quote reserves inventory until this instant. }
+    SalesOrder:
+      type: object
+      required: [id, customer_id, quote_id, payment_id, status, total_amount, created_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        customer_id: { type: integer, minimum: 1 }
+        quote_id: { type: integer, minimum: 1 }
+        payment_id: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/SaleStatus' }
+        total_amount: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        created_at: { type: string, format: date-time }
+    PaymentConfirmation:
+      type: object
+      additionalProperties: false
+      required: [method]
+      properties:
+        method: { type: string, enum: [CREDIT_CARD, DEBIT_CARD, BANK_TRANSFER, CASH, PAYMENT_GATEWAY] }
+        transaction_reference: { type: [string, 'null'], maxLength: 100 }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    LinkAccount:
+      type: object
+      additionalProperties: false
+      required: [user_id, identity_verified]
+      properties:
+        user_id: { type: integer, minimum: 1 }
+        identity_verified: { type: boolean, const: true, description: ADMIN attests that customer identity was explicitly verified. }
+    ManualQuoteAcceptance:
+      type: object
+      additionalProperties: false
+      required: [confirmation_channel]
+      properties:
+        confirmation_channel: { type: string, enum: [IN_PERSON, PHONE, OTHER] }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: { type: string }
+        code: { type: string }
+paths:
+  /api/chat:
+    post:
+      operationId: chatWithMultiagentPattern
+      security: [{ sessionCookie: [] }]
+      summary: Send authenticated chat input to one of the supported patterns
+      description: The response includes quote_id when a pattern has persisted a quotation. A direct product sale has no service ticket. The Orchestrator currently supports service/PC-build flows only and does not create direct product-sale quotations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+      responses:
+        '200':
+          description: Chat response with optional persisted quote reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+        '401': { description: Missing or invalid session }
+        '502': { description: Model or pattern failure }
+        '503': { description: Storage unavailable }
+  /api/admin/customers:
+    get:
+      operationId: listCommercialCustomers
+      security: [{ sessionCookie: [] }]
+      summary: Search commercial customers (ADMIN)
+      parameters:
+        - { in: query, name: search, schema: { type: string, maxLength: 200 } }
+        - { in: query, name: origin, schema: { $ref: '#/components/schemas/Origin' } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Paginated customers, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerPage' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+    post:
+      operationId: createCommercialCustomer
+      security: [{ sessionCookie: [] }]
+      summary: Register a manual commercial customer without creating credentials
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerWrite' } } } }
+      responses:
+        '201': { description: Customer created, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '409': { description: Conflicting account link or request idempotency key }
+        '422': { description: Invalid contact data }
+  /api/admin/customers/{customer_id}:
+    parameters:
+      - { in: path, name: customer_id, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getCommercialCustomer
+      security: [{ sessionCookie: [] }]
+      summary: Get a customer and account-link state (ADMIN)
+      responses:
+        '200': { description: Customer detail, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Customer not found }
+    patch:
+      operationId: updateCommercialCustomer
+      security: [{ sessionCookie: [] }]
+      summary: Update current commercial contact data (ADMIN)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerPatch' } } } }
+      responses:
+        '200': { description: Updated customer, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Customer not found }
+        '422': { description: Invalid contact data }
+  /api/admin/customers/{customer_id}/link-account:
+    post:
+      operationId: linkCustomerAccount
+      security: [{ sessionCookie: [] }]
+      summary: Link a commercial customer to a verified portal account (ADMIN)
+      parameters:
+        - { in: path, name: customer_id, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LinkAccount' } } } }
+      responses:
+        '200': { description: Account linked, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Customer or account not found }
+        '409': { description: Account is not a CUSTOMER, already linked, or identity verification is missing }
+  /api/admin/tickets:
+    post:
+      operationId: createServiceTicketForCustomer
+      security: [{ sessionCookie: [] }]
+      summary: Create a manual service ticket for an existing commercial customer (ADMIN)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateServiceTicket' } } } }
+      responses:
+        '201': { description: Service ticket created, content: { application/json: { schema: { $ref: '#/components/schemas/ServiceTicket' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Customer not found }
+        '422': { description: Invalid ticket data }
+  /api/customer/tickets:
+    post:
+      operationId: createOwnServiceTicket
+      security: [{ sessionCookie: [] }]
+      summary: Create a service ticket for the commercial profile resolved from the portal session
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreatePortalServiceTicket' } } } }
+      responses:
+        '201': { description: Created ticket with customer and actor resolved by the backend }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+        '422': { description: Invalid ticket data or a non-service request type }
+    get:
+      operationId: listOwnServiceTickets
+      security: [{ sessionCookie: [] }]
+      summary: List service tickets for the authenticated customer's linked profile
+      responses:
+        '200': { description: Own tickets only, without accepting a customer ID parameter }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+  /api/admin/sales-quotes:
+    get:
+      operationId: listAdminSalesQuotes
+      security: [{ sessionCookie: [] }]
+      summary: List direct-sales quotations (ADMIN)
+      parameters:
+        - { in: query, name: customer_id, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/QuoteStatus' } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Paginated sales quotations }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+    post:
+      operationId: createAdminSalesQuote
+      security: [{ sessionCookie: [] }]
+      summary: Create a direct-sales quotation without a service ticket (ADMIN)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateSalesQuote' } } } }
+      responses:
+        '201': { description: Sales quotation created, content: { application/json: { schema: { $ref: '#/components/schemas/Quote' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Customer or product not found }
+        '409': { description: Customer inactive, invalid state or insufficient inventory; no partial reservation is created }
+        '422': { description: Invalid lines or amounts }
+  /api/admin/sales-quotes/{quote_id}:
+    get:
+      operationId: getAdminSalesQuote
+      security: [{ sessionCookie: [] }]
+      summary: Get a sales quotation with its customer, lines, payment state and audit events (ADMIN)
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Sales quote detail, content: { application/json: { schema: { $ref: '#/components/schemas/Quote' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Quotation not found }
+  /api/admin/sales-quotes/{quote_id}/acceptance:
+    post:
+      operationId: recordManualSalesQuoteAcceptance
+      security: [{ sessionCookie: [] }]
+      summary: Record a customer's explicit acceptance when they have no portal account (ADMIN)
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ManualQuoteAcceptance' } } } }
+      responses:
+        '200': { description: Acceptance recorded by ADMIN; payment remains pending }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Quotation not found }
+        '409': { description: Quote is not pending, has expired, or all requested inventory cannot be reserved; no partial reservation is created }
+  /api/admin/sales-quotes/{quote_id}/payment-confirmation:
+    post:
+      operationId: confirmSalesQuotePayment
+      security: [{ sessionCookie: [] }]
+      summary: Confirm an externally received payment and create one sale record (ADMIN)
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PaymentConfirmation' } } } }
+      responses:
+        '201': { description: Payment confirmed and sale created, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrder' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Quotation not found }
+        '409': { description: Quote not accepted, payment already resolved, or reservation missing/expired/inconsistent }
+        '422': { description: Invalid confirmation }
+  /api/admin/sales-quotes/{quote_id}/cancellation:
+    post:
+      operationId: cancelAdminSalesQuote
+      security: [{ sessionCookie: [] }]
+      summary: Cancel a pending or accepted sales quote and release its reservation
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                notes: { type: [string, 'null'], maxLength: 1000 }
+      responses:
+        '200': { description: Quote cancelled, reservation released and event audited }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Quote not found }
+        '409': { description: Quote is already resolved or payment has been confirmed }
+  /api/admin/sales-orders:
+    get:
+      operationId: listAdminSalesOrders
+      security: [{ sessionCookie: [] }]
+      summary: List confirmed sales (ADMIN)
+      parameters:
+        - { in: query, name: customer_id, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Paginated sales }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+  /api/admin/sales-orders/{order_id}:
+    get:
+      operationId: getAdminSalesOrder
+      security: [{ sessionCookie: [] }]
+      summary: Get a confirmed sale and its payment and item history (ADMIN)
+      parameters:
+        - { in: path, name: order_id, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Sale detail, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrder' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Sale not found }
+  /api/admin/tickets/{ticket_id}/quotes:
+    post:
+      operationId: createServiceQuote
+      security: [{ sessionCookie: [] }]
+      summary: Create a service quotation for an existing service ticket (ADMIN)
+      parameters:
+        - { in: path, name: ticket_id, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, lines]
+              properties:
+                kind: { type: string, enum: [REPAIR, PC_BUILD] }
+                lines: { type: array, minItems: 1, maxItems: 50, items: { $ref: '#/components/schemas/QuoteLineWrite' } }
+                observations: { type: [string, 'null'], maxLength: 2000 }
+      responses:
+        '201': { description: Quote linked to ticket and its customer, content: { application/json: { schema: { $ref: '#/components/schemas/Quote' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+        '404': { description: Ticket or product not found }
+        '409': { description: Ticket is cancelled or ticket customer conflicts with quote customer }
+        '422': { description: Invalid quote lines }
+  /api/customer/quotes:
+    get:
+      operationId: listOwnCommercialQuotes
+      security: [{ sessionCookie: [] }]
+      summary: List the authenticated customer's own service and sales quotations
+      parameters:
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/QuoteStatus' } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Own quotations only }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+  /api/customer/quotes/{quote_id}:
+    get:
+      operationId: getOwnCommercialQuote
+      security: [{ sessionCookie: [] }]
+      summary: Get one of the authenticated customer's own quotations
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Own quotation detail, content: { application/json: { schema: { $ref: '#/components/schemas/Quote' } } } }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+        '404': { description: Quotation not found or not owned by this customer }
+  /api/customer/quotes/{quote_id}/acceptance:
+    post:
+      operationId: acceptOwnQuote
+      security: [{ sessionCookie: [] }]
+      summary: Record acceptance of the authenticated customer's own quote
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+      responses:
+        '200': { description: Quote accepted; payment remains pending until confirmed }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+        '404': { description: Quotation not found or not owned by this customer }
+        '409': { description: Quote is not pending, has expired, or inventory could not be fully reserved; no partial reservation is created }
+  /api/customer/sales-quotes:
+    get:
+      operationId: listOwnDirectSalesQuotes
+      security: [{ sessionCookie: [] }]
+      summary: List direct-sales quotations for the profile resolved from the session
+      responses:
+        '200': { description: Own direct-sales quotes only }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+  /api/customer/sales-quotes/{quote_id}/acceptance:
+    post:
+      operationId: acceptOwnDirectSalesQuote
+      security: [{ sessionCookie: [] }]
+      summary: Accept an owned direct-sales quote and reserve all required stock
+      parameters:
+        - { in: path, name: quote_id, required: true, schema: { type: integer, minimum: 1 } }
+        - { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+      responses:
+        '200': { description: Accepted; payment pending and full reservation active }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+        '404': { description: Quote not found or not owned by this customer }
+        '409': { description: Expired quote or insufficient stock; no partial reservation }
+  /api/customer/sales-orders:
+    get:
+      operationId: listOwnSalesOrders
+      security: [{ sessionCookie: [] }]
+      summary: List the authenticated customer's own confirmed sales
+      responses:
+        '200': { description: Sales associated only with the profile resolved from session }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+  /api/customer/sales-orders/{order_id}:
+    get:
+      operationId: getOwnSalesOrder
+      security: [{ sessionCookie: [] }]
+      summary: Get one of the authenticated customer's own sales orders
+      parameters:
+        - { in: path, name: order_id, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Own order, payment and item snapshots }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }
+        '404': { description: Order not found or not owned by this customer }
+  /api/admin/payments:
+    get:
+      operationId: listAdminPayments
+      security: [{ sessionCookie: [] }]
+      summary: List payment records for commercial customers (ADMIN)
+      parameters:
+        - { in: query, name: customer_id, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/PaymentStatus' } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Paginated payment records and confirmation audit fields }
+        '401': { description: Missing or invalid session }
+        '403': { description: ADMIN role required }
+  /api/customer/payments:
+    get:
+      operationId: listOwnPayments
+      security: [{ sessionCookie: [] }]
+      summary: List payments for quotes owned by the authenticated customer's linked profile
+      parameters:
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/PaymentStatus' } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Own payment records only; never accepts a customer ID filter }
+        '401': { description: Missing or invalid session }
+        '403': { description: Customer role required }

@@ -27,6 +27,7 @@ class OrchestratorPattern(GraphPattern):
             quote=self.quote(result),
             ticket=self.ticket(result),
             pending_quote=bool(result.get("awaiting_ticket_confirmation")),
+            quote_id=result.get("quote_id"),
         )
 
     @staticmethod

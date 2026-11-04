@@ -43,11 +43,13 @@ class SessionCustomer:
     last_name: str | None
     email: str
     role: str
+    phone: str = ""
+    commercial_customer_id: int | None = None
 
 
 def _to_customer(user: User) -> SessionCustomer:
     role = user.role.value if hasattr(user.role, "value") else str(user.role)
-    return SessionCustomer(id=user.id, first_name=user.name, last_name=user.last_name, email=user.email, role=role)
+    return SessionCustomer(id=user.id, first_name=user.name, last_name=user.last_name, email=user.email, role=role, phone=user.phone)
 
 
 class SessionGuard:

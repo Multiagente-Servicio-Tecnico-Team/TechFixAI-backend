@@ -130,7 +130,7 @@ Una persona autorizada corrige un asiento confirmado mediante un asiento inverso
 - El responsable de la operación es la persona autenticada que la ejecuta. Si se requiere asignar un responsable distinto, será un requisito separado con auditoría de ambos actores.
 - La categoría se mantiene como catálogo controlado por el sistema; sus valores iniciales se decidirán en planificación a partir de los casos operativos confirmados.
 - Los códigos de cuenta y denominaciones se conservan tal como los proporciona el personal autorizado. No se presume que el backend tenga cargado un Plan Contable General Empresarial oficial y vigente.
-- Las tablas del esquema actual no representan asientos contables ni sus líneas o eventos de auditoría; la planificación debe proponer una migración aditiva y trazable sin recrear ni borrar las tablas existentes.
+- Al redactar este spec, el esquema base de referencia aún no representaba asientos contables, líneas ni eventos de auditoría. La migración 003 implementó esas entidades en la BD actual; comprobar la instantánea `contexto/tablas postgres v2.sql` para el estado vigente. Esta nota conserva el razonamiento original del feature.
 - El repositorio del frontend es independiente y recibirá después una especificación propia basada en el contrato de detalle del backend.
 
 ## Referencias normativas consultadas

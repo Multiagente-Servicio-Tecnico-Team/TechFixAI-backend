@@ -49,10 +49,10 @@
 
 ### 8. Database reference is already present in the test database
 
-- **Decision**: Treat the expanded schema as canonical and do not execute its destructive setup SQL. The current `.env` test database was inspected read-only on 2026-11-02; its public tables, relevant columns, and enum labels match the expanded schema. No schema migration is planned unless implementation discovers a concrete missing object.
+- **Decision**: Treat the live PostgreSQL database as canonical. On 2026-11-03, `contexto/tablas postgres v2.sql` was regenerated as a schema-only rebuild script from `multiagentedb`, with DROP statements for exported `public` objects. It is for a resettable target; migrations remain the path to evolve an existing database while preserving data.
 - **Rationale**: The expanded tables already include refunds, payments, logistics, warranty claims, supplier purchase orders, `quote_details.custom_item_name`, and separate diagnosis fields. The functional gaps are application behavior and consistency.
-- **Alternatives considered**: Re-run `contexto/tablas postgres v2.sql` (it starts with `DROP ... CASCADE`); apply the older `sql/creacion_tablas_ingles_sin_inserciones.sql` (it omits required expanded tables/columns).
-- **Traceability**: No database rows were read; no writes or DDL were issued. Record the schema comparison and this decision in the implementation change log.
+- **Alternatives considered**: Running the rebuild script against a database with data (destructive and rejected) or using the legacy `sql/creacion_tablas_ingles_sin_inserciones.sql` (it omits current tables and columns).
+- **Traceability**: The schema was dumped without row data or DDL execution. The read-only customer-ticket route check returned 200 with quoted tickets. Record any later schema changes in `sql/migrations/`.
 
 ### 9. Keep conversation checkpoint persistence out of scope
 

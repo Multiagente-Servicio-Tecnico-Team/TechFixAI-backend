@@ -143,8 +143,8 @@ Como ADMIN, quiero buscar compras y revisar su detalle para verificar documentos
 - La fuente de identidad del responsable es la sesión autenticada ADMIN, nunca un campo libre enviado por el cliente.
 - La funcionalidad es un registro operativo interno, no una implementación de cumplimiento tributario ni generación/envío PLE.
 - No se contabiliza automáticamente la compra en la sección de asientos contables; las operaciones contables permanecen separadas.
-- El esquema de referencia ya contiene suppliers, purchase_orders y purchase_order_items. suppliers tiene nombre, correo, teléfono, plazo estimado y estado; purchase_orders almacena proveedor, total, estado, llegada estimada y fechas; sus líneas almacenan artículo opcional, nombre libre, cantidad, costo y subtotal.
-- purchase_orders permanece como registro de órdenes de abastecimiento; las compras recibidas tendrán su propio registro y podrán vincularse a una orden. No existe tabla de movimientos de stock en el esquema de referencia; la recepción debe dejar un historial consultable.
+- Al redactar este spec, el esquema de referencia contenía suppliers, purchase_orders y purchase_order_items. La BD actual también contiene las tablas de compras, recepciones, movimientos y auditoría añadidas por la migración 005; sus definiciones vigentes se reflejan en `contexto/tablas postgres v2.sql`.
+- `purchase_orders` permanece como registro de órdenes de abastecimiento; las compras recibidas tienen su propio registro y pueden vincularse a una orden. La migración 005 agregó movimientos de inventario y un historial consultable de recepción.
 - El acceso administrativo queda restringido a ADMIN, coherente con la administración de contabilidad y tickets.
 - En la primera versión, cada compra tiene un único estado de pago (pagado o pendiente) y un método; no se registran abonos ni pagos parciales.
 

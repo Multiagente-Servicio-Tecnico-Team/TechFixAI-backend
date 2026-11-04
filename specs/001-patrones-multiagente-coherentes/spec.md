@@ -113,7 +113,7 @@ El equipo puede comparar los tres patrones por conversación, flujo, modelo y re
 - **FR-010**: Los tres patrones MUST consultar una interfaz común de recuperación sobre fuentes de conocimiento aprobadas, con referencias de origen y resultado reproducible para la misma consulta y versión de fuentes.
 - **FR-011**: La ingesta MUST identificar documentos fuente, evitar duplicados en reingestas y permitir reconstruir qué versión de documentos generó el índice.
 - **FR-011a**: La información institucional identificada como demostrativa MUST conservar esa marca y no presentarse como un dato real verificado del negocio.
-- **FR-012**: El sistema MUST usar el esquema ampliado de `contexto/tablas postgres v2.sql` como referencia del modelo de negocio, reconciliándolo con el repositorio y manteniendo el SQL destructivo fuera del camino de migración.
+- **FR-012**: El sistema MUST mantener `contexto/tablas postgres v2.sql` como script de reconstrucción del esquema `public` generado desde la base PostgreSQL vigente, sin filas. Su ejecución elimina y recrea los objetos exportados y solo se permite en una base destino reinicializable; una base existente con datos se actualiza mediante migraciones versionadas.
 - **FR-013**: Todo cambio de base de datos MUST quedar en una migración versionada con descripción de propósito, objetos afectados y estrategia de preservación/transformación de datos.
 - **FR-014**: El sistema MUST definir pruebas de contrato comunes que ejecuten los mismos escenarios contra los tres patrones y validen respuestas, efectos de negocio, permisos y errores equivalentes.
 - **FR-015**: Las trazas MUST identificar patrón, caso, agente/herramienta, modelo y resultado de negocio sin registrar credenciales ni contenido sensible cuando la redacción esté habilitada.
@@ -153,7 +153,7 @@ El equipo puede comparar los tres patrones por conversación, flujo, modelo y re
 
 - Los tres patrones son requisito permanente para comparación académica; no se busca hacerlos converger en un solo grafo.
 - El patrón jerárquico define la cobertura de negocio de referencia, mientras la selección de patrón conserva diferencias de coordinación medibles.
-- `contexto/tablas postgres v2.sql` describe el esquema ampliado deseado, pero su bloque de `DROP ... CASCADE` no es una migración segura y no debe ejecutarse sobre una base con datos que se quieran conservar.
+- `contexto/tablas postgres v2.sql` refleja la base local `multiagentedb` desde 2026-11-03; la base es la fuente de verdad. `sql/creacion_tablas_ingles_sin_inserciones.sql` es un bootstrap legado incompleto y no se usa para actualizar la base vigente.
 - La base de datos configurada en `.env` es de prueba, según confirmó el usuario. Las credenciales y URL de conexión no deben imprimirse ni incluirse en trazas o documentación.
 - Las modificaciones de esquema se registran con migraciones aditivas/versionadas y conservan datos por defecto.
 - Los flujos de pago no integran una pasarela de cobro salvo que exista un proveedor configurado; `PENDING` no equivale a pago recibido.

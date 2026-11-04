@@ -45,3 +45,9 @@ class CustomerTicket:
     created_at: datetime | str | None = None
     updated_at: datetime | str | None = None
     quote: TicketQuote | None = None
+    customer_id: int | None = None
+    id: int | None = None
+    quotes: tuple[TicketQuote, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "quotes", tuple(self.quotes))

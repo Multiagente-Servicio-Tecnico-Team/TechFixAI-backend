@@ -133,7 +133,7 @@
 
 ### Notas de ejecución
 
-- No ejecutar `contexto/tablas postgres v2.sql` para actualizar una base existente: contiene instrucciones destructivas de esquema inicial.
+- `contexto/tablas postgres v2.sql` elimina y recrea objetos `public` sin filas; usar únicamente en una BD reinicializable. Para conservar datos, aplicar cambios mediante migraciones versionadas.
 - Aplicar `sql/migrations/005_supplier_purchases.sql` sólo a base de prueba autorizada y después de respaldo/verificación de destino.
 - Mantener el libro contable independiente; no crear automáticamente `accounting_entries`.
 - Las tareas marcadas `[P]` no comparten archivos ni dependen de cambios incompletos; toda tarea de historia usa su etiqueta `[USn]`.

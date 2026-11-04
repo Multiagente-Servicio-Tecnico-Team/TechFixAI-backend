@@ -31,6 +31,6 @@
 
 ## Notes
 
-- El esquema contiene suppliers, purchase_orders y purchase_order_items. No se encontró historial de stock ni datos tributarios/pagos en estas tablas.
+- Al redactar este spec, el esquema de referencia contenía suppliers, purchase_orders y purchase_order_items, pero no el registro separado de compras ni el historial de recepciones. La BD actual fue ampliada por la migración 005; consultar la instantánea vigente y el estado del backend antes de tratar esta nota como descripción actual.
 - Las decisiones sobre separar compras de órdenes, actualizar stock al confirmar recepción y registrar método/estado de pago están resueltas e integradas en la especificación.
 - El registro de compras no genera asientos contables automáticamente y no incluye pagos parciales ni PLE en esta versión.

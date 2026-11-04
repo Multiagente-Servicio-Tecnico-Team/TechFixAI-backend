@@ -51,7 +51,7 @@
 - `app/adapters/api/admin_tickets.py`: las rutas actuales ya están protegidas por `require_admin`; POST exige `customer_email`; PATCH acepta estados canónicos; DELETE borra físicamente.
 - `app/database/repository.py`: `list_admin_tickets()` y `get_admin_ticket()` hacen `JOIN users`, requieren cambiar a unión externa para tickets manuales. `delete_admin_ticket()` ejecuta `DELETE`. `create_intake_ticket()` crea tickets online con cuenta autenticada.
 - `app/accounts/session.py`: `SessionGuard.require_admin` valida la cookie y el rol; el actor de auditoría debe venir de `SessionCustomer.id`.
-- `contexto/tablas postgres v2.sql`: request types ya cubiertos; `tickets.customer_id` es NOT NULL; `quotes.ticket_id/total_amount` ya existen; pagos requieren cliente y método enum distinto a Yape/Plin.
+- `contexto/tablas postgres v2.sql` (snapshot vigente desde 2026-11-03): request types cubiertos; `tickets.customer_id` es nullable tras la migración 004; `quotes.ticket_id/total_amount` existen; los pagos conservan su propio cliente y métodos separados del adelanto administrativo.
 - `TechFixAI-frontend/src/features/workshop/NewTicket.jsx`: captura contacto, equipo/modelo, detalle, tres categorías y adelanto; sigue usando estado demo local.
 - No se encontró Alembic. El proyecto versiona SQL en `sql/migrations/`; la migración nueva será aditiva y se documentará para aplicación explícita en BD de prueba.
 

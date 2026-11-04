@@ -8,15 +8,20 @@ def record_customer_logistics_preference(
     repository,
     *,
     customer_id: int,
-    ticket_id: int,
+    ticket_id: int | None = None,
+    sales_order_id: int | None = None,
     mode: str,
     courier_company: str | None = None,
     shipping_address: str | None = None,
 ) -> int:
     if type(customer_id) is not int or customer_id < 1:
         raise PermissionError("Se requiere una sesión de cliente autenticada.")
-    if type(ticket_id) is not int or ticket_id < 1:
-        raise ValueError("Se requiere un ticket válido.")
+    if (ticket_id is None) == (sales_order_id is None):
+        raise ValueError("Indica un ticket de servicio o una venta, pero no ambos.")
+    if ticket_id is not None and (type(ticket_id) is not int or ticket_id < 1):
+        raise ValueError("El ticket indicado no es válido.")
+    if sales_order_id is not None and (type(sales_order_id) is not int or sales_order_id < 1):
+        raise ValueError("La venta indicada no es válida.")
     if mode not in LOGISTICS_MODES:
         raise ValueError("Modalidad logística no admitida.")
 
@@ -31,6 +36,7 @@ def record_customer_logistics_preference(
 
     return repository.create_logistics_record(
         ticket_id=ticket_id,
+        sales_order_id=sales_order_id,
         customer_id=customer_id,
         mode=mode,
         courier_company=company,

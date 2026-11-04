@@ -12,6 +12,37 @@ from app.database.repository import ServiceRepository
 def make_billing_agent(repository: ServiceRepository):
     def billing_agent(state: ServiceState) -> dict[str, Any]:
         quote = state["quote"]
+        if state.get("request_type") == "SALE":
+            from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+
+            accepted = traced_tool(
+                state,
+                "direct_sale_quote_acceptance",
+                lambda: SalesQuoteRepositoryAdapter().accept_direct_sales_quote(
+                    quote_id=int(state["quote_id"]),
+                    customer_id=int(state["customer_id"]),
+                    actor_user_id=None,
+                    idempotency_key=f"chat-sale-quote-{int(state['quote_id'])}",
+                ),
+            )
+            return {
+                "quote_id": accepted["quote_id"],
+                "payment_id": accepted["payment_id"],
+                "payment_code": accepted["payment_code"],
+                "payment_status": "PENDING",
+                "ticket_id": None,
+                "ticket_code": "",
+                "ticket_status": None,
+                "awaiting_quote_confirmation": False,
+                "awaiting_logistics": False,
+                "outcome": "direct_sale_accepted",
+                "messages": [AIMessage(content=(
+                    f"Aceptaste la cotización de venta #{accepted['quote_id']}. "
+                    f"Reservé el stock hasta su vencimiento. El pago {accepted['payment_code']} "
+                    f"por S/ {quote['total_amount']:.2f} está PENDIENTE; el pedido se creará "
+                    "cuando ADMIN confirme que recibió el pago. No se creó un ticket de reparación."
+                ))],
+            }
         accepted_quote = traced_tool(
             state,
             "accepted_quote_write",

@@ -1,6 +1,7 @@
 
 import json
 from decimal import Decimal, InvalidOperation
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from langchain_core.messages import (
@@ -37,6 +38,18 @@ from app.agents.decentralized.tools.ventas_tools import (
 
 llm = create_chat_model()
 sales_repository = ServiceRepository()
+
+
+def _save_direct_sales_quote(customer_id: int, quote: dict, observations: str):
+    from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+
+    return SalesQuoteRepositoryAdapter().create_direct_sales_quote(
+        customer_id=int(customer_id), actor_user_id=None,
+        lines=[{"spare_part_id": int(part.get("inventory_id") or part.get("id")), "quantity": int(part["quantity"])}
+               for part in quote.get("parts", [])],
+        expires_at=datetime.now(UTC) + timedelta(hours=24),
+        observations=observations, origin="PORTAL",
+    )
 
 
 # =========================================================
@@ -344,20 +357,27 @@ def ventas_node(state: AgentState):
         decision = interpret_quote_decision(user)
         quote = state.get("quote") or {}
         if decision == "REJECT":
-            sales_repository.cancel_ticket(state["ticket_id"], state["customer_id"])
+            if quote.get("quote_type") == "DIRECT_SALE" and state.get("quote_id"):
+                from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+                SalesQuoteRepositoryAdapter().resolve_direct_sales_quote(
+                    quote_id=int(state["quote_id"]), customer_id=int(state["customer_id"]),
+                    actor_user_id=None, target_status="REJECTED", notes="Rechazada desde el chat.",
+                )
+            elif state.get("ticket_id"):
+                sales_repository.cancel_ticket(state["ticket_id"], state["customer_id"])
             rejected = {**quote, "status": "rejected"}
             return {
                 "current_agent": "ventas",
                 "quote": rejected,
                 "quote_status": "rejected",
-                "ticket_status": "CANCELLED",
+                "ticket_status": "CANCELLED" if state.get("ticket_id") else None,
                 "quote_scope": None,
                 "inventory_results": [],
                 "required_parts": [],
                 "inventory_pending": False,
                 "messages": [AIMessage(content=(
-                    "Entendido. Cancelé el ticket pendiente y no guardé la "
-                    "cotización ni generé un pago."
+                    "Entendido. Rechacé la cotización; no se reservó inventario "
+                    "ni se generó un pago."
                 ))],
             }
         if decision == "ACCEPT":
@@ -370,9 +390,15 @@ def ventas_node(state: AgentState):
                     "state": state,
                 })
             except (ValueError, LookupError, RuntimeError):
-                sales_repository.cancel_ticket(
-                    state["ticket_id"], state["customer_id"]
-                )
+                if state.get("ticket_id"):
+                    sales_repository.cancel_ticket(state["ticket_id"], state["customer_id"])
+                elif quote.get("quote_type") == "DIRECT_SALE" and state.get("quote_id"):
+                    from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+                    SalesQuoteRepositoryAdapter().resolve_direct_sales_quote(
+                        quote_id=int(state["quote_id"]), customer_id=int(state["customer_id"]),
+                        actor_user_id=None, target_status="REJECTED",
+                        notes="No fue posible validar precio o existencias al aceptar.",
+                    )
                 return {
                     "current_agent": "ventas",
                     "quote": {**quote, "status": "rejected"},
@@ -385,22 +411,60 @@ def ventas_node(state: AgentState):
                     "messages": [AIMessage(content=(
                         "No puedo aceptar la propuesta porque el producto dejó "
                         "de estar disponible con un precio y stock válidos. "
-                        "Cancelé el ticket pendiente y no guardé la cotización."
+                        "No reservé inventario ni registré un pago."
                     ))],
                 }
-            current.update(
-                ticket_id=state["ticket_id"],
-                status="proposed",
-            )
+            current.update(ticket_id=state.get("ticket_id"), status="proposed")
             if quote_changed(quote, current):
+                new_quote_id = state.get("quote_id")
+                if quote.get("quote_type") == "DIRECT_SALE":
+                    from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+                    SalesQuoteRepositoryAdapter().resolve_direct_sales_quote(
+                        quote_id=int(state["quote_id"]), customer_id=int(state["customer_id"]),
+                        actor_user_id=None, target_status="CANCELLED",
+                        notes="Reemplazada porque cambiaron precio o disponibilidad.",
+                    )
+                    new_quote_id = int(_save_direct_sales_quote(
+                        int(state["customer_id"]), current,
+                        "Cotización actualizada desde el chat; requiere nueva aceptación.",
+                    )["id"])
                 return {
                     "current_agent": "ventas",
                     "quote": current,
+                    "quote_id": new_quote_id,
                     "quote_status": "proposed",
                     "messages": [AIMessage(content=(
                         f"Cambió el precio o el stock. La propuesta actualizada "
-                        f"suma S/ {current['total_amount']:.2f}. No guardé la "
-                        "cotización; confirma de nuevo si aceptas este importe."
+                        f"suma S/ {current['total_amount']:.2f}. "
+                        + (f"La cotización #{new_quote_id} quedó pendiente; "
+                           if new_quote_id else "No se guardó la cotización; ")
+                        + "confirma de nuevo si aceptas este importe."
+                    ))],
+                }
+            if quote.get("quote_type") == "DIRECT_SALE":
+                from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+                accepted = SalesQuoteRepositoryAdapter().accept_direct_sales_quote(
+                    quote_id=int(state["quote_id"]), customer_id=int(state["customer_id"]),
+                    actor_user_id=None, idempotency_key=f"decentralized-chat-sale-{int(state['quote_id'])}",
+                )
+                if accepted.get("error"):
+                    return {
+                        "current_agent": "ventas", "quote": quote,
+                        "quote_id": state["quote_id"], "quote_status": "rejected",
+                        "ticket_status": None,
+                        "messages": [AIMessage(content=accepted["error"])],
+                    }
+                confirmed = {**quote, "status": "confirmed"}
+                return {
+                    "current_agent": "ventas", "quote": confirmed,
+                    "quote_id": accepted["quote_id"], "quote_status": "confirmed",
+                    "ticket_id": None, "ticket_code": None, "ticket_status": None,
+                    "payment_code": accepted.get("payment_code"),
+                    "messages": [AIMessage(content=(
+                        f"Aceptaste la cotización de venta #{accepted['quote_id']}. "
+                        f"Reservé el stock hasta su vencimiento. El pago {accepted.get('payment_code')} "
+                        f"por S/ {quote['total_amount']:.2f} está PENDIENTE; el pedido se registrará "
+                        "cuando ADMIN confirme el pago. No se creó un ticket de reparación."
                     ))],
                 }
             accepted = accept_quoted_draft(
@@ -489,23 +553,28 @@ def ventas_node(state: AgentState):
                     ],
                     "state": state,
                 })
-                ticket_code = f"TCK-{uuid4().hex[:12].upper()}"
                 request_type = {
                     "REPAIR": "REPAIR",
                     "DIRECT_SALE": "SALE",
                     "PC_BUILD": "PC_BUILD",
                 }[quote["quote_type"]]
-                ticket_id = sales_repository.create_intake_ticket(
-                    code=ticket_code,
-                    customer_id=state["customer_id"],
-                    title=(
-                        "Solicitud de venta"
-                        if request_type == "SALE"
-                        else "Solicitud de servicio técnico"
-                    ),
-                    failure_description=user[:2000],
-                    request_type=request_type,
-                )
+                ticket_id = None
+                ticket_code = None
+                if request_type == "SALE":
+                    saved = _save_direct_sales_quote(
+                        int(state["customer_id"]), quote,
+                        "Cotización directa creada desde la conversación; pendiente de aceptación.",
+                    )
+                    state["quote_id"] = int(saved["id"])
+                else:
+                    ticket_code = f"TCK-{uuid4().hex[:12].upper()}"
+                    ticket_id = sales_repository.create_intake_ticket(
+                        code=ticket_code,
+                        customer_id=state["customer_id"],
+                        title="Solicitud de servicio técnico",
+                        failure_description=user[:2000],
+                        request_type=request_type,
+                    )
                 quote["ticket_id"] = ticket_id
                 quote["status"] = "proposed"
                 lines = ["Cotización preliminar (PEN):"]
@@ -517,8 +586,10 @@ def ventas_node(state: AgentState):
                 )
                 lines.extend([
                     f"Total preliminar: S/ {quote['total_amount']:.2f}.",
-                    "El precio y el stock se verificaron al calcular; no se reservó "
-                    "inventario ni se registró un ticket o una cotización.",
+                    (f"La cotización de venta #{state['quote_id']} quedó guardada como pendiente; "
+                     "el precio y stock se verificarán otra vez al aceptarla. No hay ticket de reparación.")
+                    if request_type == "SALE" else
+                    "El precio y el stock se verificaron al calcular; todavía no se guardó una cotización.",
                 ])
                 return {
                     "current_agent": "ventas",
@@ -526,7 +597,8 @@ def ventas_node(state: AgentState):
                     "quote_status": "proposed",
                     "ticket_id": ticket_id,
                     "ticket_code": ticket_code,
-                    "ticket_status": "NEW",
+                    "ticket_status": "NEW" if ticket_id else None,
+                    "quote_id": state.get("quote_id"),
                     "messages": [AIMessage(content="\n".join(lines))],
                 }
             quote, reply = cotizacion_verificada(inventory, problems, state.get("inventory_pending", False), state.get("quote_scope"))

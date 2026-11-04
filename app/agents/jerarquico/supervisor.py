@@ -996,7 +996,7 @@ def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
             }
         ticket_id = state.get("ticket_id")
         ticket_code = state.get("ticket_code", "")
-        if ticket_id is None:
+        if ticket_id is None and request_type != "SALE":
             ticket_code = f"TCK-{uuid4().hex[:12].upper()}"
             ticket_id = traced_tool(
                 state,
@@ -1009,6 +1009,9 @@ def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
                     request_type=request_type,
                 ),
             )
+        elif request_type == "SALE":
+            ticket_id = None
+            ticket_code = ""
 
         route = {
             "REPAIR": "service",

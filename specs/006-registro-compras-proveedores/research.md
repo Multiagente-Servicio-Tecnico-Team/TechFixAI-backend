@@ -40,8 +40,8 @@
 ### Migración aditiva y esquema actual
 
 - **Decisión**: crear `sql/migrations/005_supplier_purchases.sql` transaccional e idempotente, sin eliminar ni recrear tablas. Ampliar `suppliers` con campos que faltan (razón social, identificador fiscal, dirección; conservar los actuales) y agregar compras, líneas, recepciones, movimientos y eventos.
-- **Rationale**: el SQL de referencia es un esquema de instalación con `DROP TABLE` y no debe usarse para actualizar una base existente. El proyecto usa migraciones versionadas para cambios conservadores.
-- **Alternativas consideradas**: editar/re-ejecutar `contexto/tablas postgres v2.sql`, descartada por su carácter destructivo.
+- **Rationale**: `contexto/tablas postgres v2.sql` refleja el esquema vivo, pero no codifica pasos de migración. El proyecto usa scripts versionados para actualizar bases conservando sus datos.
+- **Alternativas consideradas**: usar el script de reconstrucción `contexto/tablas postgres v2.sql` como migración sobre una base existente; se descarta porque elimina objetos y no transforma/conserva los datos.
 - **Evidencia local**: `sql/migrations/003_accounting_entries.sql` y `004_admin_ticket_management.sql` usan `BEGIN`/`COMMIT` y cambios aditivos.
 
 ## Convenciones de implementación observadas

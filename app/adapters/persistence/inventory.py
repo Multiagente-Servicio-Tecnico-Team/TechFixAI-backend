@@ -3,7 +3,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.application.errors import InventoryConflict, InventoryStorageUnavailable
@@ -15,6 +15,22 @@ PART_COLUMNS = """
     id, code, name, category, description, unit_price, current_stock,
     minimum_threshold, active, created_at, updated_at
 """
+
+
+def _reserved_units(session, part_id: int) -> int:
+    # Keep existing inventory CRUD functional during the additive-migration window.
+    # No reservation can exist until the new table exists; after migration the
+    # transactional sum becomes authoritative.
+    if not inspect(session.connection()).has_table("inventory_reservations", schema="public" if session.bind.dialect.name == "postgresql" else None):
+        return 0
+    return int(session.execute(text("""SELECT COALESCE(SUM(ri.quantity),0)
+        FROM inventory_reservation_items ri JOIN inventory_reservations r ON r.id=ri.reservation_id
+        WHERE ri.spare_part_id=:part AND r.status='RESERVED' AND r.expires_at>CURRENT_TIMESTAMP"""),
+        {"part": part_id}).scalar_one())
+
+
+def _row_lock_clause(session) -> str:
+    return " FOR UPDATE" if session.bind.dialect.name == "postgresql" else ""
 
 
 def _default_session_factory():
@@ -97,6 +113,18 @@ class InventoryRepositoryAdapter:
     def update_part(self, code: str, part: InventoryPartDraft) -> InventoryPart | None:
         try:
             with self._session_factory() as session, session.begin():
+                current = session.execute(
+                    text("SELECT id,current_stock FROM spare_parts WHERE code=:code AND active IS TRUE" + _row_lock_clause(session)),
+                    {"code": code},
+                ).mappings().first()
+                if current is None:
+                    return None
+                reserved = _reserved_units(session, int(current["id"]))
+                if part.current_stock < reserved:
+                    raise InventoryConflict(
+                        f"El stock no puede ser menor a las {reserved} unidades reservadas.",
+                        code="reserved_stock", field="current_stock",
+                    )
                 row = session.execute(
                     text("""UPDATE spare_parts
                             SET name = :name, category = :category, description = :description,
@@ -120,6 +148,18 @@ class InventoryRepositoryAdapter:
     def delete_part(self, code: str) -> bool:
         try:
             with self._session_factory() as session, session.begin():
+                current = session.execute(
+                    text("SELECT id FROM spare_parts WHERE code=:code" + _row_lock_clause(session)),
+                    {"code": code},
+                ).mappings().first()
+                if current is None:
+                    return False
+                reserved = _reserved_units(session, int(current["id"]))
+                if reserved:
+                    raise InventoryConflict(
+                        "No se puede eliminar un artículo con unidades reservadas.",
+                        code="reserved_stock",
+                    )
                 row = session.execute(
                     text("DELETE FROM spare_parts WHERE code = :code RETURNING id"),
                     {"code": code},

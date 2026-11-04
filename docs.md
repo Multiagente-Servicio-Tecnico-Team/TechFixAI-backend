@@ -21,7 +21,8 @@ Dónde está explicado cada tema. Antes de documentar algo nuevo, revisa si ya e
 | `docs/multiagent-architecture.md` | Diseño del sistema multiagente y del patrón Jerárquico |
 | `spec/01-arquitectura-descentralizada.md` | Arquitectura de la Red descentralizada |
 | `postman/techfix-auth.postman_collection.json` | Colección de la API de cuentas (Postman o Newman) |
-| `sql/creacion_tablas_ingles_sin_inserciones.sql` | Esquema de la base de datos (incompleto: ver `features.md`) |
+| `contexto/tablas postgres v2.sql` | Script destructivo para reconstruir los objetos del esquema `public` en una BD reinicializable; no contiene datos |
+| `sql/creacion_tablas_ingles_sin_inserciones.sql` | Script de bootstrap legado; incompleto y no es fuente de verdad para la base actual |
 | `sql/migrate_spanish_schema_to_english.sql` | Migración del esquema en español al esquema en inglés |
 
 ## Especificaciones (`spec/`) y evidencias (`docs/`), numeradas por tarea
@@ -50,6 +51,8 @@ El contrato backend de audio y su validacion local viven en
 | 16 | Precios y deduplicación del catálogo | `spec/16-precios-y-dedupe-catalogo-seed.md` | `docs/19-precios-y-dedupe-catalogo-seed.md` |
 | 21 | Registro interno de asientos contables | `specs/003-asientos-contables/` | `docs/21-asientos-contables.md` |
 | 24 | API CRUD del inventario para el taller | `specs/005-api-inventario/` | `docs/24-api-inventario.md` |
+| 25 | Limpieza verificada de auxiliares de migración y tabla sin consumidor | `sql/migrations/010_remove_obsolete_tables.sql` | `docs/25-limpieza-tablas-obsoletas.md` |
+| 26 | Desactivación temporal de guardas contables en la base local de pruebas | `sql/operations/accounting-test-triggers-disable.sql`, `accounting-test-triggers-restore.sql` | `docs/26-borrado-temporal-asientos-prueba.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.

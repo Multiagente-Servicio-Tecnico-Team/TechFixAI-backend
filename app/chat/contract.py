@@ -44,6 +44,7 @@ class ChatOut(BaseModel):
     reply: str
     pattern: Literal["hierarchical", "orchestrator", "decentralized"] = "hierarchical"
     quote: QuoteOut | None = None
+    quote_id: int | None = None
     ticket: TicketOut | None = None
 
 

@@ -32,6 +32,6 @@ def request_refund(
     return RefundRequest(
         id=int(row["id"]),
         payment_id=payment_id,
-        ticket_id=int(row["ticket_id"]),
+        ticket_id=int(row["ticket_id"]) if row.get("ticket_id") is not None else None,
         amount=refund_amount,
     )

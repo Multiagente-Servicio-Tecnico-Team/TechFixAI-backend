@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi.responses import JSONResponse
 
 from app.accounts.session import SessionCustomer
@@ -22,6 +23,13 @@ from app.domain.money import money_text
 from app.domain.tickets import CustomerTicket
 
 
+class PortalTicketCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=2, max_length=200)
+    failure_description: str = Field(min_length=5, max_length=10000)
+    request_type: str = Field(pattern="^(REPAIR|SUPPORT|PC_BUILD|WARRANTY_CLAIM)$")
+
+
 def create_chat_router(
     *,
     send_message: SendChatMessage,
@@ -31,6 +39,7 @@ def create_chat_router(
     audio_message: SendAudioChatMessage | None = None,
     audio_enabled: bool = False,
     audio_max_bytes: int = 25_000_000,
+    create_portal_ticket: Callable[..., dict[str, Any]] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -40,17 +49,36 @@ def create_chat_router(
 
     @router.get("/api/customer/tickets")
     def customer_tickets(customer: SessionCustomer = Depends(require_customer)):
+        customer_id = customer.commercial_customer_id or customer.id
         try:
-            tickets = list_tickets.execute(customer.id)
+            tickets = list_tickets.execute(customer_id)
         except StorageUnavailable as exc:
             raise HTTPException(status_code=503, detail=exc.detail) from exc
         return {"tickets": [ticket_json(ticket) for ticket in tickets]}
+
+    @router.post("/api/customer/tickets", status_code=201)
+    def create_customer_ticket(body: PortalTicketCreate, customer: SessionCustomer = Depends(require_customer)):
+        if create_portal_ticket is None:
+            raise HTTPException(status_code=503, detail="La creación de tickets no está disponible.")
+        try:
+            return create_portal_ticket(
+                customer_id=customer.commercial_customer_id or customer.id,
+                title=body.title.strip(),
+                failure_description=body.failure_description.strip(),
+                request_type=body.request_type,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except (OSError, RuntimeError) as exc:
+            raise HTTPException(status_code=503, detail="No se pudo registrar el ticket.") from exc
 
     @router.post("/api/chat", response_model=ChatOut, response_model_exclude_none=True)
     def chat(body: ChatIn, customer: SessionCustomer = Depends(require_customer)):
         try:
             turn = send_message.execute(
-                customer_id=customer.id,
+                customer_id=customer.commercial_customer_id or customer.id,
                 pattern=body.pattern,
                 message=body.message,
                 action=body.action,
@@ -98,7 +126,7 @@ def create_chat_router(
             content_type = audio.content_type or ""
             content = audio.file.read(audio_max_bytes + 1)
             result = audio_message.execute(
-                customer_id=customer.id,
+                customer_id=customer.commercial_customer_id or customer.id,
                 audio=content,
                 content_type=content_type,
                 duration_ms=duration_ms,
@@ -149,6 +177,7 @@ def chat_out(conversation_id: str, pattern: str, reply: PatternReply) -> ChatOut
             if quote
             else None
         ),
+        quote_id=reply.quote_id,
         ticket=TicketOut(code=reply.ticket.code, status=reply.ticket.status) if reply.ticket else None,
     )
 
@@ -163,31 +192,33 @@ def _money(value: Any) -> str | None:
 
 def ticket_json(ticket: CustomerTicket) -> dict[str, Any]:
     quote = ticket.quote
+    quotes = ticket.quotes or ((quote,) if quote else ())
+    def quote_json(item):
+        return {
+            "status": item.status,
+            "labor_cost": _money(item.labor_cost),
+            "parts_cost": _money(item.parts_cost),
+            "total_amount": _money(item.total_amount),
+            "created_at": _date(item.created_at),
+            "lines": [
+                {"name": line.name, "quantity": line.quantity,
+                 "unit_price": _money(line.unit_price), "subtotal": _money(line.subtotal)}
+                for line in item.lines
+            ],
+        }
     return {
+        "id": ticket.id,
         "code": ticket.code,
+        "customer_id": ticket.customer_id,
         "title": ticket.title,
         "failure_description": ticket.failure_description,
         "request_type": ticket.request_type,
         "status": ticket.status,
         "created_at": _date(ticket.created_at),
         "updated_at": _date(ticket.updated_at),
+        "quotes": [quote_json(item) for item in quotes],
         "quote": (
-            {
-                "status": quote.status,
-                "labor_cost": _money(quote.labor_cost),
-                "parts_cost": _money(quote.parts_cost),
-                "total_amount": _money(quote.total_amount),
-                "created_at": _date(quote.created_at),
-                "lines": [
-                    {
-                        "name": line.name,
-                        "quantity": line.quantity,
-                        "unit_price": _money(line.unit_price),
-                        "subtotal": _money(line.subtotal),
-                    }
-                    for line in quote.lines
-                ],
-            }
+            quote_json(quote)
             if quote
             else None
         ),

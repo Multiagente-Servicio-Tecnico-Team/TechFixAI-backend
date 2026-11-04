@@ -15,6 +15,7 @@ from app.application.admin_tickets import AdminTicketService
 from app.domain.ticket_management import ADVANCE_METHODS, money
 
 RequestType = Literal["REPAIR", "SALE", "PC_BUILD", "SUPPORT", "WARRANTY_CLAIM"]
+ServiceRequestType = Literal["REPAIR", "PC_BUILD", "SUPPORT", "WARRANTY_CLAIM"]
 DiagnosisType = Literal["HARDWARE", "SOFTWARE", "HYBRID", "NONE"]
 TicketStatus = Literal[
     "NEW", "IN_DIAGNOSIS", "QUOTED", "PAYMENT_PENDING", "PAID", "IN_REPAIR",
@@ -25,12 +26,13 @@ TicketStatus = Literal[
 class TicketCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    customer_id: int | None = Field(default=None, gt=0)
     contact_name: str = Field(min_length=3, max_length=200)
     contact_phone: str = Field(min_length=9, max_length=20)
     contact_email: str | None = Field(default=None, min_length=5, max_length=255)
     title: str = Field(min_length=2, max_length=200)
     failure_description: str = Field(min_length=5, max_length=10000)
-    request_type: RequestType = "REPAIR"
+    request_type: ServiceRequestType = "REPAIR"
     advance_amount: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
     advance_payment_method: str | None = None
     technician_id: int | None = Field(default=None, gt=0)
@@ -136,24 +138,6 @@ def create_admin_ticket_router(
     make_repository = repository_factory or AdminTicketRepositoryAdapter
     make_service = lambda: AdminTicketService(make_repository())
 
-    @router.get("/customers")
-    def customer_by_email(
-        email: str = Query(min_length=5, max_length=255),
-        _admin: SessionCustomer = Depends(require_admin),
-    ):
-        try:
-            customer = make_repository().find_active_customer_by_email(email)
-        except SQLAlchemyError as exc:
-            raise HTTPException(status_code=503, detail="No se pudo consultar el cliente.") from exc
-        if customer is None:
-            raise HTTPException(status_code=404, detail="No se encontró un cliente activo con ese correo.")
-        return {
-            "id": customer["id"],
-            "name": " ".join(part for part in (customer.get("name"), customer.get("last_name")) if part),
-            "email": customer["email"],
-            "phone": customer["phone"],
-        }
-
     @router.get("/tickets")
     def list_tickets(
         status: TicketStatus | None = None,
@@ -199,7 +183,7 @@ def create_admin_ticket_router(
         repository = service.repository
         try:
             values = body.model_dump()
-            values.update(customer_id=None, origin="MANUAL", diagnosis_type="NONE", status="NEW", technician_id=None, estimated_labor_hours=Decimal("0.0"), is_remote_service=False, hardware_diagnosis=None, software_diagnosis=None)
+            values.update(customer_id=body.customer_id, origin="MANUAL", diagnosis_type="NONE", status="NEW", technician_id=None, estimated_labor_hours=Decimal("0.0"), is_remote_service=False, hardware_diagnosis=None, software_diagnosis=None)
             ticket_id = service.create_manual_ticket(
                 values=values,
                 code=f"TCK-{uuid4().hex[:12].upper()}",

@@ -258,7 +258,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertTrue(session.transaction.committed)
 
     def test_service_intake_ticket_starts_new(self):
-        session = FakeSession([FakeResult(scalar=55)])
+        session = FakeSession([FakeResult(scalar=7), FakeResult(scalar=55), FakeResult()])
         repository = ServiceRepository(lambda: session)
 
         ticket_id = repository.create_intake_ticket(
@@ -269,10 +269,12 @@ class RepositoryTests(unittest.TestCase):
             request_type="REPAIR",
         )
 
-        query, parameters = session.calls[0]
+        query, parameters = session.calls[1]
         self.assertEqual(ticket_id, 55)
         self.assertIn("CAST('NEW' AS ticket_status_enum)", query)
         self.assertEqual(parameters["request_type"], "REPAIR")
+        self.assertIn("commercial_customer_id", query)
+        self.assertIn("INSERT INTO ticket_audit_events", session.calls[2][0])
         self.assertTrue(session.transaction.committed)
 
     def test_service_diagnosis_updates_existing_ticket_columns(self):
@@ -484,6 +486,8 @@ class RepositoryTests(unittest.TestCase):
     def test_logistics_preference_is_updated_while_receipt_is_pending(self):
         session = FakeSession(
             [
+                FakeResult(row={"user_id": 9}),
+                FakeResult(scalar=55),
                 FakeResult(
                     row={
                         "id": 81,
@@ -507,12 +511,16 @@ class RepositoryTests(unittest.TestCase):
         )
 
         self.assertEqual(record_id, 81)
-        self.assertIn("UPDATE logistics_records", session.calls[1][0])
+        self.assertIn("UPDATE logistics_records", session.calls[3][0])
         self.assertTrue(session.transaction.committed)
 
     def test_logistics_preference_cannot_change_after_receipt(self):
         session = FakeSession(
             [
+                FakeResult(
+                    row={"user_id": 9}
+                ),
+                FakeResult(scalar=55),
                 FakeResult(
                     row={
                         "id": 81,
@@ -535,7 +543,7 @@ class RepositoryTests(unittest.TestCase):
                 shipping_address="Dirección de prueba",
             )
 
-        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(len(session.calls), 3)
         self.assertTrue(session.transaction.rolled_back)
 
     def test_diagnostic_quote_can_be_saved_without_spare_part_details(self):

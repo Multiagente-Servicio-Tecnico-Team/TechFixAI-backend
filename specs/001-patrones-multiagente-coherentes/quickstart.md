@@ -6,7 +6,7 @@
 - Keep the three pattern identifiers registered and use one model profile for comparable runs.
 - Tests should inject fake LLM/repository/RAG implementations; no external Groq or LangSmith call is required for contract tests.
 - Any database integration check must use the configured test database only, run inside a rollback/isolated transaction where possible, and never print `DATABASE_URL` or row-level personal data.
-- Do not execute `contexto/tablas postgres v2.sql`; it drops existing objects before creating them.
+- `contexto/tablas postgres v2.sql` recreates exported objects in `public` and is destructive. Run it only against a fresh/reinitializable target database. Preserve existing data by applying the relevant versioned migrations instead.
 
 ## Contract test cycle
 

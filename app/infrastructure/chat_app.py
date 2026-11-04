@@ -4,6 +4,7 @@ Es el único lugar que conoce las implementaciones concretas; el resto de capas
 depende de los puertos de `app.application.ports`.
 """
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -20,10 +21,13 @@ from app.adapters.api.admin_tickets import create_admin_ticket_router
 from app.adapters.api.accounting import create_accounting_router
 from app.adapters.api.inventory import create_inventory_router
 from app.adapters.api.purchases import create_supplier_purchase_router
+from app.adapters.api.sales_quotes import create_sales_quote_router
 from app.adapters.speech.groq import GroqAudioTranscriber
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
 from app.adapters.patterns.registry import PATTERN_NAMES, build_patterns
 from app.adapters.persistence.tickets import RepositoryTicketReader
+from app.adapters.persistence.customers import CustomerRepositoryAdapter
+from app.database.repository import ServiceRepository
 from app.adapters.persistence.accounting import AccountingRepositoryAdapter
 from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
 from app.application.chat import SendChatMessage
@@ -32,6 +36,7 @@ from app.application.audio_requests import AudioRequestRegistry
 from app.application.ports import AudioTranscriber
 from app.application.conversations import ConversationRegistry
 from app.application.tickets import ListCustomerTickets
+from app.application.customer_profiles import CustomerProfileService
 from app.settings import Settings, load_settings
 from app.infrastructure.request_limits import RequestBodyLimitMiddleware
 
@@ -49,6 +54,7 @@ def build_chat_app(
     accounting_repository_factory: Callable[[], Any] | None = None,
     inventory_repository_factory: Callable[[], Any] | None = None,
     purchase_repository_factory: Callable[[], Any] | None = None,
+    sales_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0")
     runtime_settings = settings_factory()
@@ -68,7 +74,8 @@ def build_chat_app(
         if (request.url.path.startswith("/api/admin/accounting/")
                 or request.url.path.startswith("/api/admin/tickets")
                 or request.url.path.startswith("/api/admin/purchases")
-                or request.url.path.startswith("/api/admin/suppliers")):
+                or request.url.path.startswith("/api/admin/suppliers")
+                or request.url.path.startswith("/api/admin/sales-")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -105,7 +112,9 @@ def build_chat_app(
     def require_customer(request: Request) -> SessionCustomer:
         if guard_holder["guard"] is None:
             guard_holder["guard"] = SessionGuard.from_env()
-        return guard_holder["guard"].require_customer(request)
+        user = guard_holder["guard"].require_customer(request)
+        profile = CustomerProfileService(CustomerRepositoryAdapter()).resolve_session_customer(user)
+        return replace(user, commercial_customer_id=int(profile["id"]))
 
     def require_admin(request: Request) -> SessionCustomer:
         if guard_holder["guard"] is None:
@@ -154,6 +163,9 @@ def build_chat_app(
             audio_message=audio_use_case,
             audio_enabled=runtime_settings.audio_transcription_enabled,
             audio_max_bytes=runtime_settings.audio_max_bytes,
+            create_portal_ticket=lambda **values: _create_portal_ticket(
+                repository_factory=ticket_repository_factory, **values
+            ),
         )
     )
     app.include_router(
@@ -172,4 +184,25 @@ def build_chat_app(
             repository_factory=inventory_repository_factory,
         )
     )
+    app.include_router(create_sales_quote_router(
+        require_admin=require_admin,
+        require_customer=require_customer,
+        repository_factory=sales_repository_factory,
+    ))
     return app
+
+
+def _create_portal_ticket(*, repository_factory=None, customer_id: int, title: str,
+                           failure_description: str, request_type: str) -> dict[str, Any]:
+    from uuid import uuid4
+
+    if request_type not in {"REPAIR", "SUPPORT", "PC_BUILD", "WARRANTY_CLAIM"}:
+        raise ValueError("El tipo de solicitud no corresponde a un ticket de servicio.")
+    repository = repository_factory() if repository_factory else ServiceRepository()
+    code = f"TCK-{uuid4().hex[:12].upper()}"
+    ticket_id = repository.create_intake_ticket(
+        code=code, customer_id=customer_id, title=title,
+        failure_description=failure_description, request_type=request_type,
+    )
+    return {"id": ticket_id, "code": code, "customer_id": customer_id,
+            "request_type": request_type, "status": "NEW"}

@@ -1,5 +1,6 @@
 from typing import Any
 from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 
 from langchain_core.messages import AIMessage
 
@@ -9,8 +10,31 @@ from app.agents.jerarquico.tools.quotes import calculate_quote
 from app.application.quotes import quote_changed
 
 
-def make_sales_agent(settings: Settings):
+def make_sales_agent(settings: Settings, direct_sales_quotes=None):
+    if direct_sales_quotes is None:
+        from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+        direct_sales_quotes = SalesQuoteRepositoryAdapter()
+
+    def persist_sale_quote(state, quote):
+        return direct_sales_quotes.create_direct_sales_quote(
+            customer_id=int(state["customer_id"]), actor_user_id=None,
+            lines=[{"spare_part_id": int(part.get("inventory_id") or part.get("id")), "quantity": int(part["quantity"])}
+                   for part in quote["parts"]],
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
+            observations="Cotización generada desde el chat; el cliente aún debe aceptarla.",
+            origin="PORTAL",
+        )
+
     def sales_agent(state: ServiceState) -> dict[str, Any]:
+        if state.get("request_type") == "SALE" and state.get("route") == "declined":
+            if state.get("quote_id"):
+                direct_sales_quotes.resolve_direct_sales_quote(
+                    quote_id=state["quote_id"], customer_id=int(state["customer_id"]),
+                    actor_user_id=None, target_status="REJECTED", notes="Rechazada desde el chat.",
+                )
+            return {"route": "service", "outcome": "declined", "messages": [
+                AIMessage(content="Entendido. Rechacé la cotización de venta; no se reservó inventario ni se registró un pago.")
+            ]}
         request_type = state["request_type"]
         if request_type == "SALE":
             labor_task_type = "sale"
@@ -18,7 +42,7 @@ def make_sales_agent(settings: Settings):
             labor_task_type = "pc_build"
         else:
             labor_task_type = state["labor_task_type"]
-        labor_cost = settings.labor_price_for(labor_task_type)
+        labor_cost = Decimal("0.00") if request_type == "SALE" else settings.labor_price_for(labor_task_type)
         quote = calculate_quote(
             labor_cost=labor_cost,
             labor_task_type=labor_task_type,
@@ -29,21 +53,37 @@ def make_sales_agent(settings: Settings):
             "PC_BUILD": "PC_BUILD",
         }.get(request_type, "REPAIR")
         quote["quote_type"] = quote_type
+        quote_id = state.get("quote_id")
         if state.get("route") == "confirm" and state.get("quote"):
             previous = state["quote"]
             if quote_changed(previous, quote):
+                if request_type == "SALE" and quote_id:
+                    direct_sales_quotes.resolve_direct_sales_quote(
+                        quote_id=quote_id, customer_id=int(state["customer_id"]),
+                        actor_user_id=None, target_status="CANCELLED",
+                        notes="Reemplazada porque cambió el precio o disponibilidad.",
+                    )
+                    quote_id = int(persist_sale_quote(state, quote)["id"])
                 return {
                     "quote": quote,
+                    "quote_id": quote_id,
                     "route": "service",
                     "outcome": "price_changed",
                     "quote_changed": True,
                 }
-        return {"quote": quote, "quote_type": quote_type}
+        if request_type == "SALE" and quote_id is None:
+            quote_id = int(persist_sale_quote(state, quote)["id"])
+        return {"quote": quote, "quote_type": quote_type, "quote_id": quote_id}
 
     return sales_agent
 
 
 def quote_suggestion_response(state: ServiceState) -> dict[str, Any]:
+    if state.get("request_type") == "SALE" and state.get("outcome") == "declined":
+        return {
+            "route": "service", "outcome": "declined", "awaiting_quote_confirmation": False,
+            "messages": [AIMessage(content="Entendido. Rechacé la cotización de venta; no se reservó inventario ni se registró un pago.")],
+        }
     quote = state["quote"]
     if state["request_type"] == "SALE":
         lines = ["Revisé los artículos solicitados contra el inventario actual:"]
@@ -133,8 +173,15 @@ def quote_suggestion_response(state: ServiceState) -> dict[str, Any]:
         lines.append(f"Para la propuesta consideré: {part_names}.")
     elif not quote["parts"] and quote["labor_task_type"] != "diagnosis":
         lines.append("Por ahora no hace falta incluir un repuesto específico.")
-    lines.extend(
-        [
+    if state.get("request_type") == "SALE":
+        lines.extend([
+            f"Los productos suman S/ {quote['parts_cost']:.2f}; el total es S/ {quote['total_amount']:.2f}.",
+            (f"La cotización de venta #{state.get('quote_id')} quedó guardada como pendiente. "
+             "No hay ticket de reparación asociado. ¿Aceptas esta propuesta? Responde sí o no."),
+        ])
+    else:
+        lines.extend(
+            [
             (
                 f"El costo fijo de mano de obra por "
                 f"{'diagnóstico' if quote['labor_task_type'] == 'diagnosis' else 'ensamble' if quote['labor_task_type'] == 'pc_build' else 'mantenimiento/cambio de partes' if quote['labor_task_type'] == 'maintenance' else 'venta directa'} "
@@ -147,8 +194,8 @@ def quote_suggestion_response(state: ServiceState) -> dict[str, Any]:
                 "Todavía no he guardado la cotización. ¿Aceptas esta propuesta? "
                 "Responde sí o no."
             ),
-        ]
-    )
+            ]
+        )
     budget = state.get("budget_max")
     if (
         state.get("request_type") == "PC_BUILD"

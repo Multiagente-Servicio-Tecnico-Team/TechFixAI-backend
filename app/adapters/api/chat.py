@@ -1,4 +1,5 @@
 """Rutas HTTP del chat: traducen JSON ↔ casos de uso y errores ↔ códigos HTTP."""
+import json
 from collections.abc import Callable, Mapping
 from typing import Any
 from uuid import UUID
@@ -8,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.accounts.session import SessionCustomer
 from app.application.chat import SendChatMessage
+from app.application.accounting_assistant import accounting_intent
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.errors import (
     AudioIdempotencyConflict, AudioQuotaExceeded, AudioRequestError,
@@ -27,6 +29,7 @@ def create_chat_router(
     send_message: SendChatMessage,
     list_tickets: ListCustomerTickets,
     require_customer: Callable[[Request], SessionCustomer],
+    require_user: Callable[[Request], SessionCustomer] | None = None,
     pattern_names: Mapping[str, str],
     audio_message: SendAudioChatMessage | None = None,
     audio_enabled: bool = False,
@@ -47,10 +50,28 @@ def create_chat_router(
         return {"tickets": [ticket_json(ticket) for ticket in tickets]}
 
     @router.post("/api/chat", response_model=ChatOut, response_model_exclude_none=True)
-    def chat(body: ChatIn, customer: SessionCustomer = Depends(require_customer)):
+    def chat(body: ChatIn, request: Request):
+        customer = (require_user or require_customer)(request) if body.pattern == "decentralized" else require_customer(request)
+        if body.pattern == "decentralized" and body.message and body.message.lstrip().startswith("{"):
+            try:
+                data = json.loads(body.message)
+            except ValueError:
+                data = None
+            if isinstance(data, dict) and {"operation_date", "category_id", "lines"} & data.keys():
+                if customer.role != "ADMIN":
+                    raise HTTPException(status_code=403, detail="Esta operación requiere una cuenta administradora.")
+                return JSONResponse(status_code=409, content={"detail": "La vista previa contable de chat requiere el contrato acordado."})
+        if body.pattern == "decentralized" and customer.role != "ADMIN" and accounting_intent(body.message or ""):
+            raise HTTPException(status_code=403, detail="Esta operación requiere una cuenta administradora.")
+        if body.pattern == "decentralized" and customer.role not in {"ADMIN", "CUSTOMER"}:
+            raise HTTPException(status_code=403, detail="Este chat requiere una cuenta autorizada.")
+        if body.pattern == "decentralized" and customer.role == "ADMIN" and body.action is not None:
+            raise HTTPException(status_code=403, detail="Las acciones comerciales del chat no están disponibles para ADMIN.")
         try:
+            role_context = {"authenticated_role": customer.role} if body.pattern == "decentralized" and require_user is not None else {}
             turn = send_message.execute(
                 customer_id=customer.id,
+                **role_context,
                 pattern=body.pattern,
                 message=body.message,
                 action=body.action,

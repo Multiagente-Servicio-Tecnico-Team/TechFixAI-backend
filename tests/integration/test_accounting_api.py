@@ -26,8 +26,13 @@ ACCOUNT_SETTINGS = AccountSettings(database_url=None, auth_secret="a" * 48, secu
 
 
 class FakeGraph:
+    def get_state(self, _config):
+        from types import SimpleNamespace
+        return SimpleNamespace(values={})
+
     def invoke(self, *_args, **_kwargs):
-        return {"messages": []}
+        from langchain_core.messages import AIMessage
+        return {"messages": [AIMessage(content="Consulta recibida.")]}
 
 
 class FakeAccountingRepository:
@@ -38,6 +43,7 @@ class FakeAccountingRepository:
         self.fail_category_read = False
         self.fail_create = False
         self.category_active = True
+        self.reversal_calls = []
 
     def list_categories(self):
         if self.fail_category_read:
@@ -99,17 +105,22 @@ class FakeAccountingRepository:
         return self.entries.get(entry_id)
 
     def reverse_entry(self, actor_id, entry_id, operation_date, reason):
+        self.reversal_calls.append((actor_id, entry_id, operation_date, reason))
         original = self.entries.get(entry_id)
         if original is None:
             from app.application.errors import AccountingNotFound
             raise AccountingNotFound()
         from app.application.errors import AccountingConflict
         if original["status"] == "REVERSED":
+            previous = self.entries[original["reversal_entry_id"]]
+            if previous["operation_date"] == operation_date.isoformat() and previous["reversal_reason"] == reason:
+                return {"original": original, "reversal": previous}, True
             raise AccountingConflict()
         original["status"] = "REVERSED"
         reversal = dict(original)
         reversal.update({"id": self.next_id, "entry_number": str(self.next_id), "operation_date": operation_date.isoformat(),
                          "status": "CONFIRMED", "reversal_of_entry_id": entry_id, "reversal_entry_id": None,
+                         "reversal_reason": reason,
                          "debit_total": original["credit_total"], "credit_total": original["debit_total"],
                          "amount": original["debit_total"],
                          "lines": [{**line, "debit": line["credit"], "credit": line["debit"]} for line in original["lines"]]})
@@ -149,6 +160,26 @@ def payload(concept="Venta mostrador"):
     return {"operation_date": "2026-11-02", "concept": concept, "detail": "Registro interno", "category_id": 1,
             "lines": [{"account_code": "101", "account_name": "Caja", "description": None, "debit": "100.00", "credit": "0.00"},
                       {"account_code": "701", "account_name": "Ventas", "description": None, "debit": "0.00", "credit": "100.00"}]}
+
+
+def test_accounting_chat_requires_signed_admin_and_does_not_write(accounting_client):
+    client, _, repository = accounting_client
+    request = {"pattern": "decentralized", "message": "categorías contables"}
+    response = client.post("/api/chat", json=request)
+    assert response.status_code == 200
+    assert client.post("/api/chat", json={"pattern": "decentralized", "message": "confirmar asiento",
+                                           "action": "accept_quote"}).status_code == 403
+    assert client.post("/api/chat", json={"pattern": "decentralized",
+                                           "message": '{"operation_date":"2026-11-03","lines":[]}'}).status_code == 409
+    assert repository.entries == {}
+
+    client.post("/auth/logout")
+    assert client.post("/api/chat", json=request).status_code == 401
+    client.post("/auth/login", json={"email": "cliente@test.pe", "password": PASSWORD})
+    assert client.post("/api/chat", json={**request, "role": "ADMIN"}).status_code == 403
+    client.post("/auth/login", json={"email": "technician@test.pe", "password": PASSWORD})
+    assert client.post("/api/chat", json=request).status_code == 403
+    assert repository.entries == {}
 
 
 def test_create_replay_conflict_and_detail(accounting_client):
@@ -222,3 +253,36 @@ def test_listing_reversal_and_not_found(accounting_client):
     assert reversal.json()["reversal"]["reversal_of_entry_id"] == 1
     assert client.get("/api/admin/accounting/entries?status=REVERSED").json()["total"] == 1
     assert client.post("/api/admin/accounting/entries/999/reverse", json={"operation_date": "2026-11-03", "reason": "No existe"}).status_code == 404
+
+
+def test_reversal_requires_admin_and_delegates_actor_and_replay_to_003(accounting_client):
+    client, _, repository = accounting_client
+    created = client.post("/api/admin/accounting/entries",
+                          headers={"Idempotency-Key": "723d06c0-65da-4d2c-8471-b8d71d28771c"}, json=payload())
+    assert created.status_code == 201
+    original_lines = created.json()["lines"]
+    path = "/api/admin/accounting/entries/1/reverse"
+    body = {"operation_date": "2026-11-03", "reason": "Corrección manual"}
+
+    client.post("/auth/logout")
+    assert client.post(path, json=body).status_code == 401
+    client.post("/auth/login", json={"email": "cliente@test.pe", "password": PASSWORD})
+    assert client.post(path, json=body).status_code == 403
+    client.post("/auth/login", json={"email": "technician@test.pe", "password": PASSWORD})
+    assert client.post(path, json=body).status_code == 403
+    assert repository.reversal_calls == []
+
+    client.post("/auth/login", json={"email": "admin@test.pe", "password": PASSWORD})
+    assert client.post(path, json={**body, "actor_id": 999}).status_code == 422
+    assert repository.reversal_calls == []
+    reversed_response = client.post(path, json=body)
+    assert reversed_response.status_code == 201
+    assert repository.reversal_calls == [(2, 1, date(2026, 11, 3), "Corrección manual")]
+    assert reversed_response.json()["reversal"]["reversal_of_entry_id"] == 1
+    assert client.get("/api/admin/accounting/entries/1").json()["lines"] == original_lines
+
+    replay = client.post(path, json=body)
+    assert replay.status_code == 200
+    assert len(repository.entries) == 2
+    assert client.post(path, json={**body, "reason": "Otro motivo"}).status_code == 409
+    assert len(repository.entries) == 2

@@ -33,6 +33,7 @@ class SendChatMessage:
         self,
         *,
         customer_id: int,
+        authenticated_role: str | None = None,
         pattern: str,
         message: str | None = None,
         action: str | None = None,
@@ -47,7 +48,7 @@ class SendChatMessage:
 
         if self._durable is not None:
             if pattern == "decentralized":
-                cid, reply = self._durable.execute(customer_id=customer_id, message=message,
+                cid, reply = self._durable.execute(customer_id=customer_id, authenticated_role=authenticated_role, message=message,
                     conversation_id=conversation_id, action=action, proposal_id=proposal_id)
                 return ChatTurn(conversation_id=cid, pattern=pattern, reply=reply)
             self._durable.check_other_pattern(conversation_id, customer_id)

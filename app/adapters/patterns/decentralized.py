@@ -15,7 +15,8 @@ def _build_decentralized_graph(checkpointer, *, financial_repository=None) -> An
     return build_graph(checkpointer=checkpointer, ticket_writes=True, quote_writes=True, financial_repository=(
         financial_repository if financial_repository is not None else DecentralizedRepository()))
 
-def build_invoker(get_graph, graph_factories, financial_repository, trace_context_factory, settings_factory, config_factory):
+def build_invoker(get_graph, graph_factories, financial_repository, trace_context_factory, settings_factory, config_factory,
+                  accounting_service_factory=None):
     def invoke_pattern(
         pattern: str,
         conversation_id: str,
@@ -45,10 +46,14 @@ def build_invoker(get_graph, graph_factories, financial_repository, trace_contex
             )
         else:
             state = DecentralizedState(messages=[human_message], customer_id=customer.id)
+            if getattr(customer, "role", None) == "ADMIN":
+                state["current_agent"] = "contador"
 
         config = config_factory(conversation_id)
         config["configurable"]["thread_id"] = thread_id or conversation_id
         config["configurable"]["conversation_id"] = conversation_id
+        context = {"authenticated_customer_id": customer.id, "authenticated_role": getattr(customer, "role", None),
+                   "accounting_service_factory": accounting_service_factory}
         with (trace_context_factory or (lambda: get_trace_context(settings_factory())))():
             graph = get_graph(pattern)
             if pattern == "decentralized" and quote_action is not None:
@@ -90,7 +95,7 @@ def build_invoker(get_graph, graph_factories, financial_repository, trace_contex
                                 "La operación quedó bloqueada por una corrección y necesita reconciliación. No se intentará otra escritura."
                                 if blocked else "Hay una solicitud preparada. Responde continuar para registrar esa misma solicitud."))
                         return graph.invoke(None, config=config,
-                            context={"authenticated_customer_id": customer.id}, durability="sync")
+                            context=context, durability="sync")
                     pending = saved.get("pending_payment_operation") if saved else None
                     logistics_pending = saved.get("pending_logistics_operation") if saved else None
                     if logistics_pending is not None:
@@ -122,19 +127,20 @@ def build_invoker(get_graph, graph_factories, financial_repository, trace_contex
                     elif "ejecutar_pago" in snapshot.next:
                         raise ConversationActionError(status_code=409, detail="La operación financiera requiere reanudación explícita.")
                     return graph.invoke(state, config=config,
-                        context={"authenticated_customer_id": customer.id}, durability="sync")
+                        context=context, durability="sync")
                 except PsycopgError:
                     raise ConversationActionError(status_code=503, detail="El almacenamiento del asistente no está disponible.") from None
-            return graph.invoke(state, config=config)
+            return graph.invoke(state, config=config, context=context) if pattern == "decentralized" else graph.invoke(state, config=config)
     return invoke_pattern
 
 class DecentralizedPattern(LegacyReplyPattern):
     def build_graph(self):
         raise RuntimeError("La red requiere PostgresSaver inicializado por infraestructura.")
 
-    def configure_runtime(self, *, graph_factories, financial_repository):
+    def configure_runtime(self, *, graph_factories, financial_repository, accounting_service_factory=None):
         self.invoke_turn = build_invoker(lambda pattern: self.graph(), graph_factories,
-            financial_repository, self._trace_context_factory, self._settings_factory, self.config)
+            financial_repository, self._trace_context_factory, self._settings_factory, self.config,
+            accounting_service_factory=accounting_service_factory)
 
     def to_reply(self, result):
         if not result.get("proposal"):

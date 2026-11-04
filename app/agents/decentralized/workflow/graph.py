@@ -1,4 +1,5 @@
 import json
+from typing import Any, Callable
 from app.agents.decentralized.compatibility.data_compat import (
     normalize_handoff_history_entry, normalize_handoff_payload, normalize_inventory_result,
 )
@@ -29,6 +30,7 @@ from app.agents.decentralized.tools.tecnico_tools import diagnosticar_problema
 from app.agents.decentralized.agents.billing import billing_node, facturacion_node, billing_tools, facturacion_tools
 from app.agents.decentralized.tools.facturacion_tools import consultar_capacidades_financieras
 from app.agents.decentralized.agents.logistics import logistics_node, logistica_node, logistics_tools, logistica_tools
+from app.agents.decentralized.agents.accountant import accountant_node
 from app.agents.decentralized.operations.logistics_operations import validate_pending_logistics_operation
 from app.agents.decentralized.operations.payment_operations import validate_pending_payment_operation
 from langgraph.runtime import Runtime
@@ -37,6 +39,8 @@ from typing_extensions import TypedDict
 
 class FinancialContext(TypedDict, total=False):
     authenticated_customer_id: int
+    authenticated_role: str
+    accounting_service_factory: Callable[[], Any] | None
     quote_action: str
     quote_proposal_id: str
     quote_conversation_id: str
@@ -150,6 +154,7 @@ AGENT_NODES = {
     "facturacion": billing_node,
     "logistica": logistics_node,
     "garantia": warranty_node,
+    "contador": accountant_node,
 }
 
 
@@ -538,6 +543,10 @@ def route_next_agent(state: AgentState):
 
 def route_entry(state: AgentState):
     """Retoma al agente activo; las conversaciones nuevas empiezan en Soporte."""
+    from app.agents.decentralized.policies.policy import latest_user_message
+    from app.application.accounting_assistant import accounting_intent
+    if accounting_intent(latest_user_message(state)):
+        return "contador"
     agent = state.get("current_agent", "soporte")
     return agent if agent in AGENT_NODES else "soporte"
 
@@ -916,6 +925,9 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         builder.add_conditional_edges("preparar_turno", route_entry,
                                       {name: name for name in AGENT_NODES})
     for agent in AGENT_NODES:
+        if agent == "contador":
+            builder.add_edge(agent, END)
+            continue
         if agent == "soporte" and ticket_writes:
             def support_route(state):
                 if tools_condition(state) == "tools":

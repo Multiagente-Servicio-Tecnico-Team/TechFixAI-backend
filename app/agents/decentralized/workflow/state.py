@@ -15,7 +15,7 @@ from app.agents.decentralized.workflow.handoffs import HandoffRecord
 
 # Identidades lógicas; soporte/tecnico conservan Atención/Hardware existentes.
 AgentName = Literal["soporte", "ventas", "tecnico", "software", "almacen",
-                    "compras", "facturacion", "logistica", "garantia"]
+                    "compras", "facturacion", "logistica", "garantia", "contador"]
 ConversationIntent = Literal["REPAIR", "SUPPORT", "SALE", "PC_BUILD",
                              "WARRANTY_CLAIM", "WARRANTY_STATUS_CHECK",
                              "INFO_QUERY", "REFUND"]

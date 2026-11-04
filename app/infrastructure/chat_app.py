@@ -27,6 +27,7 @@ from app.adapters.persistence.tickets import RepositoryTicketReader
 from app.adapters.persistence.accounting import AccountingRepositoryAdapter
 from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
 from app.application.chat import SendChatMessage
+from app.application.accounting import AccountingService
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.audio_requests import AudioRequestRegistry
 from app.application.ports import AudioTranscriber
@@ -118,6 +119,11 @@ def build_chat_app(
             guard_holder["guard"] = SessionGuard.from_env()
         return guard_holder["guard"].require_customer(request)
 
+    def require_user(request: Request) -> SessionCustomer:
+        if guard_holder["guard"] is None:
+            guard_holder["guard"] = SessionGuard.from_env()
+        return guard_holder["guard"].require_user(request)
+
     def require_admin(request: Request) -> SessionCustomer:
         if guard_holder["guard"] is None:
             guard_holder["guard"] = SessionGuard.from_env()
@@ -141,7 +147,11 @@ def build_chat_app(
             return app.state.decentralized_graph
         from app.application.errors import StorageUnavailable
         patterns["decentralized"]._graph_factory = durable_graph
-    patterns["decentralized"].configure_runtime(graph_factories=graph_factories, financial_repository=financial_repository)
+    repository_factory = accounting_repository_factory or (lambda: AccountingRepositoryAdapter())
+    patterns["decentralized"].configure_runtime(
+        graph_factories=graph_factories, financial_repository=financial_repository,
+        accounting_service_factory=lambda: AccountingService(repository_factory()),
+    )
     registry = ConversationRegistry()
     durable = DurableConversations(app, patterns["decentralized"], registry,
         conversation_owners_repository, conversation_locks) if graph_factories is None or conversation_owners_repository is not None else None
@@ -174,6 +184,7 @@ def build_chat_app(
             send_message=send_message,
             list_tickets=list_tickets,
             require_customer=require_customer,
+            require_user=require_user,
             pattern_names=PATTERN_NAMES,
             audio_message=audio_use_case,
             audio_enabled=runtime_settings.audio_transcription_enabled,
@@ -186,7 +197,6 @@ def build_chat_app(
             repository_factory=ticket_repository_factory,
         )
     )
-    repository_factory = accounting_repository_factory or (lambda: AccountingRepositoryAdapter())
     app.include_router(create_accounting_router(repository_factory, require_admin))
     purchases_factory = purchase_repository_factory or (lambda: SupplierPurchaseRepositoryAdapter())
     app.include_router(create_supplier_purchase_router(require_admin=require_admin, repository_factory=purchases_factory))

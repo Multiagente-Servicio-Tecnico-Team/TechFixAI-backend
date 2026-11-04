@@ -1,7 +1,7 @@
 # Tasks: Asistente contable común
 
 **Sources**: [spec.md](spec.md), [plan.md](plan.md), [checklist](checklists/requirements.md), constitución, specs 001/003/006 y contrato OpenAPI de 003.
-**Scope**: tareas futuras; este archivo no implementa código. D1/D2 de 003 y FR-015 de 006 son invariantes.
+**Scope**: seguimiento de tareas; este archivo no implementa código. D1/D2 de 003 y FR-015 de 006 son invariantes.
 **Stories**: US1 consulta contable; US2 ingreso y creación manual; US3 reversión.
 
 ## Phase 1 — Contrato de vista previa de chat
@@ -17,14 +17,14 @@
 **Goal**: recoger solo datos de ADMIN y aplicar las reglas deterministas de 003.
 
 - [ ] T004 [US2] Crear el caso de uso compartido de guía manual en app/application/accounting_assistant.py para fecha, concepto, detalle, category_id y 2–100 líneas con código, denominación, descripción opcional y debe/haber; no leer operaciones comerciales ni inferir valores.
-- [ ] T005 [US2] Reutilizar EntryDraft, EntryLine y validate_draft de app/domain/accounting.py desde app/application/accounting_assistant.py: Decimal/PEN, importe positivo en exactamente un lado, precisión de 003 y totales debe/haber iguales; pedir cada dato ausente o inválido.
-- [ ] T006 [US2] Aplicar en app/application/accounting_assistant.py la restricción de no inventar cuentas, importes, IGV, costos o fechas y de no derivar líneas de ventas, compras, pagos, cotizaciones, reembolsos o inventario.
+- [x] T005 [US2] Reutilizar EntryDraft, EntryLine y validate_draft de app/domain/accounting.py desde app/application/accounting_assistant.py: Decimal/PEN, importe positivo en exactamente un lado, precisión de 003 y totales debe/haber iguales; pedir cada dato ausente o inválido.
+- [x] T006 [US2] Aplicar en app/application/accounting_assistant.py la restricción de no inventar cuentas, importes, IGV, costos o fechas y de no derivar líneas de ventas, compras, pagos, cotizaciones, reembolsos o inventario.
 
 ## Phase 3 — Vista previa temporal sin escritura
 
 **Goal**: devolver la vista previa y demostrar que no crea asientos.
 
-- [ ] T007 [US2] Componer en app/application/accounting_assistant.py un resultado temporal con los datos manuales y totales validados, sin id de asiento, correlativo, estado DRAFT ni llamada a create_entry.
+- [x] T007 [US2] Componer en app/application/accounting_assistant.py un resultado temporal con los datos manuales y totales validados, sin id de asiento, correlativo, estado DRAFT ni llamada a create_entry.
 - [ ] T008 [US2] Exponer ese resultado solo a ADMIN mediante el adaptador de chat en app/adapters/api/chat.py y la salida opcional de app/chat/contract.py; evitar que el checkpoint de app/agents/decentralized/workflow/state.py conserve un borrador contable.
 - [ ] T009 [US2] Comprobar en tests/unit/application/test_accounting_assistant.py y tests/contract/patterns/test_accounting_assistant_contract.py que una solicitud de vista previa válida, incompleta o desbalanceada no invoca escritura ni cambia el libro contable.
 
@@ -32,7 +32,7 @@
 
 **Goal**: reutilizar consultas, creación por API y reversión sin duplicar rutas ni persistencia.
 
-- [ ] T010 [US1] Conectar consultas de categorías, listado con filtros y detalle al AccountingService existente de app/application/accounting.py; respetar permisos ADMIN de app/accounts/session.py y respuestas del contrato specs/003-asientos-contables/contracts/accounting.openapi.yaml.
+- [x] T010 [US1] Conectar consultas de categorías, listado con filtros y detalle al AccountingService existente de app/application/accounting.py; respetar permisos ADMIN de app/accounts/session.py y respuestas del contrato specs/003-asientos-contables/contracts/accounting.openapi.yaml.
 - [ ] T011 [US2] Mantener la creación exclusivamente en POST /api/admin/accounting/entries de app/adapters/api/accounting.py: el frontend envía el payload revisado y una Idempotency-Key UUID tras Confirmar; la API revalida sesión ADMIN, categoría, estructura y balance antes de crear CONFIRMED en una operación. No agregar confirmación a POST /api/chat.
 - [ ] T012 [US3] Conectar la consulta y solicitud de reversión con motivo al AccountingService existente de app/application/accounting.py y a POST /api/admin/accounting/entries/{entry_id}/reverse; conservar original, actor, historial e idempotencia de 003, sin nueva ruta.
 
@@ -77,3 +77,13 @@ T001 → T002 → T003 → T004–T006 → T007–T009 → T010–T012 → T013�
 - **Otros patrones**: T015/T022 requieren coordinación con sus responsables; este worktree no modifica Orquestador ni Jerárquico.
 - **PostgreSQL real**: T023 requiere entorno de prueba autorizado.
 - **Decisiones contables**: ninguna tarea de este alcance depende de aprobar cuentas, IGV o costos, porque ADMIN proporciona manualmente las líneas y 003 valida solo estructura y balance. Si se pide derivar importes o cuentas de eventos comerciales, ese trabajo queda bloqueado hasta decisión del líder/equipo contable y queda fuera de 007.
+
+## Estado backend verificado en este worktree
+
+- T004 está parcial: existe validación de datos manuales, pero la captura conversacional espera el contrato de vista previa T002/T003.
+- T012 está parcial: el nodo consulta el original y prepara una solicitud con fecha y motivo, sin ejecutar reversión. La ruta POST existente de 003 revalida ADMIN y delega al servicio contable; falta definir la interacción de confirmación entre chat y frontend.
+- T013/T014 están parciales: el nodo y la sesión ADMIN llegan al grafo, pero no se ha validado una vista previa estructurada ni el recorrido durable con PostgreSQL real.
+- T017/T018 están parciales: hay pruebas focalizadas de roles, filtros, detalle, reversión sin escritura y validación manual; faltan los escenarios de contrato indicados en esas tareas.
+- Validación focalizada ejecutada con SQLite/repositorio simulado y trazas desactivadas: 42 pruebas aprobadas; no demuestra durabilidad PostgreSQL ni el recorrido completo del grafo con PostgresSaver.
+- T021 está parcial: pruebas focalizadas confirman 401/403, actor de sesión, original conservado, replay 200 y conflicto 409 con repositorio simulado; falta comprobar la persistencia y auditoría reales en PostgreSQL.
+- Validación adicional de reversión y contador: 18 pruebas focalizadas aprobadas. La preparación del chat ya no prejuzga un asiento `REVERSED`; 003 decide si la misma fecha y razón constituyen un reintento idempotente.

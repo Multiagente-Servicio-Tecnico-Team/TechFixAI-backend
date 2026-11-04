@@ -22,7 +22,7 @@ class DurableConversations:
         if conversation_id and self.registry.known_pattern(conversation_id, customer_id) == "decentralized":
             raise PatternLocked()
 
-    def execute(self, *, customer_id, message, conversation_id=None, action=None, proposal_id=None):
+    def execute(self, *, customer_id, message, authenticated_role=None, conversation_id=None, action=None, proposal_id=None):
         if conversation_id and self.registry.known_pattern(conversation_id, customer_id) not in {None, "decentralized"}:
             raise PatternLocked()
         owners = self.owners or self.app.state.conversation_owners
@@ -46,7 +46,7 @@ class DurableConversations:
         self.registry.remember(conversation_id, customer_id, "decentralized")
         try:
             with locks.hold(owner["thread_id"]):
-                result = self.pattern.invoke_turn("decentralized", conversation_id, SimpleNamespace(id=customer_id),
+                result = self.pattern.invoke_turn("decentralized", conversation_id, SimpleNamespace(id=customer_id, role=authenticated_role),
                     message or "", thread_id=owner["thread_id"],
                     resume_payment=action == "resume_payment", resume_logistics=action == "resume_logistics",
                     resume_warranty=action == "resume_warranty",

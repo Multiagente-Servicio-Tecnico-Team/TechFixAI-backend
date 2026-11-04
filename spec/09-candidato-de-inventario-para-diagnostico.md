@@ -1,5 +1,10 @@
 # Especificación 09 — candidato de inventario para diagnóstico provisional
 
+**Estado retrospectivo: Implementada según código y evidencia histórica; depende del catálogo disponible.**
+**Evidencia revisada:** docs/12-candidato-inventario-diagnostico.md; app/agents/jerarquico/; app/database/repository.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Cuando la guía más relevante vincule de forma inequívoca un síntoma con un solo

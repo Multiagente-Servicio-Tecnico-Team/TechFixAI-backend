@@ -293,14 +293,14 @@ def test_ventas_contexto_cotizacion():
         tool_calls=[
             {
                 "name": "generar_cotizacion",
-                "args": {"servicio": "reparacion"},
+                "args": {"parts": [{"code": "SSD-512", "quantity": 1}]},
                 "id": "call-ventas",
             }
         ],
     )
 
     resultado = ToolMessage(
-        content="Precio estimado: S/ 120",
+        content='{"total_amount":"55.50","quote_type":"REPAIR"}',
         name="generar_cotizacion",
         tool_call_id="call-ventas",
     )
@@ -522,11 +522,54 @@ def test_handoff_almacen_registra_repuesto():
         {"name": "Memoria RAM 16GB DDR4 3200MHz", "quantity": 1}
     ]
     assert resultado["inventory_pending"] is True
+    assert resultado["quote_type"] == "REPAIR"
+    assert resultado["quote_task_type"] == "maintenance"
     assert resultado["handoff_count"] == 1
     assert resultado["handoff_history"] == [
         {"origen": "tecnico", "destino": "almacen"}
     ]
     assert not resultado.get("errors")
+
+
+def test_handoff_venta_a_almacen_fija_cotizacion_como_venta_directa():
+    estado = {
+        "messages": [ToolMessage(
+            content=json.dumps({
+                "accion": "CONSULTAR_DISPONIBILIDAD",
+                "consulta": "SSD 512GB NVMe",
+            }),
+            name="solicitar_inventario",
+            tool_call_id="sale-inventory-1",
+        )],
+        "handoff_count": 0,
+        "handoff_history": [],
+        "errors": [],
+    }
+
+    resultado = registrar_handoff(estado, "ventas")
+
+    assert resultado["next_agent"] == "almacen"
+    assert resultado["quote_type"] == "DIRECT_SALE"
+    assert resultado["quote_task_type"] == "sale"
+
+
+def test_handoff_tecnico_a_ventas_fija_cotizacion_de_diagnostico():
+    estado = {
+        "messages": [ToolMessage(
+            content=json.dumps({"alcance": "solo_servicio"}),
+            name="transferir_a_ventas",
+            tool_call_id="diagnosis-quote-1",
+        )],
+        "handoff_count": 0,
+        "handoff_history": [],
+        "errors": [],
+    }
+
+    resultado = registrar_handoff(estado, "tecnico")
+
+    assert resultado["next_agent"] == "ventas"
+    assert resultado["quote_type"] == "REPAIR"
+    assert resultado["quote_task_type"] == "diagnosis"
 
 
 # TEST 26: NO TRANSFERIR SIN NOMBRE DE REPUESTO

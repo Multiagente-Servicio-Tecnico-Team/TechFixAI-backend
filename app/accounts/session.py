@@ -26,6 +26,8 @@ from app.accounts.security import password_fingerprint, read_session
 
 SESSION_REQUIRED = "Inicia sesión para continuar."
 CUSTOMER_ONLY = "El chat es para clientes."
+ADMIN_ONLY = "Esta operación requiere una cuenta administradora."
+STAFF_ONLY = "Solo el personal del taller puede gestionar el inventario."
 
 
 class SessionError(Exception):
@@ -41,11 +43,13 @@ class SessionCustomer:
     last_name: str | None
     email: str
     role: str
+    phone: str = ""
+    commercial_customer_id: int | None = None
 
 
 def _to_customer(user: User) -> SessionCustomer:
     role = user.role.value if hasattr(user.role, "value") else str(user.role)
-    return SessionCustomer(id=user.id, first_name=user.name, last_name=user.last_name, email=user.email, role=role)
+    return SessionCustomer(id=user.id, first_name=user.name, last_name=user.last_name, email=user.email, role=role, phone=user.phone)
 
 
 class SessionGuard:
@@ -92,6 +96,19 @@ class SessionGuard:
         if customer.role != Role.CUSTOMER.value:
             raise SessionError(403, CUSTOMER_ONLY, "customer_only")
         return customer
+
+    def require_admin(self, request: Request) -> SessionCustomer:
+        administrator = self.require_user(request)
+        if administrator.role != Role.ADMIN.value:
+            raise SessionError(403, ADMIN_ONLY, "admin_only")
+        return administrator
+
+    def require_staff(self, request: Request) -> SessionCustomer:
+        """Permite a ADMIN y TECHNICIAN; mantiene a CUSTOMER fuera del panel de inventario."""
+        staff = self.require_user(request)
+        if staff.role not in {Role.ADMIN.value, Role.TECHNICIAN.value}:
+            raise SessionError(403, STAFF_ONLY, "staff_only")
+        return staff
 
     @staticmethod
     def install(app: FastAPI) -> None:

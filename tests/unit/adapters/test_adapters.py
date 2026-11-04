@@ -92,9 +92,10 @@ def test_decentralized_resets_turn_control_and_never_offers_quotes():
     reply = pattern.reply("conv-2", 3, "Hola")
 
     state = graph.calls[0][0]
-    assert not pattern.supports_quotes and reply.quote is None
+    assert pattern.supports_quotes and reply.quote is None
     assert state["turn_start_index"] == 2 and state["handoff_count"] == 0 and state["next_agent"] is None
-    assert "customer_id" not in state
+    assert state["customer_id"] == 3
+    assert state["conversation_id"] == "conv-2"
 
 
 @pytest.mark.parametrize(

@@ -10,6 +10,9 @@ from app.agents.decentralized.soporte import soporte_node, soporte_tools
 from app.agents.decentralized.tecnico import tecnico_node, tecnico_tools
 from app.agents.decentralized.ventas import ventas_node, ventas_tools
 from app.agents.decentralized.almacen import almacen_node, almacen_tools
+from app.agents.decentralized.compras import procurement_node
+from app.agents.refund_requests import make_refund_agent
+from app.database.repository import ServiceRepository
 
 MAX_HANDOFFS = 5
 MAX_TOOL_ITERATIONS = 6
@@ -20,6 +23,8 @@ HANDOFF_TOOLS = {
     "transferir_a_tecnico": "tecnico",
     "transferir_a_ventas": "ventas",
     "transferir_a_almacen": "almacen",
+    "transferir_a_reembolsos": "reembolsos",
+    "transferir_a_compras": "compras",
 }
 
 
@@ -111,7 +116,8 @@ def registrar_handoff(state: AgentState, origen: str):
                     historial.append({"origen": "ventas", "destino": "almacen"})
                     return {"next_agent": "almacen", "inventory_query": datos["consulta"],
                             "handoff_count": contador + 1, "handoff_history": historial,
-                            "tool_iterations": iteraciones}
+                            "tool_iterations": iteraciones,
+                            "quote_type": "DIRECT_SALE", "quote_task_type": "sale"}
 
     if destino == origen:
         errores.append("Transferencia al mismo agente")
@@ -218,8 +224,12 @@ def registrar_handoff(state: AgentState, origen: str):
         actualizacion["required_parts"] = repuestos
         actualizacion["inventory_pending"] = True
         actualizacion["quote_scope"] = "repuestos"
+        actualizacion["quote_type"] = "REPAIR"
+        actualizacion["quote_task_type"] = "maintenance"
     elif origen == "tecnico" and destino == "ventas":
         actualizacion["quote_scope"] = "solo_servicio"
+        actualizacion["quote_type"] = "REPAIR"
+        actualizacion["quote_task_type"] = "diagnosis"
     elif origen == "almacen" and destino == "ventas":
         actualizacion["quote_scope"] = "repuestos"
     return actualizacion
@@ -344,6 +354,8 @@ for name, node in (
     ("tecnico", tecnico_node),
     ("ventas", ventas_node),
     ("almacen", almacen_node),
+    ("reembolsos", make_refund_agent(ServiceRepository())),
+    ("compras", procurement_node),
 ):
     builder.add_node(name, node)
 
@@ -389,6 +401,8 @@ rutas = {
     "tecnico": "tecnico",
     "almacen": "almacen",
     "ventas": "ventas",
+    "reembolsos": "reembolsos",
+    "compras": "compras",
     "finalizar": END,
 }
 for auditor in (
@@ -396,6 +410,9 @@ for auditor in (
     "auditar_almacen", "auditar_ventas",
 ):
     builder.add_conditional_edges(auditor, route_next_agent, rutas)
+
+builder.add_edge("reembolsos", END)
+builder.add_edge("compras", END)
 
 
 def build_graph(*, checkpointer=None):

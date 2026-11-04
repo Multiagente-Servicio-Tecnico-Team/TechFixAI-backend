@@ -1,5 +1,10 @@
 # Especificación 08 — resiliencia del triage jerárquico
 
+**Estado retrospectivo: Implementada según evidencia histórica; no se reejecutaron pruebas en esta revisión.**
+**Evidencia revisada:** docs/11-resiliencia-triage-jerarquico.md; app/agents/jerarquico/supervisor.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Evitar que una clasificación válida de servicio falle con HTTP 502 cuando el

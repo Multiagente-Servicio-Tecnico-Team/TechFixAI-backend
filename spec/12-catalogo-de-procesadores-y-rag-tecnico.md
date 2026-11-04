@@ -1,5 +1,10 @@
 # Spec 12 — Consulta comercial de catálogo y RAG técnico
 
+**Estado retrospectivo: Implementada según evidencia; el comportamiento de búsqueda se amplió a otras familias.**
+**Evidencia revisada:** docs/15-catalogo-procesadores-y-rag-tecnico.md; app/agents/jerarquico/
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 ## Adenda — intención de catálogo para cualquier familia (2026-10-13)

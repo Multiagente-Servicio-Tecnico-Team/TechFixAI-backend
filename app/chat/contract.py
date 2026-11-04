@@ -44,4 +44,9 @@ class ChatOut(BaseModel):
     reply: str
     pattern: Literal["hierarchical", "orchestrator", "decentralized"] = "hierarchical"
     quote: QuoteOut | None = None
+    quote_id: int | None = None
     ticket: TicketOut | None = None
+
+
+class AudioChatOut(ChatOut):
+    transcript: str = Field(min_length=1, max_length=2000)

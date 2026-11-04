@@ -1,5 +1,10 @@
 # Arquitectura de red descentralizada
 
+**Estado retrospectivo: Histórica / parcial — describe la rama aislada; confirmar diferencias con develop.**
+**Evidencia revisada:** app/agents/decentralized/; features.md; esta especificación
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo y alcance
 
 El módulo atiende consultas de soporte, diagnóstico técnico, disponibilidad de repuestos y cotización mediante cuatro agentes implementados en Python y LangGraph. Esta descripción corresponde al código de la rama `patron-red-rag-aislado`. La integración con el frontend del equipo todavía debe verificarse.

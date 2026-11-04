@@ -6,7 +6,10 @@ from langchain_core.messages import HumanMessage
 from app.adapters.patterns.base import GraphPattern, last_message_text
 from app.domain.chat import PatternReply, Quote, QuoteLine, TicketRef
 
-QUOTE_STATUS_BY_OUTCOME = {"awaiting_confirmation": "proposed", "declined": "rejected"}
+QUOTE_STATUS_BY_OUTCOME = {
+    "awaiting_confirmation": "proposed", "declined": "rejected",
+    "direct_sale_accepted": "confirmed",
+}
 TICKET_OUTCOMES = {"quoted", "warranty_claim_registered"}
 LABOR_LABELS = {"diagnosis": "Diagnóstico técnico", "pc_build": "Ensamble"}
 
@@ -31,6 +34,7 @@ class HierarchicalPattern(GraphPattern):
             quote=self.quote(result),
             ticket=self.ticket(result),
             pending_quote=result.get("outcome") == "awaiting_confirmation",
+            quote_id=result.get("quote_id"),
         )
 
     @staticmethod

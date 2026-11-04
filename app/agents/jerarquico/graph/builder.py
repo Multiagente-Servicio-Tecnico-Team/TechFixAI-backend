@@ -1,6 +1,5 @@
 from typing import Any
 
-from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
@@ -10,6 +9,7 @@ from app.agents.jerarquico.knowledge_retrieval import (
 from app.agents.jerarquico.agents.billing import make_billing_agent
 from app.agents.jerarquico.agents.faq import MarkdownFaqRetriever, make_faq_agent
 from app.agents.jerarquico.agents.logistics import make_logistics_agent
+from app.agents.refund_requests import make_refund_agent
 from app.agents.jerarquico.agents.procurement import purchasing_agent
 from app.agents.jerarquico.agents.teams import make_team_supervisor
 from app.agents.jerarquico.agents.warranty import (
@@ -21,9 +21,10 @@ from app.agents.jerarquico.retriever import MarkdownKnowledgeRetriever
 from app.agents.jerarquico.sales import make_sales_agent, quote_suggestion_response
 from app.agents.jerarquico.supervisor import make_customer_care_supervisor
 from app.agents.jerarquico.technical_support import make_technical_support_agent
-from app.agents.jerarquico.trace import traced_node
+from app.agents.jerarquico.trace import traced_node, traced_tool
 from app.agents.jerarquico.warehouse import make_warehouse_agent
 from app.database.repository import ServiceRepository
+from app.adapters.llm.model_factory import create_model
 from app.agents.jerarquico.graph.routing import (
     after_inventory,
     after_logistics,
@@ -49,11 +50,7 @@ def build_multiagent_graph(
     repository = repository or ServiceRepository()
     retriever = retriever or MarkdownKnowledgeRetriever()
     faq_retriever = MarkdownFaqRetriever()
-    llm = model or ChatGroq(
-        model=settings.groq_model,
-        api_key=settings.groq_api_key,
-        temperature=0,
-    )
+    llm = model or create_model(settings)
 
     graph = StateGraph(ServiceState)
     graph.add_node(
@@ -92,6 +89,10 @@ def build_multiagent_graph(
     graph.add_node(
         "warranty_agent",
         traced_node("warranty_agent", make_warranty_agent(repository)),
+    )
+    graph.add_node(
+        "refund_agent",
+        traced_node("refund_agent", make_refund_agent(repository, trace_tool=traced_tool)),
     )
     graph.add_node(
         "order_completion_agent",
@@ -167,6 +168,8 @@ def build_multiagent_graph(
             "technical_team_supervisor": "technical_team_supervisor",
             "commercial_team_supervisor": "commercial_team_supervisor",
             "operations_team_supervisor": "operations_team_supervisor",
+            "refund_agent": "refund_agent",
+            "purchasing_agent": "purchasing_agent",
             "faq_agent": "faq_agent",
             "knowledge_retrieval": "knowledge_retrieval",
             "warehouse_agent": "warehouse_agent",
@@ -192,6 +195,7 @@ def build_multiagent_graph(
     )
     graph.add_edge("faq_agent", END)
     graph.add_edge("warranty_agent", END)
+    graph.add_edge("refund_agent", END)
     graph.add_conditional_edges(
         "logistics_agent",
         after_logistics,

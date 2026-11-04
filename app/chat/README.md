@@ -13,6 +13,10 @@ escrito en el chat.
 | `app/adapters/patterns/` | Un adaptador por patrón LangGraph (puerto `ChatPattern`); para sumar un patrón se agrega su adaptador al registro |
 | `app/chat/reference.py` | API de referencia independiente para probar el contrato |
 
+| `app/application/audio_chat.py` | Transcribe y delega en el mismo caso de uso del chat escrito |
+| `app/adapters/speech/groq.py` | Adaptador Groq Whisper con errores seguros |
+| `app/infrastructure/request_limits.py` | Limite incremental del cuerpo multipart |
+
 ## Contrato `POST /api/chat`
 
 Petición (cookie `techfix_session` obligatoria):
@@ -49,6 +53,23 @@ Respuesta `200`:
 | `502` | Error procesando con el proveedor LLM o el patrón |
 | `503` | Base de datos o almacenamiento no disponibles |
 
+## Contrato de audio `POST /api/chat/audio`
+
+La ruta usa la misma sesion autenticada y acepta `audio`, `duration_ms`, `pattern`,
+`request_id` y opcionalmente `conversation_id` como `multipart/form-data`. El resultado
+agrega `transcript` a los campos habituales de `ChatOut`. Solo admite audio hasta 25 MB
+y 120 segundos; una cuota de cinco envios por minuto y la idempotencia por cliente
+protegen las llamadas a Groq. El arranque exige ocultar inputs y outputs de LangSmith
+si el tracing esta activo.
+
+`AUDIO_TRANSCRIPTION_ENABLED` vale `false` por defecto. Para activar voz, configura
+esa bandera y `GROQ_API_KEY`; revisa timeout y limites en `.env.example`. El archivo
+se procesa temporalmente y se cierra al terminar. El endpoint no cambia `POST /api/chat`.
+
+El contrato canonico es
+[`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](../../specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml).
+La tarea frontend se implementa y valida en el repositorio hermano.
+
 ## API integrada
 
 El punto de entrada recomendado ejecuta cuentas y chat en el mismo servidor:
@@ -56,6 +77,17 @@ El punto de entrada recomendado ejecuta cuentas y chat en el mismo servidor:
 ```bash
 .venv/Scripts/python -m uvicorn app.main:app --host localhost --port 8000
 ```
+
+## API administrativa de tickets
+
+- `GET /api/admin/customers?email=...`: busca una cuenta cliente activa para asociarla al alta manual.
+- `GET /api/admin/tickets`: lista tickets; admite filtros `status`, `request_type`, `search`, `limit` y `offset`.
+- `GET /api/admin/tickets/{id}`: obtiene detalle.
+- `POST /api/admin/tickets`: crea un ticket asociado a `customer_email`.
+- `PATCH /api/admin/tickets/{id}`: actualiza solo los campos enviados.
+- `DELETE /api/admin/tickets/{id}`: elimina físicamente el ticket y las relaciones con borrado en cascada.
+
+Todas las rutas requieren sesión `techfix_session` de usuario activo con rol `ADMIN`; rol `TECHNICIAN` no concede acceso. La guía paso a paso para Postman está en `contexto/CRUD-tickets-admin-postman.md`.
 
 Las rutas de cuentas quedan bajo `/auth/*`; el chat conserva `/api/chat` y
 `/api/chat/patterns`. Este es el punto de entrada recomendado para el backend

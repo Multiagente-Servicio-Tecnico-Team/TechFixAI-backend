@@ -18,6 +18,7 @@ from sqlalchemy.orm import sessionmaker
 from app.accounts.api import create_app as create_accounts_app
 from app.accounts.config import Settings as AccountSettings
 from app.accounts.session import SessionGuard
+from app.adapters.api.customers import create_customer_router
 from app.adapters.llm.tracing import get_trace_context, redact_trace_error
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
 from app.adapters.patterns.registry import PATTERN_NAMES
@@ -38,6 +39,7 @@ def create_app(
     settings_factory: Callable[[], Settings] = load_settings,
     trace_context_factory: TraceContextFactory | None = None,
     ticket_repository_factory: Callable[[], Any] | None = None,
+    accounting_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     load_dotenv()
     account_settings = settings or (session_guard.settings if session_guard else AccountSettings.from_env())
@@ -56,8 +58,10 @@ def create_app(
         settings_factory=settings_factory,
         trace_context_factory=trace_context_factory,
         ticket_repository_factory=ticket_repository_factory,
+        accounting_repository_factory=accounting_repository_factory,
     )
     application.mount("/auth", accounts_app)
+    application.include_router(create_customer_router(require_admin=shared_guard.require_admin))
     return application
 
 

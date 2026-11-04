@@ -33,15 +33,38 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Patrón Jerárquico (ventas, soporte, almacén, garantía, logística) | `app/agents/jerarquico/` | Funciona; ver pendientes | `test_hierarchical_workflows.py`, `test_multiagent_graph.py` |
 | Patrón Orquestador / supervisor | `app/agents/orquestador/` | Cotiza; guardar ticket falla (ver pendientes) | `test_graph_confirmation.py`, `test_quotes.py` |
 | Red descentralizada | `app/agents/decentralized/` | Herramientas simuladas en `develop` | `test_decentralized*.py`, `test_conversation.py` |
-| «Mis Tickets» del cliente `GET /api/customer/tickets` | `app/main.py`, `app/database/repository.py` | Falla con tickets presupuestados (ver pendientes) | `test_portal.py` |
+| «Mis Tickets» del cliente `GET /api/customer/tickets` | `app/adapters/api/chat.py`, `app/database/repository.py` | Verificado contra `multiagentedb`: `200`, 12 tickets; 3 con líneas de cotización | Smoke de ruta con cliente inyectado; falta una prueba PostgreSQL automatizada |
+| CRUD administrativo de tickets (`/api/admin/tickets`) | `app/adapters/api/admin_tickets.py`, `app/database/repository.py`, `app/accounts/session.py` | Implementado; requiere esquema completo y rol ADMIN | Guía Postman en `contexto/CRUD-tickets-admin-postman.md` |
+| CRUD de inventario (`/api/inventory/parts`, `/api/inventory/categories`) | `app/adapters/api/inventory.py`, `app/application/inventory.py`, `app/adapters/persistence/inventory.py`, `app/domain/inventory.py` | Implementado; sesiones de personal ADMIN/TECHNICIAN; usa `spare_parts` y respeta referencias de presupuestos | `tests/contract/test_inventory_contract.py`, `tests/integration/test_inventory_api.py` |
 | Trazas en LangSmith (contenido oculto) | `app/main.py` | Listo; se activa con `LANGSMITH_TRACING` | `test_api.py` |
 | Trazas locales del Jerárquico | `app/agents/jerarquico/trace.py` | Listo | `test_hierarchical_tracing.py` |
 | Correo de recuperación (SMTP u outbox local) | `app/accounts/mailer.py`, `app/email/` | Listo | `test_accounts_recovery.py` |
 | Búsqueda en conocimiento (RAG) | `app/rag/`, retrievers por patrón | Listo | `test_retriever.py`, `test_knowledge_base.py` |
 
+| Chat autenticado por voz `POST /api/chat/audio` | `app/application/audio_chat.py`, `app/adapters/speech/`, `app/adapters/api/chat.py` | Backend implementado; desactivado por defecto | `test_audio_chat_api.py`, `test_audio_chat_patterns.py` |
+| Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
+
 ## Pendientes conocidos
 
-- **Esquema SQL incompleto:** `sql/creacion_tablas_ingles_sin_inserciones.sql` no crea `quote_details.custom_item_name`, `diagnosis_type_enum` ni las columnas de diagnóstico. Efecto: «Mis Tickets» responde 503 con tickets presupuestados y el Jerárquico responde 503 al guardar el diagnóstico.
+- El backend entrega todas las categorías activas por `/api/inventory/categories`; el frontend actual todavía tiene cinco opciones fijas y debe consumir esta ruta para exponer toda la taxonomía de la base de datos.
+
+### Patrones multiagente coherentes (Spec Kit)
+
+### Asientos contables internos (Spec Kit)
+
+La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. La migración aditiva está en `sql/migrations/003_accounting_entries.sql`; se aplicó y verificó en la BD de prueba `multiagentedb` indicada explícitamente para la ejecución.
+
+Estado de esta iteración: en progreso en `feature/spec-kit`. Se conservan los tres grafos para comparación académica. El perfil Groq se centralizó y se añadieron escenarios/contratos iniciales.
+
+El cálculo Decimal de cotizaciones ahora tiene un único caso de uso compartido entre Jerárquico y Orquestador. La validación de consulta del catálogo se centralizó para Orquestador y la Red Descentralizada; la integración del mismo puerto en Jerárquico y la ejecución uniforme de cotizaciones todavía están pendientes.
+
+- El RAG común tiene manifiesto de fuentes, metadatos de confianza y procedencia, chunks deterministas y colección Chroma versionada. FAQ Jerárquico y recuperación técnica Orquestador llaman al contrato común. La recuperación técnica estructurada del Jerárquico todavía requiere integración de procedencia; la búsqueda semántica aún requiere validación con el modelo descargado.
+- Las FAQ del manual de Jerárquico están marcadas como demostrativas. Las respuestas no deben presentar ubicación, horarios, tarifas o medios de pago de ese archivo como datos reales.
+- La solicitud de reembolso puede registrarse transaccionalmente como `REQUESTED` tras validar titularidad, pago completado, saldo y duplicados. Falta conectar la conversación a esa operación en los tres patrones; no hay aprobación ni movimiento de dinero automático.
+- La compra externa permanece no disponible. No existe una relación de ofertas confiables proveedor-artículo-precio-plazo.
+- No se declara paridad de capacidades: la Red Descentralizada aún conserva herramientas simuladas y Orquestador no cubre todos los flujos de Jerárquico. El avance restante está enumerado en `specs/001-patrones-multiagente-coherentes/tasks.md`.
+
+- **Esquema de bootstrap:** `sql/creacion_tablas_ingles_sin_inserciones.sql` es legado y omite objetos actuales. `contexto/tablas postgres v2.sql` se generó desde `multiagentedb` el 2026-11-03 y elimina/recrea los objetos exportados del esquema `public`; usar solo en una BD reinicializable. Para conservar datos, aplicar migraciones. “Mis Tickets” devolvió 200 contra la BD de referencia y serializó los tickets cotizados.
 - **Orquestador al aceptar:** `app/agents/orquestador/agentes/ventas.py` espera 4 valores de `create_ticket_with_quote` y `app/database/repository.py` devuelve 3 (`ValueError`, 502).
 - **Botón «No guardar»:** la API envía «No, rechazo el presupuesto»; el Orquestador `develop` solo reconoce «no», «rechazo», «cancelar»… La rama `alonso_orquestador` ya acepta frases que empiezan con «no, ».
 - **`GROQ_MODEL`:** sin esa variable el Jerárquico no arranca y el Orquestador usa `llama-3.3-70b-versatile`, que Groq ya no reconoce. Usar `openai/gpt-oss-20b`.

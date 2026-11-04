@@ -1,10 +1,11 @@
 from dotenv import load_dotenv
+import re
 from app.rag.tools import consultar_base_conocimiento
 from app.config import create_chat_model
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from app.agents.decentralized.workflow.state import AgentState
 from app.agents.decentralized.policies.policy import is_diagnostic_pricing_query, latest_user_message, handoff, cannot_perform_checks, is_customer_service_query
-from app.agents.decentralized.policies.policy import classify_support_triage, is_handoff_without_progress, has_reported_physical_hazard
+from app.agents.decentralized.policies.policy import classify_support_triage, is_handoff_without_progress, has_reported_physical_hazard, normalize_text
 from app.agents.decentralized.tools.hardware_handoff_tools import (
     transfer_to_support, transfer_to_software, transfer_to_sales, transfer_to_warehouse, transfer_to_logistics,
 )
@@ -224,6 +225,17 @@ def hardware_node(state: AgentState):
             "ni entrar a Windows o al BIOS. Sin una revisión no puedo confirmar la causa ni un repuesto. "
             "Te recomiendo revisión presencial. Si quieres, puedes preguntar por el precio de un diagnóstico; "
             "no se ha reservado una cita."
+        ))]}
+
+    # El tipo de equipo determina la siguiente comprobacion externa segura.
+    # La descripcion de intake es un dato proporcionado por el usuario; no se infiere del sintoma.
+    equipment = normalize_text(str((state.get("intake") or {}).get("equipment") or ""))
+    reported = normalize_text(user)
+    known_device = re.search(r"\b(laptop|portatil|notebook|escritorio|desktop|pc)\b", equipment + " " + reported)
+    if classification == "tecnico" and not known_device:
+        return {"current_agent": "tecnico", "messages": [AIMessage(content=(
+            "Para orientar el diagnostico preliminar de ese sintoma, "
+            "¿es una laptop o una computadora de escritorio? Aun no puedo confirmar la causa."
         ))]}
 
     messages = [

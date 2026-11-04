@@ -22,7 +22,7 @@ class CustomerRepositoryAdapter:
         self._session_factory = session_factory
 
     def list_customers(self, *, search: str | None = None, origin: str | None = None, limit: int = 50, offset: int = 0):
-        predicates = ["(:origin IS NULL OR c.origin = :origin)"]
+        predicates = ["(CAST(:origin AS text) IS NULL OR c.origin = CAST(:origin AS text))"]
         params: dict[str, object] = {"origin": origin, "limit": limit, "offset": offset}
         if search:
             predicates.append("(c.display_name ILIKE :search OR c.phone ILIKE :search OR c.email ILIKE :search)")

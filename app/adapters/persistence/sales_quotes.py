@@ -366,7 +366,7 @@ class SalesQuoteRepositoryAdapter:
                 VALUES (NULL,:quote,NULL,:customer,:code,:amount,'PENDING') RETURNING id,payment_code"""), {
                 "quote": quote_id, "customer": customer_id, "code": f"PAY-{uuid4().hex[:16].upper()}",
                 "amount": quote["total_amount"],
-            })
+            }).mappings().one()
             fields = '{"status":"ACCEPTED","reservation":"RESERVED"}'
             if confirmation_channel:
                 import json

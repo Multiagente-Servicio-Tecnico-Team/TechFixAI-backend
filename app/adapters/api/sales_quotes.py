@@ -102,7 +102,7 @@ def create_sales_quote_router(*, require_admin: Callable[..., SessionCustomer],
                 confirmation_channel=body.confirmation_channel, notes=body.notes)
             if result.get("error"):
                 raise HTTPException(409, result["error"])
-            return result
+            return {"quote": repo.get_sales_quote(quote_id), **result}
         except HTTPException:
             raise
         except PermissionError as exc:
@@ -144,12 +144,13 @@ def create_sales_quote_router(*, require_admin: Callable[..., SessionCustomer],
                               customer: SessionCustomer = Depends(require_customer)):
         customer_id = customer.commercial_customer_id or customer.id
         try:
-            result = make_repository().accept_direct_sales_quote(
+            repo = make_repository()
+            result = repo.accept_direct_sales_quote(
                 quote_id=quote_id, customer_id=customer_id,
                 actor_user_id=customer.id, idempotency_key=idempotency_key)
             if result.get("error"):
                 raise HTTPException(409, result["error"])
-            return result
+            return {"quote": repo.get_sales_quote(quote_id, customer_id=customer_id), **result}
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from exc
         except PermissionError as exc:
@@ -163,9 +164,11 @@ def create_sales_quote_router(*, require_admin: Callable[..., SessionCustomer],
     def admin_cancel_quote(quote_id: int, body: QuoteCancellation,
                            admin: SessionCustomer = Depends(require_admin)):
         try:
-            return make_repository().resolve_direct_sales_quote(
+            repo = make_repository()
+            result = repo.resolve_direct_sales_quote(
                 quote_id=quote_id, customer_id=None, actor_user_id=admin.id,
                 target_status="CANCELLED", notes=body.notes)
+            return {"quote": repo.get_sales_quote(quote_id), **result}
         except LookupError as exc:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
@@ -231,9 +234,10 @@ def create_sales_quote_router(*, require_admin: Callable[..., SessionCustomer],
                     actor_user_id=customer.id, idempotency_key=idempotency_key)
                 if result.get("error"):
                     raise HTTPException(409, result["error"])
-                return result
-            return repo.accept_service_quote(quote_id=quote_id, customer_id=customer_id,
-                actor_user_id=customer.id)
+            else:
+                result = repo.accept_service_quote(quote_id=quote_id, customer_id=customer_id,
+                    actor_user_id=customer.id)
+            return {"quote": repo.get_commercial_quote(quote_id, customer_id=customer_id), **result}
         except HTTPException:
             raise
         except LookupError as exc:

@@ -31,6 +31,7 @@ class Quote:
     lines: tuple[QuoteLine, ...]
     total: Decimal
     currency: str = CURRENCY
+    proposal_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "lines", tuple(self.lines))

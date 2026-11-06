@@ -69,7 +69,7 @@ def generar_cotizacion(
     state: Annotated[AgentState, InjectedState()],
 ) -> dict[str, object]:
     """Calcula importes con catálogo/precios compartidos y contexto autenticado."""
-    customer_id = state.get("customer_id")
+    customer_id = state.get("commercial_customer_id") or state.get("customer_id")
     conversation_id = state.get("conversation_id", "")
     task_type = state.get("quote_task_type")
     quote_types = {

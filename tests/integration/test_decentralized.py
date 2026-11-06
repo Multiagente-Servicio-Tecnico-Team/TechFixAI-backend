@@ -57,7 +57,7 @@ def test_registrar_handoff():
     assert resultado["next_agent"] == "ventas"
     assert resultado["handoff_count"] == 1
     assert resultado["handoff_history"] == [
-        {"origen": "soporte", "destino": "ventas"}
+        {"origin": "soporte", "destination": "ventas"}
     ]
 
 
@@ -522,16 +522,15 @@ def test_handoff_almacen_registra_repuesto():
         {"name": "Memoria RAM 16GB DDR4 3200MHz", "quantity": 1}
     ]
     assert resultado["inventory_pending"] is True
-    assert resultado["quote_type"] == "REPAIR"
-    assert resultado["quote_task_type"] == "maintenance"
+    assert resultado["quote_scope"] == "repuestos"
     assert resultado["handoff_count"] == 1
     assert resultado["handoff_history"] == [
-        {"origen": "tecnico", "destino": "almacen"}
+        {"origin": "tecnico", "destination": "almacen"}
     ]
     assert not resultado.get("errors")
 
 
-def test_handoff_venta_a_almacen_fija_cotizacion_como_venta_directa():
+def test_handoff_venta_a_almacen_registra_consulta_sin_inferir_cotizacion():
     estado = {
         "messages": [ToolMessage(
             content=json.dumps({
@@ -549,11 +548,11 @@ def test_handoff_venta_a_almacen_fija_cotizacion_como_venta_directa():
     resultado = registrar_handoff(estado, "ventas")
 
     assert resultado["next_agent"] == "almacen"
-    assert resultado["quote_type"] == "DIRECT_SALE"
-    assert resultado["quote_task_type"] == "sale"
+    assert resultado["inventory_query"] == "SSD 512GB NVMe"
+    assert "quote_type" not in resultado
 
 
-def test_handoff_tecnico_a_ventas_fija_cotizacion_de_diagnostico():
+def test_handoff_tecnico_a_ventas_requiere_evaluacion_para_cotizar():
     estado = {
         "messages": [ToolMessage(
             content=json.dumps({"alcance": "solo_servicio"}),
@@ -567,9 +566,8 @@ def test_handoff_tecnico_a_ventas_fija_cotizacion_de_diagnostico():
 
     resultado = registrar_handoff(estado, "tecnico")
 
-    assert resultado["next_agent"] == "ventas"
-    assert resultado["quote_type"] == "REPAIR"
-    assert resultado["quote_task_type"] == "diagnosis"
+    assert resultado["next_agent"] == "finalizar"
+    assert "quote_type" not in resultado
 
 
 # TEST 26: NO TRANSFERIR SIN NOMBRE DE REPUESTO

@@ -38,6 +38,8 @@ from app.application.conversations import ConversationRegistry
 from app.application.tickets import ListCustomerTickets
 from app.application.customer_profiles import CustomerProfileService
 from app.settings import Settings, load_settings
+from app.infrastructure.decentralized_runtime import create_lifespan
+from app.adapters.patterns.durable_conversations import DurableConversations
 from app.infrastructure.request_limits import RequestBodyLimitMiddleware
 
 MESSAGES_PER_MINUTE = 20
@@ -55,8 +57,18 @@ def build_chat_app(
     inventory_repository_factory: Callable[[], Any] | None = None,
     purchase_repository_factory: Callable[[], Any] | None = None,
     sales_repository_factory: Callable[[], Any] | None = None,
+    customer_profile_resolver: Callable[[SessionCustomer], SessionCustomer] | None = None,
+    checkpoint_resources_factory=None,
+    financial_repository=None,
+    conversation_owners_repository=None,
+    conversation_locks=None,
 ) -> FastAPI:
-    app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0")
+    app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0", lifespan=create_lifespan(
+        graph_factories=graph_factories, checkpoint_resources_factory=checkpoint_resources_factory, financial_repository=financial_repository))
+    app.state.decentralized_graph = None
+    app.state.checkpoint_resources = None
+    app.state.conversation_owners = conversation_owners_repository
+    app.state.conversation_locks = conversation_locks
     runtime_settings = settings_factory()
     account_settings = session_guard.settings if session_guard is not None else AccountSettings.from_env()
     app.add_middleware(
@@ -112,7 +124,11 @@ def build_chat_app(
     def require_customer(request: Request) -> SessionCustomer:
         if guard_holder["guard"] is None:
             guard_holder["guard"] = SessionGuard.from_env()
-        user = guard_holder["guard"].require_customer(request)
+        return guard_holder["guard"].require_customer(request)
+
+    def resolve_commercial_customer(user: SessionCustomer) -> SessionCustomer:
+        if customer_profile_resolver is not None:
+            return customer_profile_resolver(user)
         profile = CustomerProfileService(CustomerRepositoryAdapter()).resolve_session_customer(user)
         return replace(user, commercial_customer_id=int(profile["id"]))
 
@@ -131,9 +147,22 @@ def build_chat_app(
         settings_factory=settings_factory,
         trace_context_factory=trace_context_factory,
     )
+    app.state.patterns = patterns
+    if graph_factories is None:
+        def durable_graph():
+            if app.state.decentralized_graph is None:
+                raise StorageUnavailable()
+            return app.state.decentralized_graph
+        from app.application.errors import StorageUnavailable
+        patterns["decentralized"]._graph_factory = durable_graph
+    patterns["decentralized"].configure_runtime(graph_factories=graph_factories, financial_repository=financial_repository)
+    registry = ConversationRegistry()
+    durable = DurableConversations(app, patterns["decentralized"], registry,
+        conversation_owners_repository, conversation_locks) if graph_factories is None or conversation_owners_repository is not None else None
     send_message = SendChatMessage(
         patterns=patterns,
-        conversations=ConversationRegistry(),
+        conversations=registry,
+        durable_conversations=durable,
         limiter=LoginLimiter(MESSAGES_PER_MINUTE, 60),
     )
     list_tickets = ListCustomerTickets(lambda: RepositoryTicketReader(ticket_repository_factory))
@@ -159,6 +188,8 @@ def build_chat_app(
             send_message=send_message,
             list_tickets=list_tickets,
             require_customer=require_customer,
+            resolve_commercial_customer=resolve_commercial_customer,
+            resolve_decentralized_profile=graph_factories is None,
             pattern_names=PATTERN_NAMES,
             audio_message=audio_use_case,
             audio_enabled=runtime_settings.audio_transcription_enabled,

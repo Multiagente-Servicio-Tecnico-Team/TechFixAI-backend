@@ -13,7 +13,7 @@ from app.application.audio_chat import SendAudioChatMessage
 from app.application.errors import (
     AudioIdempotencyConflict, AudioQuotaExceeded, AudioRequestError,
     AudioTranscriptionTimeout, AudioUnavailable,
-    PatternFailure, RateLimited, StorageUnavailable,
+    PatternFailure, RateLimited, StorageUnavailable, ConversationActionError,
 )
 from app.application.tickets import ListCustomerTickets
 from app.chat.contract import AudioChatOut, ChatIn, ChatOut, QuoteLine, QuoteOut, TicketOut
@@ -35,6 +35,8 @@ def create_chat_router(
     send_message: SendChatMessage,
     list_tickets: ListCustomerTickets,
     require_customer: Callable[[Request], SessionCustomer],
+    resolve_commercial_customer: Callable[[SessionCustomer], SessionCustomer] | None = None,
+    resolve_decentralized_profile: bool = False,
     pattern_names: Mapping[str, str],
     audio_message: SendAudioChatMessage | None = None,
     audio_enabled: bool = False,
@@ -49,6 +51,8 @@ def create_chat_router(
 
     @router.get("/api/customer/tickets")
     def customer_tickets(customer: SessionCustomer = Depends(require_customer)):
+        if resolve_commercial_customer is not None:
+            customer = resolve_commercial_customer(customer)
         customer_id = customer.commercial_customer_id or customer.id
         try:
             tickets = list_tickets.execute(customer_id)
@@ -58,6 +62,8 @@ def create_chat_router(
 
     @router.post("/api/customer/tickets", status_code=201)
     def create_customer_ticket(body: PortalTicketCreate, customer: SessionCustomer = Depends(require_customer)):
+        if resolve_commercial_customer is not None:
+            customer = resolve_commercial_customer(customer)
         if create_portal_ticket is None:
             raise HTTPException(status_code=503, detail="La creación de tickets no está disponible.")
         try:
@@ -77,13 +83,21 @@ def create_chat_router(
     @router.post("/api/chat", response_model=ChatOut, response_model_exclude_none=True)
     def chat(body: ChatIn, customer: SessionCustomer = Depends(require_customer)):
         try:
+            if resolve_commercial_customer is not None and (
+                body.pattern != "decentralized" or resolve_decentralized_profile
+            ):
+                customer = resolve_commercial_customer(customer)
             turn = send_message.execute(
-                customer_id=customer.commercial_customer_id or customer.id,
+                customer_id=customer.id if body.pattern == "decentralized" else getattr(customer, "commercial_customer_id", None) or customer.id,
                 pattern=body.pattern,
                 message=body.message,
                 action=body.action,
                 conversation_id=body.conversation_id,
+                proposal_id=body.proposal_id,
+                commercial_customer_id=getattr(customer, "commercial_customer_id", None) if body.pattern == "decentralized" else None,
             )
+        except ConversationActionError as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
         except RateLimited as exc:
             return JSONResponse(status_code=429, content={"detail": exc.detail})
         except DomainError as exc:
@@ -123,16 +137,21 @@ def create_chat_router(
                 "code": "audio_unavailable",
             })
         try:
+            if resolve_commercial_customer is not None and (
+                pattern != "decentralized" or resolve_decentralized_profile
+            ):
+                customer = resolve_commercial_customer(customer)
             content_type = audio.content_type or ""
             content = audio.file.read(audio_max_bytes + 1)
             result = audio_message.execute(
-                customer_id=customer.commercial_customer_id or customer.id,
+                customer_id=customer.id if pattern == "decentralized" else getattr(customer, "commercial_customer_id", None) or customer.id,
                 audio=content,
                 content_type=content_type,
                 duration_ms=duration_ms,
                 pattern=pattern,
                 request_id=request_id,
                 conversation_id=str(conversation_id) if conversation_id else None,
+                commercial_customer_id=getattr(customer, "commercial_customer_id", None) if pattern == "decentralized" else None,
             )
         except AudioQuotaExceeded as exc:
             return JSONResponse(
@@ -141,6 +160,8 @@ def create_chat_router(
                 headers={"Retry-After": "60"},
             )
         except (AudioRequestError, AudioIdempotencyConflict) as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
+        except ConversationActionError as exc:
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code})
         except RateLimited as exc:
             return JSONResponse(status_code=429, content={"detail": exc.detail, "code": "rate_limited"})
@@ -173,6 +194,7 @@ def chat_out(conversation_id: str, pattern: str, reply: PatternReply) -> ChatOut
                 lines=[QuoteLine(label=line.label, amount=money_text(line.amount)) for line in quote.lines],
                 total=money_text(quote.total),
                 currency=quote.currency,
+                proposal_id=quote.proposal_id,
             )
             if quote
             else None

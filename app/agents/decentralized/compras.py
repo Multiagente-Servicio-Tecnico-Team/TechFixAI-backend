@@ -1,5 +1,4 @@
-from app.agents.procurement import procurement_node as _procurement_node
+import importlib as _importlib
+import sys as _sys
 
-
-def procurement_node(state):
-    return _procurement_node(state)
+_sys.modules[__name__] = _importlib.import_module(".purchasing", __package__)

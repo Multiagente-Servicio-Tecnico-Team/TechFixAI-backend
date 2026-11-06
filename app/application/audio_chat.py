@@ -38,7 +38,8 @@ class SendAudioChatMessage:
 
     def execute(self, *, customer_id: int, audio: bytes, content_type: str, duration_ms: int,
                 pattern: Literal["hierarchical", "orchestrator", "decentralized"],
-                request_id: str, conversation_id: str | None = None) -> AudioChatResult:
+                request_id: str, conversation_id: str | None = None,
+                commercial_customer_id: int | None = None) -> AudioChatResult:
         try:
             UUID(request_id)
         except (ValueError, TypeError, AttributeError) as exc:
@@ -65,7 +66,7 @@ class SendAudioChatMessage:
                 raise AudioRequestError()
             turn = self._send_message.execute(
                 customer_id=customer_id, pattern=pattern, message=text,
-                conversation_id=conversation_id,
+                conversation_id=conversation_id, commercial_customer_id=commercial_customer_id,
             )
             result = AudioChatResult(text, turn)
             self._registry.complete(lease, result)

@@ -2,9 +2,8 @@
 
 ## Cambios realizados
 
-- `requirements.txt` incluye `requirements-agent.txt`; este manifiesto declara
-  `langchain-chroma`, `langchain-community`, `langchain-text-splitters` y
-  `fastembed`, necesarios para importar y ejecutar el RAG.
+- Se consolidaron en `requirements.txt` las dependencias de API, agentes, RAG,
+  Streamlit y pruebas; el archivo es ahora el único manifiesto de dependencias.
 - Se añadió `build_graph(checkpointer=...)` al grafo descentralizado. La API
   solicita su grafo con `MemorySaver`; el grafo de módulo queda sin checkpoint
   para consumidores que conservan el estado por instancia.

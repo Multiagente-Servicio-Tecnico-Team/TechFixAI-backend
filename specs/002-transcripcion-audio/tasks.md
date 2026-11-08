@@ -16,7 +16,7 @@ description: "Tareas locales del backend para transcripción de audio en el chat
 
 **Purpose**: Habilitar recepción de `multipart/form-data`.
 
-- [X] T001 Añadir y fijar una versión de `python-multipart` compatible con FastAPI en `requirements-agent.txt`.
+- [X] T001 Añadir y fijar una versión de `python-multipart` compatible con FastAPI en `requirements.txt`.
 
 ---
 

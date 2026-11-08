@@ -4,7 +4,7 @@ Este documento guía la validación después de implementar la feature. Las prue
 
 ## Prerrequisitos
 
-- Python 3.12 y entorno virtual con las dependencias de `requirements-agent.txt`.
+- Python 3.12 y entorno virtual con las dependencias de `requirements.txt`.
 - PostgreSQL configurado igual que para el chat existente, o fixtures SQLite usados por las pruebas.
 - Una sesión de cliente válida para la prueba manual.
 - Para UI: checkout separado de `TechFixAI-frontend`, Node.js 18+ y navegador en HTTPS o localhost con soporte de micrófono.
@@ -13,7 +13,7 @@ Este documento guía la validación después de implementar la feature. Las prue
 ## Instalar e iniciar el backend
 
 ```powershell
-python -m pip install -r requirements-agent.txt
+python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --host localhost --port 8000 --reload
 ```
 

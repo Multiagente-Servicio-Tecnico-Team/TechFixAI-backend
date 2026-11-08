@@ -17,7 +17,7 @@ sesión, recuperación y restablecimiento.
 | Correo | Plantilla Jinja2 y servicio SMTP del repositorio (`app/email`) |
 | Pruebas | pytest + TestClient (SQLite en memoria); colección de Postman ejecutable con Newman |
 
-Dependencias en [`requirements-auth.txt`](../../requirements-auth.txt).
+Las dependencias del backend están consolidadas en [`requirements.txt`](../../requirements.txt).
 
 ## Estructura
 
@@ -102,7 +102,7 @@ separado con las rutas sin prefijo descritas arriba:
 
    ```bash
    python -m venv .venv
-   .venv/Scripts/python -m pip install -r requirements-auth.txt
+   .venv/Scripts/python -m pip install -r requirements.txt
    ```
 
 3. Configurar `.env` en la raíz del repositorio (ver `.env.example`):

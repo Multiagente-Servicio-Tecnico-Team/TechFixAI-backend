@@ -167,9 +167,14 @@ Copiar `.env.example` a `.env` y completar:
 | `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGSMITH_PROJECT` | Trazabilidad en LangSmith |
 | `LANGSMITH_HIDE_INPUTS`, `LANGSMITH_HIDE_OUTPUTS` | Ocultamiento de contenido en las trazas |
 
-La instalación raíz incluye las dependencias de API, agentes y RAG mediante
-`requirements-agent.txt`. Para crear o actualizar el índice vectorial local una
-vez instaladas las dependencias, ejecuta:
+El archivo único `requirements.txt` reúne las dependencias de API, agentes, RAG,
+Streamlit y pruebas. Instálalas desde la raíz del backend con:
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+```
+
+Para crear o actualizar el índice vectorial local después de instalarlas, ejecuta:
 
 ```powershell
 .\.venv\Scripts\python.exe -m app.rag.ingest

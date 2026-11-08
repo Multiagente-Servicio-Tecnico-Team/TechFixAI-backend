@@ -4,7 +4,7 @@ Guía de validación que se ejecutará durante implementación. No modifica el f
 
 ## Requisitos previos
 
-1. Backend instalado según `requirements-agent.txt` y entorno virtual del proyecto activado.
+1. Backend instalado según `requirements.txt` y entorno virtual del proyecto activado.
 2. PostgreSQL **desechable de pruebas** inicializado con el esquema v2 y con datos sintéticos; no usar la BD compartida o producción.
 3. Configurar una variable separada `TICKETS_TEST_DATABASE_URL` para las pruebas PostgreSQL. Las pruebas no deben cargar `.env` ni sustituirla por `DATABASE_URL`.
 4. Cuenta activa ADMIN para emitir cookie de sesión y cuenta CUSTOMER para comprobar rechazo por rol.

@@ -48,6 +48,7 @@ class SupplierPatch(BaseModel):
 class PurchaseLineWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
     spare_part_id: int | None = Field(default=None, ge=1)
+    purchase_order_item_id: int | None = Field(default=None, ge=1)
     description: str = Field(min_length=1, max_length=300)
     quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
     unit_cost: str = Field(pattern=MONEY_PATTERN.pattern)

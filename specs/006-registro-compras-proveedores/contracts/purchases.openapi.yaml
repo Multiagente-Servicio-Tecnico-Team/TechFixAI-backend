@@ -143,6 +143,7 @@ paths:
     post:
       operationId: createSupplierPurchase
       summary: Registrar comprobante recibido, sin modificar stock
+      description: Si purchase_order_id está informado, el comprobante documenta la orden; la recepción física de sus cantidades se registra únicamente contra la orden para evitar un segundo movimiento de stock.
       requestBody:
         required: true
         content:
@@ -216,7 +217,8 @@ paths:
   /api/admin/purchases/{purchase_id}/receipts:
     post:
       operationId: receiveSupplierPurchase
-      summary: Confirmar cantidades recibidas y aplicar stock una vez
+      summary: Confirmar cantidades recibidas de una compra no asociada a una orden y aplicar stock una vez
+      description: Si la compra está vinculada a purchase_order_id, responder 409 y dirigir la recepción física a /api/admin/purchase-orders/{order_id}/receipts.
       parameters:
         - in: header
           name: Idempotency-Key
@@ -318,6 +320,7 @@ components:
       required: [description, quantity, unit_cost]
       properties:
         spare_part_id: {type: [integer, 'null'], minimum: 1}
+        purchase_order_item_id: {type: [integer, 'null'], minimum: 1, description: Línea de orden asociada para conciliación de cantidades; debe pertenecer a purchase_order_id.}
         description: {type: string, minLength: 1, maxLength: 300}
         quantity: {type: number, exclusiveMinimum: 0}
         unit_cost: {$ref: '#/components/schemas/Money'}
@@ -367,6 +370,7 @@ components:
       properties:
         id: {type: integer}
         spare_part_id: {type: [integer, 'null']}
+        purchase_order_item_id: {type: [integer, 'null'], description: Explicit order line mapped to this invoice line for billed-quantity reporting.}
         code_snapshot: {type: [string, 'null'], maxLength: 50}
         description: {type: string, maxLength: 300}
         quantity: {type: string}

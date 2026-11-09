@@ -43,6 +43,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 
 | Chat autenticado por voz `POST /api/chat/audio` | `app/application/audio_chat.py`, `app/adapters/speech/`, `app/adapters/api/chat.py` | Backend implementado; desactivado por defecto | `test_audio_chat_api.py`, `test_audio_chat_patterns.py` |
 | Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
+| Catálogo contable y búsqueda de cuentas (solo ADMIN) | `app/adapters/api/accounting_catalog.py`, `app/adapters/persistence/accounting_catalog.py`, migraciones `012`–`013` | Implementado; lista por plan con `q` parcial en código/denominación, filtros ACTIVE/imputable y paginación; PCGE cargado en `multiagentedb` de pruebas | Validación de lectura directa contra el repositorio: plan 1, 1,192 cuentas, 844 activas/imputables; consultas parciales `10`, `efectivo`, `caja` devuelven coincidencias |
 
 ## Pendientes conocidos
 
@@ -53,6 +54,10 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 ### Asientos contables internos (Spec Kit)
 
 La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. La migración aditiva está en `sql/migrations/003_accounting_entries.sql`; se aplicó y verificó en la BD de prueba `multiagentedb` indicada explícitamente para la ejecución.
+
+### Catálogo de cuentas contables (Spec 009)
+
+`GET /api/admin/accounting/plans/{plan_id}/accounts` admite `q` opcional para buscar parcialmente por código o denominación (`ILIKE`), además de `status`, `postable`, `parent_id` y paginación. Sin `q`, devuelve la primera página ordenada por código. Verificación de lectura en `multiagentedb` el 2026-11-09: el plan PCGE predeterminado tiene 1,192 cuentas; 844 cumplen `ACTIVE` e imputable. Búsquedas parciales por `10`, `efectivo` y `caja` devolvieron coincidencias. No se cambió el backend en esta corrección porque la ruta y la consulta ya respondían correctamente; el frontend ahora carga una primera página automáticamente al elegir el plan y filtra por texto al escribir.
 
 Estado de esta iteración: en progreso en `feature/spec-kit`. Se conservan los tres grafos para comparación académica. El perfil Groq se centralizó y se añadieron escenarios/contratos iniciales.
 
@@ -94,6 +99,7 @@ se repite es la misma responsabilidad implementada varias veces; antes de crear 
 | Cálculo de presupuesto | `app/agents/jerarquico/tools/quotes.py`, `app/agents/orquestador/agentes/quotes.py` | Mismo caso, totales distintos según el patrón |
 | Búsqueda en conocimiento | `jerarquico/retriever.py`, `orquestador/knowledge/retriever.py`, `rag/retriever.py` | Tres criterios de relevancia |
 | Consulta de inventario | `decentralized/tools/almacen_tools.py`, `orquestador/tools/inventory.py`, repositorio | Reglas de stock distintas |
+| Trazabilidad de stock backend | `app/adapters/persistence/inventory_movements.py`, API `/api/inventory` y migración 20261108 | CRUD admite `current_stock` obsoleto temporalmente y lo convierte en movimiento; frontend debe integrar las rutas dedicadas |
 | Esquemas de diagnóstico y repuestos | `jerarquico/schemas.py` y `orquestador/graph/state.py` (`PartRequest`, `TechnicalDiagnosis`) | Campos que se separan con el tiempo |
 
 Módulos fuera del flujo de la aplicación: `app/web.py` (interfaz Streamlit de prueba) y `app/rag/ingest.py` (script de

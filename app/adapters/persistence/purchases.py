@@ -7,12 +7,19 @@ from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.adapters.persistence.inventory_movements import apply_stock_movement
 
 from app.application.errors import (
     PurchaseConflict, PurchaseError, PurchaseNotFound, PurchaseStorageUnavailable,
     SupplierNotFound,
 )
-from app.domain.purchases import PurchaseConflictFailure, next_receipt_status
+from app.domain.purchases import (
+    PurchaseConflictFailure,
+    ensure_invoice_receipt_allowed,
+    next_receipt_status,
+    validate_invoice_order_line_mapping,
+    validate_invoice_order_supplier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +60,7 @@ class SupplierPurchaseRepositoryAdapter:
     @staticmethod
     def _line(row):
         return {"id": int(row["id"]), "spare_part_id": int(row["spare_part_id"]) if row["spare_part_id"] is not None else None,
+                "purchase_order_item_id": int(row["purchase_order_item_id"]) if row["purchase_order_item_id"] is not None else None,
                 "code_snapshot": row["code_snapshot"], "description": row["description_snapshot"],
                 "quantity": str(row["quantity"]), "unit_cost": _money(row["unit_cost"]),
                 "discount_amount": _money(row["discount_amount"]), "tax_amount": _money(row["tax_amount"]),
@@ -118,9 +126,32 @@ class SupplierPurchaseRepositoryAdapter:
                 if supplier is None or not supplier["active"]:
                     raise SupplierNotFound("Selecciona un proveedor activo.")
                 if draft.purchase_order_id is not None:
-                    order = session.execute(text("SELECT id,supplier_id FROM purchase_orders WHERE id=:id FOR SHARE"), {"id": draft.purchase_order_id}).mappings().first()
-                    if order is None or int(order["supplier_id"]) != draft.supplier_id:
-                        raise PurchaseError("La orden no existe o pertenece a otro proveedor.", field="purchase_order_id")
+                    order = session.execute(text("SELECT id,supplier_id,status FROM purchase_orders WHERE id=:id FOR SHARE"), {"id": draft.purchase_order_id}).mappings().first()
+                    try:
+                        validate_invoice_order_supplier(
+                            draft.purchase_order_id, draft.supplier_id,
+                            int(order["supplier_id"]) if order is not None else None,
+                        )
+                    except ValueError as exc:
+                        raise PurchaseError(str(exc), field="purchase_order_id") from exc
+                for line in draft.lines:
+                    if line.purchase_order_item_id is None:
+                        continue
+                    mapped = session.execute(text("""SELECT id,spare_part_id FROM purchase_order_items
+                        WHERE id=:item AND purchase_order_id=:order FOR SHARE"""), {
+                        "item": line.purchase_order_item_id, "order": draft.purchase_order_id,
+                    }).mappings().first()
+                    try:
+                        validate_invoice_order_line_mapping(
+                            purchase_order_id=draft.purchase_order_id,
+                            order_item_id=line.purchase_order_item_id,
+                            item_order_id=draft.purchase_order_id if mapped is not None else None,
+                            invoice_spare_part_id=line.spare_part_id,
+                            order_spare_part_id=int(mapped["spare_part_id"])
+                                if mapped is not None and mapped["spare_part_id"] is not None else None,
+                        )
+                    except ValueError as exc:
+                        raise PurchaseError(str(exc), field=getattr(exc, "field", "purchase_order_item_id")) from exc
                 snapshots = []
                 for line in draft.lines:
                     part = None
@@ -148,10 +179,11 @@ class SupplierPurchaseRepositoryAdapter:
                 }).scalar_one()
                 for line, part in snapshots:
                     session.execute(text("""INSERT INTO supplier_purchase_items
-                        (purchase_id,spare_part_id,code_snapshot,description_snapshot,quantity,unit_cost,
+                        (purchase_id,spare_part_id,purchase_order_item_id,code_snapshot,description_snapshot,quantity,unit_cost,
                          discount_amount,tax_amount,line_total)
-                        VALUES (:purchase_id,:part_id,:code,:description,:quantity,:cost,:discount,:tax,:total)"""), {
+                        VALUES (:purchase_id,:part_id,:order_item_id,:code,:description,:quantity,:cost,:discount,:tax,:total)"""), {
                         "purchase_id": purchase_id, "part_id": part["id"] if part else None,
+                        "order_item_id": line.purchase_order_item_id,
                         "code": part["code"] if part else None,
                         "description": line.description, "quantity": line.quantity,
                         "cost": line.unit_cost, "discount": line.discount_amount,
@@ -301,9 +333,16 @@ class SupplierPurchaseRepositoryAdapter:
                         raise PurchaseConflict("La clave de idempotencia ya se usó con otros datos.")
                     receipt_id, replay = int(prior["id"]), True
                 else:
-                    purchase = session.execute(text("SELECT status FROM supplier_purchases WHERE id=:id FOR UPDATE"), {"id":purchase_id}).mappings().first()
+                    purchase = session.execute(text("SELECT status,purchase_order_id FROM supplier_purchases WHERE id=:id FOR UPDATE"), {"id":purchase_id}).mappings().first()
                     if purchase is None:
                         raise PurchaseNotFound()
+                    try:
+                        ensure_invoice_receipt_allowed(
+                            int(purchase["purchase_order_id"])
+                            if purchase["purchase_order_id"] is not None else None
+                        )
+                    except PurchaseConflictFailure as exc:
+                        raise PurchaseConflict(str(exc)) from exc
                     if purchase["status"] not in {"REGISTERED", "PARTIALLY_RECEIVED"}:
                         raise PurchaseConflict("La compra no admite nuevas recepciones.")
                     lines = session.execute(text("""SELECT i.id,i.quantity,i.spare_part_id,i.code_snapshot,i.description_snapshot,
@@ -333,21 +372,13 @@ class SupplierPurchaseRepositoryAdapter:
                         line = by_id[line_id]
                         receipt_item_id = session.execute(text("INSERT INTO purchase_receipt_items (receipt_id,purchase_item_id,quantity_received) VALUES (:receipt,:line,:qty) RETURNING id"), {"receipt":receipt_id,"line":line_id,"qty":qty}).scalar_one()
                         if line["spare_part_id"] is not None:
-                            part = session.execute(text("SELECT id,code,name,current_stock FROM spare_parts WHERE id=:id FOR UPDATE"), {"id":line["spare_part_id"]}).mappings().first()
-                            if part is None:
-                                raise PurchaseConflict("El repuesto de la línea ya no está disponible en el catálogo.")
-                            stock_before, delta = int(part["current_stock"]), int(qty)
-                            stock_after = stock_before + delta
-                            if stock_after > 999999:
-                                raise PurchaseConflict("La recepción excede el máximo de existencias permitido.")
-                            session.execute(text("UPDATE spare_parts SET current_stock=:stock,updated_at=CURRENT_TIMESTAMP WHERE id=:id"), {"stock":stock_after,"id":part["id"]})
-                            session.execute(text("""INSERT INTO inventory_movements
-                                (spare_part_id,purchase_receipt_item_id,movement_type,code_snapshot,name_snapshot,
-                                 quantity_delta,stock_before,stock_after,actor_user_id)
-                                VALUES (:part,:receipt_item,'PURCHASE_RECEIPT',:code,:name,:delta,:before,:after,:actor)"""), {
-                                "part":part["id"],"receipt_item":receipt_item_id,"code":line["code_snapshot"] or part["code"],
-                                "name":part["name"],"delta":delta,
-                                "before":stock_before,"after":stock_after,"actor":actor_id})
+                            try:
+                                apply_stock_movement(session, part_id=int(line["spare_part_id"]), quantity_delta=int(qty),
+                                    movement_type="PURCHASE_RECEIPT", actor_user_id=actor_id,
+                                    purchase_receipt_item_id=int(receipt_item_id),
+                                    code_snapshot=line["code_snapshot"])
+                            except ValueError as exc:
+                                raise PurchaseConflict(str(exc)) from exc
                     ordered_totals = {int(line["id"]): Decimal(line["quantity"]) for line in lines}
                     try:
                         new_status = next_receipt_status(purchase["status"], ordered_totals, received_totals)

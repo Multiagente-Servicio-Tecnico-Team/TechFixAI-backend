@@ -19,7 +19,7 @@ class InventoryPartDraft:
     category: str
     description: str | None
     unit_price: Decimal
-    current_stock: int
+    current_stock: int | None
     minimum_threshold: int
 
 
@@ -70,7 +70,8 @@ def validate_inventory_part(values: Mapping[str, object]) -> InventoryPartDraft:
     if not price.is_finite() or price <= 0:
         raise InventoryValidationFailure("El precio debe ser mayor que cero.", field="unit_price")
 
-    stock = _validate_count(values.get("current_stock"), "current_stock")
+    stock_value = values.get("current_stock")
+    stock = None if stock_value is None else _validate_count(stock_value, "current_stock")
     threshold = _validate_count(values.get("minimum_threshold"), "minimum_threshold")
     return InventoryPartDraft(
         code=code,
@@ -87,6 +88,44 @@ def _validate_count(value: object, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_STOCK:
         raise InventoryValidationFailure("La cantidad debe ser un entero entre 0 y 999999.", field=field)
     return value
+
+
+def validate_stock_count(value: object) -> int:
+    return _validate_count(value, "counted_stock")
+
+
+def validate_movement_reason(value: object) -> str:
+    if not isinstance(value, str):
+        raise InventoryValidationFailure("El motivo es obligatorio.", field="reason")
+    reason = value.strip()
+    if not 1 <= len(reason) <= 500:
+        raise InventoryValidationFailure("El motivo debe tener entre 1 y 500 caracteres.", field="reason")
+    return reason
+
+
+def movement_type_for_delta(delta: object) -> str:
+    """Map a non-zero stock delta to its manual movement kind."""
+    if isinstance(delta, bool) or not isinstance(delta, int) or delta == 0:
+        raise InventoryValidationFailure("El movimiento debe cambiar el saldo.", field="quantity_delta")
+    return "ADJUSTMENT_IN" if delta > 0 else "ADJUSTMENT_OUT"
+
+
+def validate_movement_sign(movement_type: object, delta: object, *, actor_kind: str = "USER") -> str:
+    """Validate movement type/sign combinations at the domain boundary."""
+    if movement_type == "OPENING_BALANCE" and actor_kind == "SYSTEM":
+        if isinstance(delta, bool) or not isinstance(delta, int) or delta < 0:
+            raise InventoryValidationFailure("El corte del sistema admite un saldo inicial no negativo.", field="quantity_delta")
+        return "OPENING_BALANCE"
+    expected = {
+        "OPENING_BALANCE": lambda value: value > 0,
+        "ADJUSTMENT_IN": lambda value: value > 0,
+        "ADJUSTMENT_OUT": lambda value: value < 0,
+        "PURCHASE_RECEIPT": lambda value: value > 0,
+        "SALE": lambda value: value < 0,
+    }
+    if movement_type not in expected or actor_kind != "USER" or isinstance(delta, bool) or not isinstance(delta, int) or not expected[movement_type](delta):
+        raise InventoryValidationFailure("El tipo de movimiento no coincide con el signo de la variación.", field="movement_type")
+    return str(movement_type)
 
 
 def part_to_dict(part: InventoryPart) -> dict[str, object]:

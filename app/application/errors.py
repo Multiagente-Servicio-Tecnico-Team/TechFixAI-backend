@@ -185,6 +185,11 @@ class InventoryStorageUnavailable(InventoryError):
     detail = "El servicio de inventario no está disponible. Inténtalo más tarde."
 
 
+class InventoryIdempotencyConflict(InventoryConflict):
+    code = "idempotency_conflict"
+    detail = "La clave de solicitud ya se usó con otros datos."
+
+
 class PurchaseError(ApplicationError):
     status_code = 422
     code = "purchase_validation"
@@ -212,6 +217,37 @@ class SupplierNotFound(PurchaseError):
     status_code = 404
     code = "supplier_not_found"
     detail = "No se encontró el proveedor solicitado."
+
+
+class PurchaseOrderError(ApplicationError):
+    """Stable purchase-order error that does not expose SQL details."""
+
+    status_code = 422
+    code = "purchase_order_validation"
+    detail = "Los datos de la orden de compra no son válidos."
+
+    def __init__(self, detail: str | None = None, *, field: str | None = None):
+        self.field = field
+        self.detail = detail or type(self).detail
+        super().__init__(self.detail)
+
+
+class PurchaseOrderConflict(PurchaseOrderError):
+    status_code = 409
+    code = "purchase_order_conflict"
+    detail = "La orden de compra entra en conflicto con su estado o sus relaciones."
+
+
+class PurchaseOrderNotFound(PurchaseOrderError):
+    status_code = 404
+    code = "purchase_order_not_found"
+    detail = "No se encontró la orden de compra solicitada."
+
+
+class PurchaseOrderStorageUnavailable(PurchaseOrderError):
+    status_code = 503
+    code = "purchase_order_storage_unavailable"
+    detail = "El servicio de órdenes de compra no está disponible. Inténtalo más tarde."
 
 
 class PurchaseStorageUnavailable(PurchaseError):

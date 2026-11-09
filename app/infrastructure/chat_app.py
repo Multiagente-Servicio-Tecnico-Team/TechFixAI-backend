@@ -19,8 +19,10 @@ from app.accounts.session import SessionCustomer, SessionError, SessionGuard
 from app.adapters.api.chat import create_chat_router
 from app.adapters.api.admin_tickets import create_admin_ticket_router
 from app.adapters.api.accounting import create_accounting_router
+from app.adapters.api.accounting_catalog import create_accounting_catalog_router
 from app.adapters.api.inventory import create_inventory_router
 from app.adapters.api.purchases import create_supplier_purchase_router
+from app.adapters.api.purchase_orders import create_purchase_order_router
 from app.adapters.api.sales_quotes import create_sales_quote_router
 from app.adapters.speech.groq import GroqAudioTranscriber
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
@@ -30,6 +32,7 @@ from app.adapters.persistence.customers import CustomerRepositoryAdapter
 from app.database.repository import ServiceRepository
 from app.adapters.persistence.accounting import AccountingRepositoryAdapter
 from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
+from app.adapters.persistence.purchase_orders import PurchaseOrderRepositoryAdapter
 from app.application.chat import SendChatMessage
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.audio_requests import AudioRequestRegistry
@@ -54,6 +57,7 @@ def build_chat_app(
     accounting_repository_factory: Callable[[], Any] | None = None,
     inventory_repository_factory: Callable[[], Any] | None = None,
     purchase_repository_factory: Callable[[], Any] | None = None,
+    purchase_order_repository_factory: Callable[[], Any] | None = None,
     sales_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0")
@@ -74,6 +78,7 @@ def build_chat_app(
         if (request.url.path.startswith("/api/admin/accounting/")
                 or request.url.path.startswith("/api/admin/tickets")
                 or request.url.path.startswith("/api/admin/purchases")
+                or request.url.path.startswith("/api/admin/purchase-orders")
                 or request.url.path.startswith("/api/admin/suppliers")
                 or request.url.path.startswith("/api/admin/sales-")):
             response.headers["Cache-Control"] = "no-store"
@@ -176,8 +181,11 @@ def build_chat_app(
     )
     repository_factory = accounting_repository_factory or (lambda: AccountingRepositoryAdapter())
     app.include_router(create_accounting_router(repository_factory, require_admin))
+    app.include_router(create_accounting_catalog_router(require_admin))
     purchases_factory = purchase_repository_factory or (lambda: SupplierPurchaseRepositoryAdapter())
     app.include_router(create_supplier_purchase_router(require_admin=require_admin, repository_factory=purchases_factory))
+    purchase_orders_factory = purchase_order_repository_factory or (lambda: PurchaseOrderRepositoryAdapter())
+    app.include_router(create_purchase_order_router(require_admin=require_admin, repository_factory=purchase_orders_factory))
     app.include_router(
         create_inventory_router(
             require_staff=require_staff,

@@ -1,0 +1,720 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Accounting Catalog and Reports API
+  version: 1.0.0
+  description: >-
+    ADMIN-only internal accounting catalog, monthly periods, and reports. The
+    default seed is PCGE Modificado 2019 from MEF. This API does not generate or
+    file SUNAT PLE books.
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+paths:
+  /api/admin/accounting/entries:
+    post:
+      operationId: createCatalogAccountingEntry
+      summary: Create a balanced entry using accounts from a plan
+      description: >-
+        A new client supplies plan_id and account_id. For legacy clients, the
+        backend may resolve account_code in the default plan; account_name is
+        ignored and replaced with the catalog denomination. Unmatched codes are rejected.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCatalogEntry' }
+      responses:
+        '201':
+          description: Balanced entry created and confirmed
+          content: { application/json: { schema: { $ref: '#/components/schemas/CatalogEntry' } } }
+        '200':
+          description: Idempotent replay of the created entry
+          content: { application/json: { schema: { $ref: '#/components/schemas/CatalogEntry' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/entries/{entry_id}:
+    get:
+      operationId: getCatalogAccountingEntry
+      summary: Get an entry with plan, account snapshots, and reversal history
+      parameters:
+        - in: path
+          name: entry_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Historical lines may have a null account_id.
+          content: { application/json: { schema: { $ref: '#/components/schemas/CatalogEntry' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/entries/{entry_id}/reverse:
+    post:
+      operationId: reverseCatalogAccountingEntry
+      summary: Reverse an entry in an open accounting period
+      parameters:
+        - in: path
+          name: entry_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReverseCatalogEntry' }
+      responses:
+        '201':
+          description: Compensating entry created; original remains auditable
+          content: { application/json: { schema: { $ref: '#/components/schemas/ReversalResult' } } }
+        '200':
+          description: Idempotent replay of the same reversal
+          content: { application/json: { schema: { $ref: '#/components/schemas/ReversalResult' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/plans:
+    get:
+      operationId: listAccountingPlans
+      summary: List chart-of-accounts plans and identify the default
+      responses:
+        '200':
+          description: Plans visible to ADMIN
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AccountingPlan' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      operationId: createAccountingPlan
+      summary: Create an alternative chart-of-accounts plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePlan' }
+      responses:
+        '201':
+          description: Plan created; it does not become default automatically
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountingPlan' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/plans/{plan_id}/default:
+    put:
+      operationId: setDefaultAccountingPlan
+      summary: Select a plan as default for new entries
+      parameters: [{ $ref: '#/components/parameters/PlanId' }]
+      responses:
+        '200':
+          description: Default selection recorded
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountingPlan' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/plans/{plan_id}/accounts:
+    get:
+      operationId: listAccountingAccounts
+      summary: List and filter plan accounts
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+          description: Optional partial case-insensitive search by code or denomination. When omitted, returns the first page ordered by account code.
+        - in: query
+          name: parent_id
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: postable
+          schema: { type: boolean }
+        - in: query
+          name: status
+          schema: { type: string, enum: [ACTIVE, INACTIVE] }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Filtered, paginated accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AccountingAccount' } }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 100 }
+                  offset: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      operationId: createAccountingAccount
+      summary: Add a hierarchical account to a plan
+      parameters: [{ $ref: '#/components/parameters/PlanId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccount' }
+      responses:
+        '201':
+          description: Account created
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountingAccount' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/accounts/{account_id}:
+    patch:
+      operationId: updateAccountingAccount
+      summary: Update or deactivate an account without rewriting entry snapshots
+      parameters:
+        - in: path
+          name: account_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccount' }
+      responses:
+        '200':
+          description: Account updated
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountingAccount' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/periods:
+    get:
+      operationId: listAccountingPeriods
+      summary: List monthly periods and their current state
+      parameters:
+        - in: query
+          name: from_period
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+        - in: query
+          name: to_period
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+        - in: query
+          name: status
+          schema: { type: string, enum: [OPEN, CLOSED] }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Monthly periods and latest transition
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AccountingPeriod' } }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 100 }
+                  offset: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/periods/{year}/{month}/close:
+    post:
+      operationId: closeAccountingPeriod
+      summary: Close an open monthly period
+      parameters:
+        - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/Month'
+      responses:
+        '200':
+          description: Period closed and transition audited
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountingPeriod' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/periods/{year}/{month}/reopen:
+    post:
+      operationId: reopenAccountingPeriod
+      summary: Reopen a closed period with a reason
+      parameters:
+        - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/Month'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReopenPeriod' }
+      responses:
+        '200':
+          description: Period reopened; actor, timestamp and reason audited
+          content: { application/json: { schema: { $ref: '#/components/schemas/AccountingPeriod' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/periods/{year}/{month}/events:
+    get:
+      operationId: listAccountingPeriodEvents
+      summary: Read all audited state transitions for a monthly period
+      parameters:
+        - $ref: '#/components/parameters/Year'
+        - $ref: '#/components/parameters/Month'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Ordered period transition history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AccountingAuditEvent' } }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 100 }
+                  offset: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/audit-events:
+    get:
+      operationId: listAccountingConfigurationEvents
+      summary: Read audited plan, account and default-plan changes
+      parameters:
+        - in: query
+          name: entity_type
+          schema: { type: string, enum: [PLAN, ACCOUNT, DEFAULT_PLAN, PERIOD] }
+        - in: query
+          name: from_at
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to_at
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Changes ordered by timestamp and event ID
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AccountingAuditEvent' } }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 100 }
+                  offset: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/reports/journal:
+    get:
+      operationId: getAccountingJournal
+      summary: Query or export journal entries
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/PlanFilter'
+        - $ref: '#/components/parameters/EntryStatusFilter'
+        - $ref: '#/components/parameters/Format'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { $ref: '#/components/responses/ReportResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/ExportTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/reports/ledger:
+    get:
+      operationId: getAccountingLedger
+      summary: Query or export movements and running balance for one account
+      parameters:
+        - in: query
+          name: account_id
+          schema: { type: integer, minimum: 1 }
+          description: Required for a catalog account.
+        - in: query
+          name: account_code
+          schema: { type: string, maxLength: 40 }
+          description: Use with account_name for a historical unlinked account; omit account_id.
+        - in: query
+          name: account_name
+          schema: { type: string, maxLength: 200 }
+          description: Required with account_code for historical unlinked lines.
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/EntryStatusFilter'
+        - $ref: '#/components/parameters/Format'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { $ref: '#/components/responses/ReportResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/ExportTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/admin/accounting/reports/trial-balance:
+    get:
+      operationId: getAccountingTrialBalance
+      summary: Query or export trial balance by plan and period
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/PlanFilter'
+        - $ref: '#/components/parameters/EntryStatusFilter'
+        - $ref: '#/components/parameters/Format'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { $ref: '#/components/responses/ReportResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/ExportTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: techfix_session
+  parameters:
+    PlanId:
+      in: path
+      name: plan_id
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Year:
+      in: path
+      name: year
+      required: true
+      schema: { type: integer, minimum: 2000, maximum: 9999 }
+    Month:
+      in: path
+      name: month
+      required: true
+      schema: { type: integer, minimum: 1, maximum: 12 }
+    FromDate:
+      in: query
+      name: from_date
+      required: true
+      schema: { type: string, format: date }
+    ToDate:
+      in: query
+      name: to_date
+      required: true
+      schema: { type: string, format: date }
+    PlanFilter:
+      in: query
+      name: plan_id
+      schema: { type: integer, minimum: 1 }
+    EntryStatusFilter:
+      in: query
+      name: status
+      schema: { type: string, enum: [CONFIRMED, REVERSED] }
+    Format:
+      in: query
+      name: format
+      schema: { type: string, enum: [json, csv, xlsx], default: json }
+    Limit:
+      in: query
+      name: limit
+      description: JSON pagination only; exports include all filtered rows up to the export cap.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Offset:
+      in: query
+      name: offset
+      description: JSON pagination only; ignored for file exports.
+      schema: { type: integer, minimum: 0, default: 0 }
+  schemas:
+    CreateCatalogEntry:
+      type: object
+      additionalProperties: false
+      required: [operation_date, concept, detail, category_id, lines]
+      description: plan_id is optional for old clients and resolves to the default plan. The submitted account_name is ignored.
+      properties:
+        plan_id: { type: integer, minimum: 1 }
+        operation_date: { type: string, format: date }
+        concept: { type: string, minLength: 1, maxLength: 200 }
+        detail: { type: string, minLength: 1, maxLength: 4000 }
+        category_id: { type: integer, minimum: 1 }
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [debit, credit]
+            oneOf:
+              - required: [account_id]
+              - required: [account_code]
+            properties:
+              account_id: { type: integer, minimum: 1 }
+              account_code: { type: string, minLength: 1, maxLength: 40 }
+              account_name: { type: string, maxLength: 200, description: Legacy input only; ignored in favor of catalog denomination. }
+              description: { type: [string, 'null'], maxLength: 1000 }
+              debit: { type: string, pattern: '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$' }
+              credit: { type: string, pattern: '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$' }
+    CatalogEntry:
+      type: object
+      required: [id, entry_number, operation_date, concept, category, currency, debit_total, credit_total, amount, status, responsible, created_at, updated_at, plan_id, accounting_plan, lines, detail, audit_events]
+      properties:
+        id: { type: integer, minimum: 1 }
+        entry_number: { type: string, pattern: '^[1-9][0-9]*$' }
+        category: { $ref: '#/components/schemas/AccountingCategory' }
+        plan_id: { type: [integer, 'null'], minimum: 1, description: Null for entries predating the catalog. }
+        accounting_plan:
+          oneOf:
+            - $ref: '#/components/schemas/EntryPlan'
+            - type: 'null'
+        operation_date: { type: string, format: date }
+        concept: { type: string }
+        detail: { type: string }
+        currency: { type: string, enum: [PEN] }
+        status: { type: string, enum: [CONFIRMED, REVERSED] }
+        debit_total: { type: string }
+        credit_total: { type: string }
+        amount: { type: string }
+        responsible: { $ref: '#/components/schemas/Responsible' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        reversed_at: { type: [string, 'null'], format: date-time }
+        reversal_of_entry_id: { type: [integer, 'null'], minimum: 1 }
+        reversal_entry_id: { type: [integer, 'null'], minimum: 1 }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [account_code, account_name, debit, credit]
+            properties:
+              account_id: { type: [integer, 'null'], minimum: 1, description: Null for historical lines. }
+              legacy_unlinked: { type: boolean, description: True when account_id is null; snapshots are retained without automatic matching. }
+              account_code: { type: string }
+              account_name: { type: string }
+              debit: { type: string }
+              credit: { type: string }
+        audit_events:
+          type: array
+          items: { $ref: '#/components/schemas/EntryAuditEvent' }
+    AccountingCategory:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, minimum: 1 }
+        code: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+    Responsible:
+      type: object
+      required: [user_id, display_name]
+      properties:
+        user_id: { type: integer, minimum: 1 }
+        display_name: { type: string }
+    EntryAuditEvent:
+      type: object
+      required: [event_type, actor, created_at]
+      properties:
+        event_type: { type: string, enum: [ENTRY_CREATED, ENTRY_REVERSED, REVERSAL_CREATED] }
+        actor: { $ref: '#/components/schemas/Responsible' }
+        related_entry_id: { type: [integer, 'null'], minimum: 1 }
+        reason: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+    EntryPlan:
+      type: object
+      required: [id, code, name, edition]
+      properties:
+        id: { type: integer, minimum: 1 }
+        code: { type: string }
+        name: { type: string }
+        edition: { type: string }
+    ReverseCatalogEntry:
+      type: object
+      additionalProperties: false
+      required: [operation_date, reason]
+      properties:
+        operation_date: { type: string, format: date }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    ReversalResult:
+      type: object
+      required: [original, reversal]
+      properties:
+        original: { $ref: '#/components/schemas/CatalogEntry' }
+        reversal: { $ref: '#/components/schemas/CatalogEntry' }
+    CreatePlan:
+      type: object
+      additionalProperties: false
+      required: [code, name, jurisdiction, edition]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 40 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        jurisdiction: { type: string, minLength: 2, maxLength: 8 }
+        edition: { type: string, minLength: 1, maxLength: 80 }
+        source_name: { type: string, maxLength: 160 }
+        source_url: { type: string, format: uri }
+        effective_from: { type: string, format: date }
+        effective_to: { type: string, format: date }
+    AccountingPlan:
+      allOf:
+        - $ref: '#/components/schemas/CreatePlan'
+        - type: object
+          required: [id, status, is_default, created_at]
+          properties:
+            id: { type: integer, minimum: 1 }
+            status: { type: string, enum: [ACTIVE, INACTIVE] }
+            is_default: { type: boolean }
+            created_at: { type: string, format: date-time }
+    CreateAccount:
+      type: object
+      additionalProperties: false
+      required: [code, name, normal_balance, is_postable]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 40 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        parent_account_id: { type: integer, minimum: 1 }
+        account_group: { type: string, maxLength: 40 }
+        normal_balance: { type: string, enum: [DEBIT, CREDIT] }
+        is_postable: { type: boolean }
+        status: { type: string, enum: [ACTIVE, INACTIVE], default: ACTIVE }
+        effective_from: { type: string, format: date }
+        effective_to: { type: string, format: date }
+    UpdateAccount:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        account_group: { type: string, maxLength: 40 }
+        normal_balance: { type: string, enum: [DEBIT, CREDIT] }
+        is_postable: { type: boolean }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        effective_to: { type: string, format: date }
+    AccountingAccount:
+      allOf:
+        - $ref: '#/components/schemas/CreateAccount'
+        - type: object
+          required: [id, plan_id, status, created_at]
+          properties:
+            id: { type: integer, minimum: 1 }
+            plan_id: { type: integer, minimum: 1 }
+            parent_name: { type: [string, 'null'] }
+            created_at: { type: string, format: date-time }
+    AccountingPeriod:
+      type: object
+      required: [year, month, status, last_transition_at, last_transition_by, last_reason]
+      properties:
+        year: { type: integer, minimum: 2000 }
+        month: { type: integer, minimum: 1, maximum: 12 }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        last_transition_at: { type: [string, 'null'], format: date-time }
+        last_transition_by: { type: [integer, 'null'], minimum: 1 }
+        last_reason: { type: [string, 'null'], maxLength: 2000 }
+    ReopenPeriod:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    AccountingAuditEvent:
+      type: object
+      required: [id, entity_type, entity_id, action, actor_user_id, occurred_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        entity_type: { type: string, enum: [PLAN, ACCOUNT, DEFAULT_PLAN, PERIOD] }
+        entity_id: { type: integer, minimum: 1 }
+        action: { type: string }
+        actor_user_id: { type: integer, minimum: 1 }
+        occurred_at: { type: string, format: date-time }
+        prior_state: { type: [object, 'null'], additionalProperties: true }
+        new_state: { type: [object, 'null'], additionalProperties: true }
+        reason: { type: [string, 'null'], maxLength: 2000 }
+    Report:
+      type: object
+      required: [report, from_date, to_date, items, totals]
+      properties:
+        report: { type: string, enum: [journal, ledger, trial_balance] }
+        from_date: { type: string, format: date }
+        to_date: { type: string, format: date }
+        filters: { type: object, additionalProperties: true }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+        total: { type: integer, minimum: 0 }
+        totals: { type: object, additionalProperties: { type: string } }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0 }
+    Error:
+      type: object
+      required: [code, detail]
+      properties:
+        code: { type: string }
+        detail: { type: string }
+  responses:
+    ReportResult:
+      description: JSON response or file export of all filtered rows up to the 10,000 row cap.
+      content:
+        application/json: { schema: { $ref: '#/components/schemas/Report' } }
+        text/csv: { schema: { type: string, format: binary } }
+        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+    Unauthorized:
+      description: Missing or invalid session.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Authenticated account lacks ADMIN access.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Requested plan, account, entry or period does not exist.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: Duplicate code, invalid state transition, closed period, or active reference conflict.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ValidationError:
+      description: Invalid input, date range, account, or period state.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unavailable:
+      description: Accounting storage is unavailable.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ExportTooLarge:
+      description: Export exceeds 10,000 rows; narrow the date range or filters.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.adapters.persistence.inventory_movements import apply_stock_movement
 
 from app.database.connection import SessionLocal, get_engine
 from app.domain.customer_commerce import available_stock
@@ -441,6 +442,10 @@ class SalesQuoteRepositoryAdapter:
             reserved_lines = session.execute(text("""SELECT ri.*,sp.current_stock FROM inventory_reservation_items ri
                 JOIN spare_parts sp ON sp.id=ri.spare_part_id WHERE ri.reservation_id=:id ORDER BY ri.spare_part_id,ri.id"""),
                 {"id": reservation["id"]}).mappings().all()
+            # The reservation is consumed in this transaction before the common
+            # movement writer checks that the remaining stock covers other holds.
+            session.execute(text("UPDATE inventory_reservations SET status='CONSUMED',consumed_at=:now WHERE id=:id"),
+                {"now": now, "id": reservation["id"]})
             for line in reserved_lines:
                 line_id = int(session.execute(text("""INSERT INTO sales_order_items
                     (sales_order_id,quote_detail_id,spare_part_id,code_snapshot,name_snapshot,quantity,unit_price,subtotal)
@@ -449,22 +454,12 @@ class SalesQuoteRepositoryAdapter:
                     "code": line["code_snapshot"], "name": line["name_snapshot"],
                     "quantity": line["quantity"], "price": line["unit_price"], "subtotal": line["subtotal"],
                 }).scalar_one())
-                before = int(line["current_stock"])
-                after = before - int(line["quantity"])
-                if after < 0:
-                    raise ValueError("El stock físico cambió y no cubre la reserva; se canceló la confirmación.")
-                session.execute(text("UPDATE spare_parts SET current_stock=:after,updated_at=:now WHERE id=:part"),
-                    {"after": after, "now": now, "part": line["spare_part_id"]})
-                session.execute(text("""INSERT INTO inventory_movements
-                    (spare_part_id,purchase_receipt_item_id,sales_order_item_id,movement_type,code_snapshot,name_snapshot,
-                     quantity_delta,stock_before,stock_after,actor_user_id)
-                    VALUES (:part,NULL,:item,'SALE',:code,:name,:delta,:before,:after,:actor)"""), {
-                    "part": line["spare_part_id"], "item": line_id, "code": line["code_snapshot"],
-                    "name": line["name_snapshot"], "delta": -int(line["quantity"]),
-                    "before": before, "after": after, "actor": actor_user_id,
-                })
-            session.execute(text("UPDATE inventory_reservations SET status='CONSUMED',consumed_at=:now WHERE id=:id"),
-                {"now": now, "id": reservation["id"]})
+                try:
+                    apply_stock_movement(session, part_id=int(line["spare_part_id"]), quantity_delta=-int(line["quantity"]),
+                        movement_type="SALE", actor_user_id=actor_user_id, sales_order_item_id=line_id,
+                        code_snapshot=line["code_snapshot"], name_snapshot=line["name_snapshot"], now=now)
+                except ValueError as exc:
+                    raise ValueError("El stock físico cambió o hay reservas que impiden confirmar la venta.") from exc
             session.execute(text("""INSERT INTO quote_audit_events(quote_id,actor_user_id,event_type,changed_fields)
                 VALUES (:quote,:actor,'PAYMENT_CONFIRMED',CAST(:fields AS jsonb))"""), {
                 "quote": quote_id, "actor": actor_user_id,

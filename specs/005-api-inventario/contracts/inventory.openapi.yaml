@@ -76,7 +76,7 @@ paths:
           maxLength: 50
     put:
       operationId: replaceInventoryPart
-      summary: Actualizar datos y existencias
+      summary: Actualizar datos del catálogo; stock se modifica por movimientos
       security:
         - sessionCookie: []
       requestBody:
@@ -161,7 +161,7 @@ components:
     InventoryPartWrite:
       type: object
       additionalProperties: false
-      required: [code, name, category, unit_price, current_stock, minimum_threshold]
+      required: [code, name, category, unit_price, minimum_threshold]
       properties:
         code:
           type: string
@@ -187,6 +187,8 @@ components:
           type: integer
           minimum: 0
           maximum: 999999
+          deprecated: true
+          description: Compatibilidad temporal. El servidor lo convierte en apertura/ajuste auditable; los clientes nuevos deben omitirlo.
         minimum_threshold:
           type: integer
           minimum: 0

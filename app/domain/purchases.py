@@ -22,6 +22,45 @@ class PurchaseConflictFailure(ValueError):
     pass
 
 
+def ensure_invoice_receipt_allowed(purchase_order_id: int | None) -> None:
+    if purchase_order_id is not None:
+        raise PurchaseConflictFailure(
+            "Esta factura está vinculada a una orden. Registra la recepción física desde "
+            "/api/admin/purchase-orders/{order_id}/receipts."
+        )
+
+
+def validate_invoice_order_supplier(purchase_order_id: int | None, purchase_supplier_id: int,
+                                    order_supplier_id: int | None) -> None:
+    if purchase_order_id is not None and order_supplier_id != purchase_supplier_id:
+        raise PurchaseValidationFailure(
+            "La orden no existe o pertenece a otro proveedor.", field="purchase_order_id"
+        )
+
+
+def validate_invoice_order_line_mapping(*, purchase_order_id: int | None,
+                                        order_item_id: int | None,
+                                        item_order_id: int | None,
+                                        invoice_spare_part_id: int | None,
+                                        order_spare_part_id: int | None) -> None:
+    if order_item_id is None:
+        return
+    if purchase_order_id is None:
+        raise PurchaseValidationFailure(
+            "La línea asociada requiere una orden en el comprobante.", field="purchase_order_id"
+        )
+    if item_order_id != purchase_order_id:
+        raise PurchaseValidationFailure(
+            "La línea asociada no pertenece a la orden indicada.", field="purchase_order_item_id"
+        )
+    if (invoice_spare_part_id is not None and order_spare_part_id is not None
+            and invoice_spare_part_id != order_spare_part_id):
+        raise PurchaseValidationFailure(
+            "El repuesto de la factura no coincide con la línea de la orden.",
+            field="purchase_order_item_id",
+        )
+
+
 def _money(value: object, field: str) -> Decimal:
     try:
         amount = Decimal(str(value))
@@ -48,6 +87,7 @@ def _text(value: object, field: str, maximum: int, *, required: bool = True) -> 
 @dataclass(frozen=True)
 class ValidatedPurchaseLine:
     spare_part_id: int | None
+    purchase_order_item_id: int | None
     description: str
     quantity: Decimal
     unit_cost: Decimal
@@ -140,6 +180,16 @@ def validate_purchase(values: Mapping[str, object]) -> ValidatedPurchase:
         spare_id = raw.get("spare_part_id")
         if spare_id is not None and (isinstance(spare_id, bool) or not isinstance(spare_id, int) or spare_id < 1):
             raise PurchaseValidationFailure("El repuesto no es válido.", field=f"{field_prefix}.spare_part_id")
+        order_item_id = raw.get("purchase_order_item_id")
+        if order_item_id is not None and (
+            isinstance(order_item_id, bool) or not isinstance(order_item_id, int) or order_item_id < 1
+        ):
+            raise PurchaseValidationFailure("La línea de orden no es válida.", field=f"{field_prefix}.purchase_order_item_id")
+        if order_item_id is not None and order_id is None:
+            raise PurchaseValidationFailure(
+                "La línea de orden requiere que el comprobante indique purchase_order_id.",
+                field=f"{field_prefix}.purchase_order_item_id",
+            )
         description = _text(raw.get("description"), f"{field_prefix}.description", 300)
         try:
             quantity = Decimal(str(raw.get("quantity")))
@@ -155,7 +205,7 @@ def validate_purchase(values: Mapping[str, object]) -> ValidatedPurchase:
         if discount > gross:
             raise PurchaseValidationFailure("El descuento no puede superar el importe bruto de la línea.", field=f"{field_prefix}.discount_amount")
         line_total = gross - discount + tax
-        lines.append(ValidatedPurchaseLine(spare_id, description, quantity, unit_cost, discount, tax, line_total))
+        lines.append(ValidatedPurchaseLine(spare_id, order_item_id, description, quantity, unit_cost, discount, tax, line_total))
     subtotal = _money(sum(((line.quantity * line.unit_cost).quantize(CENT, rounding=ROUND_HALF_UP) for line in lines), Decimal("0.00")), "subtotal")
     discounts = _money(sum((line.discount_amount for line in lines), Decimal("0.00")), "discount_total")
     taxes = _money(sum((line.tax_amount for line in lines), Decimal("0.00")), "tax_total")

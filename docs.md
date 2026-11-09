@@ -53,17 +53,22 @@ El contrato backend de audio y su validacion local viven en
 | 24 | API CRUD del inventario para el taller | `specs/005-api-inventario/` | `docs/24-api-inventario.md` |
 | 25 | Limpieza verificada de auxiliares de migración y tabla sin consumidor | `sql/migrations/010_remove_obsolete_tables.sql` | `docs/25-limpieza-tablas-obsoletas.md` |
 | 26 | Desactivación temporal de guardas contables en la base local de pruebas | `sql/operations/accounting-test-triggers-disable.sql`, `accounting-test-triggers-restore.sql` | `docs/26-borrado-temporal-asientos-prueba.md` |
+| 27 | Propuesta de mejoras del backend inspiradas en Dolibarr | — | `docs/27-propuesta-mejoras-backend-basadas-dolibarr.md` |
+| 28 | Trazabilidad de movimientos de inventario | `specs/008-trazabilidad-movimientos-inventario/` | `docs/24-api-inventario.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.
 
 ## Fuera de este repositorio
 
+- `../dolibarr/TECHFIXAI-ERP-REFERENCE.md`: mapa de referencia del código local de Dolibarr 25, con módulos ERP, informes, planes contables y generación PDF/ODT; es una orientación, no una auditoría de una instancia configurada.
+
 ### Trabajo de esta rama (`feature/spec-kit`)
 
 - `specs/001-patrones-multiagente-coherentes/`: especificación, plan, investigación, contratos, quickstart y tareas de paridad académica entre los tres patrones.
 - `specs/002-transcripcion-audio/`: especificación, contrato OpenAPI y tareas de transcripción de audio para el backend.
 - `specs/003-asientos-contables/`: especificación, plan, contrato, tareas e implementación backend del registro interno de asientos; migración aplicada y validada en la BD PostgreSQL de prueba.
+- `specs/009-catalogo-cuentas-consultas-contables/`: contrato OpenAPI, especificación y quickstart del catálogo, periodos y reportes contables; `GET /api/admin/accounting/plans/{plan_id}/accounts` busca por código/denominación y admite filtros y paginación.
 - `docs/20-esquema-ampliado-y-trazabilidad.md`: comparación estructural de solo lectura con `contexto/tablas postgres v2.sql` y registro de validación.
 
 - Frontend (pantallas, estilos, pruebas Vitest): [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend), con sus propios `AGENTS.md`, `features.md`, `docs.md` y `memory.md`.

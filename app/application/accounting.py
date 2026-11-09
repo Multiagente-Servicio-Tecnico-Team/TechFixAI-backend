@@ -22,10 +22,11 @@ class AccountingService:
             "concept": draft.concept,
             "detail": draft.detail,
             "category_id": draft.category_id,
+            "accounting_plan_id": draft.accounting_plan_id,
             "lines": [
                 {
                     "account_code": line.account_code,
-                    "account_name": line.account_name,
+                    "account_id": line.account_id,
                     "description": line.description,
                     "debit": format(line.debit, ".2f"),
                     "credit": format(line.credit, ".2f"),
@@ -62,3 +63,7 @@ class AccountingService:
         if not 1 <= len(normalized_reason) <= 2000:
             raise AccountingValidationError("La razón debe tener entre 1 y 2000 caracteres.")
         return self.repository.reverse_entry(actor_id, entry_id, operation_date, normalized_reason)
+
+    def report(self, report_type: str, **filters):
+        from app.application.accounting_reports import AccountingReportsService
+        return AccountingReportsService(self.repository).get_report(report_type, **filters)

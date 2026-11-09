@@ -116,3 +116,7 @@ def transferir_a_reembolsos(motivo: str) -> str:
 def transferir_a_compras(motivo: str) -> str:
     """Transfiere una solicitud de compra a proveedor."""
     return f"TRANSFERIR_COMPRAS: {motivo}"
+import importlib as _importlib
+import sys as _sys
+
+_sys.modules[__name__] = _importlib.import_module(".support_tools", __package__)

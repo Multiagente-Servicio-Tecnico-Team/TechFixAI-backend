@@ -31,7 +31,7 @@ def test_rag_tecnico():
 
         herramientas_por_agente[agente_actual].append(mensaje.name)
 
-        if mensaje.name == "transferir_a_tecnico":
+        if mensaje.name in {"transferir_a_tecnico", "transfer_to_hardware"}:
             agente_actual = "tecnico"
         elif mensaje.name == "transferir_a_ventas":
             agente_actual = "ventas"
@@ -48,6 +48,6 @@ def test_rag_tecnico():
             str(mensaje.content)[:500]
         )
 
-    assert "transferir_a_tecnico" in herramientas_por_agente["soporte"]
+    assert "transfer_to_hardware" in herramientas_por_agente["soporte"]
     assert "consultar_base_conocimiento" in herramientas_por_agente["tecnico"]
     assert resultado.get("errors", []) == []

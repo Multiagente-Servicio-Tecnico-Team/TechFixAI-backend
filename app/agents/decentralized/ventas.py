@@ -1,3 +1,5 @@
+import importlib as _importlib
+import sys as _sys
 
 import json
 from decimal import Decimal, InvalidOperation
@@ -638,3 +640,4 @@ def ventas_node(state: AgentState):
             "current_agent": "ventas",
             "errors": state.get("errors", []) + [error],
         }
+_sys.modules[__name__] = _importlib.import_module(".sales", __package__)

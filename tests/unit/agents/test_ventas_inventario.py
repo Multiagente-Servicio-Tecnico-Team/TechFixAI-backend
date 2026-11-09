@@ -33,7 +33,7 @@ def test_inventario_disponible():
     assert errores == []
     assert len(inventario) == 1
     assert inventario[0]["subtotal"] == "240.00"
-    assert inventario[0]["disponible"] is True
+    assert inventario[0]["available"] is True
 
 
 # 2. Stock insuficiente
@@ -51,7 +51,7 @@ def test_stock_insuficiente():
     inventario, errores = validar_inventario(state)
 
     assert errores == []
-    assert inventario[0]["disponible"] is False
+    assert inventario[0]["available"] is False
     assert inventario[0]["subtotal"] is None
 
 
@@ -68,7 +68,7 @@ def test_contexto_repuesto_sin_stock():
 
     contexto = construir_contexto_inventario(state)
 
-    assert '"disponible": false' in contexto.content
+    assert '"available": false' in contexto.content
     assert '"subtotal": null' in contexto.content
 
 # 3. Precio negativo

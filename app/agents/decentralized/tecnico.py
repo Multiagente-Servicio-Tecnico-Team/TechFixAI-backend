@@ -230,3 +230,7 @@ def tecnico_node(state: AgentState):
             "current_agent": "tecnico",
             "errors": state.get("errors", []) + [error],
         }
+import importlib as _importlib
+import sys as _sys
+
+_sys.modules[__name__] = _importlib.import_module(".hardware", __package__)

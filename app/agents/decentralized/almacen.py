@@ -220,3 +220,7 @@ def almacen_node(state: AgentState):
             "current_agent": "almacen",
             "errors": state.get("errors", []) + [error],
         }
+import importlib as _importlib
+import sys as _sys
+
+_sys.modules[__name__] = _importlib.import_module(".warehouse", __package__)

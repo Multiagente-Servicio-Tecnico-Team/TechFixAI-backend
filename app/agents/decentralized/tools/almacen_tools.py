@@ -31,3 +31,7 @@ def consultar_inventario(
 def transferir_a_ventas(motivo: str) -> str:
     """Transfiere a Ventas los resultados del inventario."""
     return f"TRANSFERIR_VENTAS: {motivo}"
+import importlib as _importlib
+import sys as _sys
+
+_sys.modules[__name__] = _importlib.import_module(".warehouse_tools", __package__)

@@ -37,11 +37,8 @@ def after_operations_supervisor(state: ServiceState) -> str:
 
 
 def after_logistics(state: ServiceState) -> str:
-    if (
-        state.get("outcome") == "logistics_registered"
-        and state.get("request_type") in {"SALE", "PC_BUILD"}
-    ):
-        return "order_completion_agent"
+    # Sales and PC_BUILD have no service ticket. A PC_BUILD warranty is
+    # attached to its paid sales order inside payment confirmation.
     return END
 
 

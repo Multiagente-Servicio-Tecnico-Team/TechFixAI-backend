@@ -772,9 +772,8 @@ class ServiceRepository:
                 return None
             if ticket["status"] == "CANCELLED":
                 raise ValueError("No se puede cotizar un ticket cancelado.")
-            expected = {"REPAIR": "REPAIR", "SUPPORT": "REPAIR", "WARRANTY_CLAIM": "REPAIR", "SALE": "DIRECT_SALE", "PC_BUILD": "PC_BUILD"}[ticket["request_type"]]
-            if expected != quote_type:
-                raise ValueError("El tipo de cotización no corresponde al tipo de ticket.")
+            if ticket["request_type"] not in {"REPAIR", "SUPPORT", "WARRANTY_CLAIM"} or quote_type != "REPAIR":
+                raise ValueError("Solo los tickets de servicio admiten cotizaciones de servicio; las ventas se cotizan sin ticket.")
             if ticket["commercial_customer_id"] is None:
                 raise ValueError("El ticket todavía no tiene cliente comercial migrado.")
             labor = Decimal(str(labor_cost)).quantize(Decimal("0.01"))
@@ -848,6 +847,8 @@ class ServiceRepository:
             """
             SELECT t.id, t.commercial_customer_id AS customer_id, t.code, t.title, t.failure_description,
                    t.request_type::text AS request_type,
+                   t.diagnosis_type::text AS diagnosis_type,
+                   t.hardware_diagnosis, t.software_diagnosis,
                    t.status::text AS status, t.created_at, t.updated_at,
                    q.id AS quote_id, q.status::text AS quote_status,
                    q.labor_cost, q.parts_cost, q.total_amount,
@@ -949,10 +950,25 @@ class ServiceRepository:
             FROM customers c WHERE c.id=:customer_id AND c.active IS TRUE AND c.user_id IS NOT NULL
             RETURNING id""")
         with self._session_factory() as session, session.begin():
-            actor_user_id = session.execute(text("SELECT user_id FROM customers WHERE id=:id AND active IS TRUE"),
-                                            {"id": customer_id}).scalar_one_or_none()
-            if actor_user_id is None:
+            customer = session.execute(text("""SELECT c.id, c.user_id, c.display_name, c.phone, c.email,
+                    u.active AS user_active, u.role::text AS user_role
+                FROM public.customers c LEFT JOIN public.users u ON u.id=c.user_id
+                WHERE c.id=:id AND c.active IS TRUE FOR UPDATE OF c"""),
+                {"id": customer_id}).mappings().first()
+            if (customer is None or customer["user_id"] is None or not customer["user_active"]
+                    or customer["user_role"] != "CUSTOMER"):
                 raise LookupError("El perfil del portal no está vinculado a una cuenta activa.")
+            actor_user_id = int(customer["user_id"])
+            existing = session.execute(text("""SELECT id, commercial_customer_id, title,
+                    failure_description, request_type::text AS request_type
+                FROM public.tickets WHERE code=:code FOR UPDATE"""), {"code": code}).mappings().first()
+            if existing is not None:
+                if (int(existing["commercial_customer_id"]) != int(customer_id)
+                        or existing["title"] != title[:200]
+                        or existing["failure_description"] != failure_description
+                        or existing["request_type"] != request_type):
+                    raise LookupError("El código del ticket ya pertenece a otra operación.")
+                return int(existing["id"])
             ticket_id = session.execute(
                 query,
                 {
@@ -982,8 +998,12 @@ class ServiceRepository:
             """
             UPDATE tickets
             SET diagnosis_type = CAST(:diagnosis_type AS diagnosis_type_enum),
-                hardware_diagnosis = :hardware_diagnosis,
-                software_diagnosis = :software_diagnosis,
+                hardware_diagnosis = CASE
+                    WHEN :diagnosis_type IN ('HARDWARE', 'HYBRID')
+                    THEN :hardware_diagnosis ELSE hardware_diagnosis END,
+                software_diagnosis = CASE
+                    WHEN :diagnosis_type IN ('SOFTWARE', 'HYBRID')
+                    THEN :software_diagnosis ELSE software_diagnosis END,
                 status = CAST('IN_DIAGNOSIS' AS ticket_status_enum),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :ticket_id
@@ -1030,116 +1050,144 @@ class ServiceRepository:
         parts: list[dict[str, Any]],
         payment_code: str,
     ) -> dict[str, Any]:
-        if quote_type not in {"REPAIR", "DIRECT_SALE", "PC_BUILD"}:
-            raise ValueError("Tipo de cotización no admitido.")
-        if total_amount <= 0 or (quote_type != "REPAIR" and not parts):
-            raise ValueError("La cotización requiere un importe positivo y artículos.")
-        insert_quote = text(
-            """
-            INSERT INTO quotes (
-                ticket_id, quote_type, labor_cost, parts_cost, total_amount,
-                status, observations
-            )
-            VALUES (
-                :ticket_id, CAST(:quote_type AS quote_type_enum), :labor_cost,
-                :parts_cost, :total_amount, CAST('ACCEPTED' AS quote_status_enum),
-                :observations
-            )
-            RETURNING id
-            """
-        )
-        insert_detail = text(
-            """
-            INSERT INTO quote_details (
-                quote_id, spare_part_id, quantity, unit_price, subtotal
-            )
-            VALUES (:quote_id, :spare_part_id, :quantity, :unit_price, :subtotal)
-            """
-        )
-        insert_payment = text(
-            """
-            INSERT INTO payments (
-                ticket_id, quote_id, customer_id, payment_code, amount, status
-            )
-            VALUES (
-                :ticket_id, :quote_id, :customer_id, :payment_code, :amount,
-                CAST('PENDING' AS payment_status_enum)
-            )
-            RETURNING id, payment_code, amount, status
-            """
-        )
-        update_ticket = text(
-            """
-            UPDATE tickets
-            SET status = CAST('PAYMENT_PENDING' AS ticket_status_enum),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :ticket_id AND customer_id = :customer_id
-            """
-        )
-        with self._session_factory() as session, session.begin():
-            existing = session.execute(
-                text(
-                    """
-                    SELECT q.id AS quote_id, p.id AS payment_id,
-                           p.payment_code, p.status AS payment_status
-                    FROM quotes q
-                    JOIN payments p ON p.quote_id = q.id
-                    JOIN tickets t ON t.id = q.ticket_id
-                    WHERE q.ticket_id = :ticket_id
-                      AND t.customer_id = :customer_id
-                      AND q.status::text = 'ACCEPTED'
-                    ORDER BY q.id DESC
-                    LIMIT 1
-                    """
-                ),
-                {"ticket_id": ticket_id, "customer_id": customer_id},
-            ).mappings().first()
-            if existing:
-                return dict(existing)
+        from app.domain.errors import StaleQuote
+        from app.domain.money import to_money
 
-            quote_id = session.execute(
-                insert_quote,
-                {
-                    "ticket_id": ticket_id,
-                    "quote_type": quote_type,
-                    "labor_cost": labor_cost,
-                    "parts_cost": parts_cost,
-                    "total_amount": total_amount,
-                    "observations": observations,
-                },
-            ).scalar_one()
+        if quote_type != "REPAIR":
+            raise ValueError("Los tickets solo admiten cotizaciones de servicio REPAIR.")
+        labor_cost = to_money(labor_cost)
+        parts_cost = to_money(parts_cost)
+        total_amount = to_money(total_amount)
+        if (labor_cost < 0 or parts_cost < 0 or total_amount <= 0
+                or total_amount != labor_cost + parts_cost):
+            raise ValueError("Los importes de la cotización no son consistentes.")
+        if not payment_code or len(payment_code) > 100:
+            raise ValueError("Se requiere una referencia de pago válida.")
+
+        with self._session_factory() as session, session.begin():
+            owner = session.execute(text("""
+                SELECT t.id, t.commercial_customer_id, t.status::text AS ticket_status,
+                       t.request_type::text AS request_type, t.customer_id AS legacy_user_id,
+                       c.user_id, c.display_name, c.phone, c.email,
+                       u.active AS user_active, u.role::text AS user_role
+                FROM public.tickets t
+                JOIN public.customers c ON c.id=t.commercial_customer_id
+                JOIN public.users u ON u.id=c.user_id
+                WHERE t.id=:ticket_id AND t.commercial_customer_id=:customer_id
+                  AND t.request_type IN (CAST('REPAIR' AS request_type_enum), CAST('SUPPORT' AS request_type_enum))
+                  AND c.active IS TRUE
+                FOR UPDATE OF t, c
+            """), {"ticket_id": ticket_id, "customer_id": customer_id}).mappings().first()
+            if (owner is None or owner["user_active"] is not True
+                    or owner["user_role"] != "CUSTOMER"):
+                raise LookupError("El ticket no pertenece al cliente autenticado o no admite cotizaciones.")
+            existing = session.execute(text("""
+                SELECT q.id AS quote_id, p.id AS payment_id, p.payment_code,
+                       p.status::text AS payment_status, q.total_amount
+                FROM public.quotes q
+                JOIN public.payments p ON p.quote_id=q.id
+                WHERE q.ticket_id=:ticket_id AND q.customer_id=:customer_id
+                  AND q.status::text='ACCEPTED' AND p.status::text='PENDING'
+                ORDER BY q.id DESC LIMIT 1
+            """), {"ticket_id": ticket_id, "customer_id": customer_id}).mappings().first()
+            if existing:
+                if to_money(existing["total_amount"]) != total_amount:
+                    raise LookupError("El ticket ya tiene una cotización aceptada con pago pendiente.")
+                return {
+                    "quote_id": int(existing["quote_id"]),
+                    "payment_id": int(existing["payment_id"]),
+                    "payment_code": existing["payment_code"],
+                    "payment_status": existing["payment_status"],
+                }
+            if owner["ticket_status"] not in {"NEW", "IN_DIAGNOSIS", "QUOTED"}:
+                raise LookupError("El ticket ya no admite cotizaciones.")
+
+            validated_parts = []
+            sum_parts = Decimal("0.00")
             for part in parts:
-                session.execute(
-                    insert_detail,
-                    {
-                        "quote_id": quote_id,
-                        "spare_part_id": part["id"],
-                        "quantity": part["quantity"],
-                        "unit_price": part["unit_price"],
-                        "subtotal": part["subtotal"],
-                    },
-                )
-            payment = session.execute(
-                insert_payment,
-                {
-                    "ticket_id": ticket_id,
-                    "quote_id": quote_id,
-                    "customer_id": customer_id,
-                    "payment_code": payment_code,
-                    "amount": total_amount,
-                },
-            ).mappings().one()
-            updated = session.execute(
-                update_ticket,
-                {"ticket_id": ticket_id, "customer_id": customer_id},
-            )
+                part_id = part.get("id", part.get("inventory_id", part.get("spare_part_id")))
+                quantity = part.get("quantity")
+                if type(part_id) is not int or part_id < 1 or type(quantity) is not int or quantity < 1:
+                    raise ValueError("Cada repuesto requiere ID y cantidad positivos.")
+                catalog = session.execute(text("""
+                    SELECT id, unit_price, current_stock
+                    FROM public.spare_parts
+                    WHERE id=:id AND active IS TRUE
+                    FOR UPDATE
+                """), {"id": part_id}).mappings().first()
+                if catalog is None or int(catalog["current_stock"]) < quantity:
+                    raise StaleQuote()
+                current_price = to_money(catalog["unit_price"])
+                proposed_price = to_money(part["unit_price"])
+                subtotal = to_money(proposed_price * quantity)
+                if (current_price != proposed_price or to_money(part["subtotal"]) != subtotal):
+                    raise StaleQuote()
+                sum_parts += subtotal
+                validated_parts.append({
+                    "spare_part_id": part_id, "quantity": quantity,
+                    "unit_price": current_price, "subtotal": subtotal,
+                })
+            if to_money(sum_parts) != parts_cost:
+                raise ValueError("El subtotal de repuestos no coincide con sus líneas.")
+
+            quote_id = session.execute(text("""
+                INSERT INTO public.quotes (
+                    ticket_id, quote_type, labor_cost, parts_cost, total_amount,
+                    status, observations, customer_id, origin, created_by_user_id,
+                    accepted_by_user_id, accepted_at, customer_name_snapshot,
+                    customer_phone_snapshot, customer_email_snapshot
+                ) VALUES (
+                    :ticket_id, CAST('REPAIR' AS quote_type_enum), :labor_cost,
+                    :parts_cost, :total_amount, CAST('ACCEPTED' AS quote_status_enum),
+                    :observations, :customer_id, 'CHAT', :actor_user_id,
+                    :actor_user_id, CURRENT_TIMESTAMP, :customer_name,
+                    :customer_phone, :customer_email
+                ) RETURNING id
+            """), {
+                "ticket_id": ticket_id, "labor_cost": labor_cost, "parts_cost": parts_cost,
+                "total_amount": total_amount, "observations": observations,
+                "customer_id": customer_id, "actor_user_id": int(owner["user_id"]),
+                "customer_name": owner["display_name"], "customer_phone": owner["phone"],
+                "customer_email": owner["email"],
+            }).scalar_one()
+            for part in validated_parts:
+                session.execute(text("""
+                    INSERT INTO public.quote_details (quote_id, spare_part_id, quantity, unit_price, subtotal)
+                    VALUES (:quote_id, :spare_part_id, :quantity, :unit_price, :subtotal)
+                """), {"quote_id": quote_id, **part})
+            payment = session.execute(text("""
+                INSERT INTO public.payments (
+                    ticket_id, quote_id, customer_id, commercial_customer_id,
+                    payment_code, amount, status
+                ) VALUES (
+                    :ticket_id, :quote_id, :user_id, :customer_id,
+                    :payment_code, :amount, CAST('PENDING' AS payment_status_enum)
+                ) RETURNING id, payment_code, status::text AS status
+            """), {
+                "ticket_id": ticket_id, "quote_id": quote_id,
+                "user_id": int(owner["user_id"]), "customer_id": customer_id,
+                "payment_code": payment_code, "amount": total_amount,
+            }).mappings().one()
+            updated = session.execute(text("""
+                UPDATE public.tickets
+                SET status=CAST('PAYMENT_PENDING' AS ticket_status_enum), updated_at=CURRENT_TIMESTAMP
+                WHERE id=:ticket_id AND commercial_customer_id=:customer_id
+                  AND status IN (CAST('NEW' AS ticket_status_enum), CAST('IN_DIAGNOSIS' AS ticket_status_enum), CAST('QUOTED' AS ticket_status_enum))
+            """), {"ticket_id": ticket_id, "customer_id": customer_id})
             if updated.rowcount != 1:
-                raise LookupError("No se pudo actualizar el ticket comercial.")
+                raise LookupError("No se pudo actualizar el ticket de servicio.")
+            session.execute(text("""
+                INSERT INTO public.quote_audit_events (quote_id, actor_user_id, event_type, changed_fields)
+                VALUES (:quote_id, :actor, 'ACCEPTED', jsonb_build_object('origin','CHAT','payment_status','PENDING'))
+            """), {"quote_id": quote_id, "actor": int(owner["user_id"])})
+            session.execute(text("""
+                INSERT INTO public.ticket_audit_events (ticket_id, actor_user_id, event_type, changed_fields)
+                VALUES (:ticket_id, :actor, 'QUOTE_ACCEPTED', jsonb_build_object('quote_id',:quote_id,'payment_id',:payment_id))
+            """), {"ticket_id": ticket_id, "actor": int(owner["user_id"]),
+                   "quote_id": int(quote_id), "payment_id": int(payment["id"])})
         return {
-            "quote_id": int(quote_id),
-            "payment_id": int(payment["id"]),
-            "payment_code": payment["payment_code"],
-            "payment_status": payment["status"],
+            "quote_id": int(quote_id), "payment_id": int(payment["id"]),
+            "payment_code": payment["payment_code"], "payment_status": payment["status"],
         }
 
     def cancel_ticket(self, ticket_id: int, customer_id: int) -> None:
@@ -1175,127 +1223,129 @@ class ServiceRepository:
         parts: list[dict[str, Any]],
         payment_code: str,
     ) -> dict[str, Any]:
-        """Atomically create an accepted ticket quote and pending payment."""
+        """Create an online service ticket, accepted quote and pending payment atomically."""
+        from app.domain.errors import StaleQuote
+        from app.domain.money import to_money
+
         if type(customer_id) is not int or customer_id < 1:
             raise ValueError("Se requiere el cliente autenticado.")
-        expected_request = {
-            "REPAIR": "REPAIR",
-            "DIRECT_SALE": "SALE",
-            "PC_BUILD": "PC_BUILD",
-        }
-        if expected_request.get(quote_type) != request_type:
-            raise ValueError("El tipo de ticket no corresponde a la cotización.")
+        if quote_type != "REPAIR" or request_type not in {"REPAIR", "SUPPORT"}:
+            raise ValueError("Los tickets solo admiten cotizaciones de reparación o soporte.")
         if diagnosis_type not in {"HARDWARE", "SOFTWARE", "HYBRID", "NONE"}:
             raise ValueError("Tipo de diagnóstico no admitido.")
-        if total_amount <= 0 or labor_cost < 0 or parts_cost < 0:
+        labor_cost, parts_cost, total_amount = map(to_money, (labor_cost, parts_cost, total_amount))
+        if (total_amount <= 0 or labor_cost < 0 or parts_cost < 0
+                or total_amount != labor_cost + parts_cost):
             raise ValueError("La cotización debe tener importes válidos.")
+        if not payment_code or len(payment_code) > 100:
+            raise ValueError("Se requiere una referencia de pago válida.")
         ticket_code = f"TCK-{uuid4().hex[:12].upper()}"
-        insert_ticket = text(
-            """
-            INSERT INTO tickets (
-                code, customer_id, title, failure_description, request_type,
-                diagnosis_type, status, hardware_diagnosis, software_diagnosis
-            )
-            VALUES (
-                :code, :customer_id, :title, :failure_description,
-                CAST(:request_type AS request_type_enum),
-                CAST(:diagnosis_type AS diagnosis_type_enum),
-                CAST('PAYMENT_PENDING' AS ticket_status_enum),
-                :hardware_diagnosis, :software_diagnosis
-            )
-            RETURNING id
-            """
-        )
-        insert_quote = text(
-            """
-            INSERT INTO quotes (
-                ticket_id, quote_type, labor_cost, parts_cost, total_amount,
-                status, observations
-            )
-            VALUES (
-                :ticket_id, CAST(:quote_type AS quote_type_enum), :labor_cost,
-                :parts_cost, :total_amount, CAST('ACCEPTED' AS quote_status_enum),
-                :observations
-            )
-            RETURNING id
-            """
-        )
-        insert_detail = text(
-            """
-            INSERT INTO quote_details (
-                quote_id, spare_part_id, quantity, unit_price, subtotal
-            )
-            VALUES (:quote_id, :spare_part_id, :quantity, :unit_price, :subtotal)
-            """
-        )
-        insert_payment = text(
-            """
-            INSERT INTO payments (
-                ticket_id, quote_id, customer_id, payment_code, amount, status
-            )
-            VALUES (
-                :ticket_id, :quote_id, :customer_id, :payment_code, :amount,
-                CAST('PENDING' AS payment_status_enum)
-            )
-            RETURNING id, payment_code, status
-            """
-        )
         with self._session_factory() as session, session.begin():
+            owner = session.execute(text("""
+                SELECT c.id, c.user_id, c.display_name, c.phone, c.email,
+                       u.active AS user_active, u.role::text AS user_role
+                FROM public.customers c
+                JOIN public.users u ON u.id=c.user_id
+                WHERE c.id=:customer_id AND c.active IS TRUE
+                FOR UPDATE OF c
+            """), {"customer_id": customer_id}).mappings().first()
+            if (owner is None or owner["user_active"] is not True
+                    or owner["user_role"] != "CUSTOMER"):
+                raise LookupError("El perfil comercial no está vinculado a una cuenta cliente activa.")
+            actor_user_id = int(owner["user_id"])
             ticket_id = session.execute(
-                insert_ticket,
-                {
-                    "code": ticket_code,
-                    "customer_id": customer_id,
-                    "title": title[:200],
-                    "failure_description": failure_description,
-                    "request_type": request_type,
+                text("""
+                    INSERT INTO public.tickets (
+                        code, customer_id, commercial_customer_id, created_by_user_id,
+                        contact_name, contact_phone, contact_email, title, failure_description,
+                        request_type, diagnosis_type, status, hardware_diagnosis,
+                        software_diagnosis, origin
+                    ) VALUES (
+                        :code, :user_id, :customer_id, :actor_user_id, :contact_name,
+                        :contact_phone, :contact_email, :title, :failure_description,
+                        CAST(:request_type AS request_type_enum), CAST(:diagnosis_type AS diagnosis_type_enum),
+                        CAST('PAYMENT_PENDING' AS ticket_status_enum), :hardware_diagnosis,
+                        :software_diagnosis, 'ONLINE'
+                    ) RETURNING id
+                """), {
+                    "code": ticket_code, "user_id": actor_user_id,
+                    "customer_id": customer_id, "actor_user_id": actor_user_id,
+                    "contact_name": owner["display_name"], "contact_phone": owner["phone"],
+                    "contact_email": owner["email"], "title": title[:200],
+                    "failure_description": failure_description, "request_type": request_type,
                     "diagnosis_type": diagnosis_type,
-                    "hardware_diagnosis": (
-                        provisional_diagnosis
-                        if diagnosis_type in {"HARDWARE", "HYBRID"}
-                        else None
-                    ),
-                    "software_diagnosis": (
-                        provisional_diagnosis
-                        if diagnosis_type in {"SOFTWARE", "HYBRID"}
-                        else None
-                    ),
-                },
-            ).scalar_one()
-            quote_id = session.execute(
-                insert_quote,
-                {
-                    "ticket_id": ticket_id,
-                    "quote_type": quote_type,
-                    "labor_cost": labor_cost,
-                    "parts_cost": parts_cost,
-                    "total_amount": total_amount,
-                    "observations": observations,
-                },
-            ).scalar_one()
+                    "hardware_diagnosis": provisional_diagnosis if diagnosis_type in {"HARDWARE", "HYBRID"} else None,
+                    "software_diagnosis": provisional_diagnosis if diagnosis_type in {"SOFTWARE", "HYBRID"} else None,
+                }).scalar_one()
+            validated_parts = []
+            sum_parts = Decimal("0.00")
             for part in parts:
-                if type(part.get("quantity")) is not int or part["quantity"] < 1:
-                    raise ValueError("Cantidad de artículo no válida.")
+                part_id = part.get("id", part.get("inventory_id", part.get("spare_part_id")))
+                quantity = part.get("quantity")
+                if type(part_id) is not int or part_id < 1 or type(quantity) is not int or quantity < 1:
+                    raise ValueError("Cada repuesto requiere ID y cantidad positivos.")
+                catalog = session.execute(text("""
+                    SELECT id, unit_price, current_stock FROM public.spare_parts
+                    WHERE id=:id AND active IS TRUE FOR UPDATE
+                """), {"id": part_id}).mappings().first()
+                if catalog is None or int(catalog["current_stock"]) < quantity:
+                    raise StaleQuote()
+                current_price = to_money(catalog["unit_price"])
+                proposed_price = to_money(part["unit_price"])
+                subtotal = to_money(proposed_price * quantity)
+                if current_price != proposed_price or to_money(part["subtotal"]) != subtotal:
+                    raise StaleQuote()
+                sum_parts += subtotal
+                validated_parts.append({"spare_part_id": part_id, "quantity": quantity,
+                                        "unit_price": current_price, "subtotal": subtotal})
+            if to_money(sum_parts) != parts_cost:
+                raise ValueError("El subtotal de repuestos no coincide con sus líneas.")
+            quote_id = session.execute(text("""
+                INSERT INTO public.quotes (
+                    ticket_id, quote_type, labor_cost, parts_cost, total_amount, status,
+                    observations, customer_id, origin, created_by_user_id, accepted_by_user_id,
+                    accepted_at, customer_name_snapshot, customer_phone_snapshot, customer_email_snapshot
+                ) VALUES (
+                    :ticket_id, CAST('REPAIR' AS quote_type_enum), :labor_cost, :parts_cost,
+                    :total_amount, CAST('ACCEPTED' AS quote_status_enum), :observations,
+                    :customer_id, 'CHAT', :actor_user_id, :actor_user_id, CURRENT_TIMESTAMP,
+                    :customer_name, :customer_phone, :customer_email
+                ) RETURNING id
+            """), {
+                "ticket_id": ticket_id, "labor_cost": labor_cost, "parts_cost": parts_cost,
+                "total_amount": total_amount, "observations": observations,
+                "customer_id": customer_id, "actor_user_id": actor_user_id,
+                "customer_name": owner["display_name"], "customer_phone": owner["phone"],
+                "customer_email": owner["email"],
+            }).scalar_one()
+            for part in validated_parts:
                 session.execute(
-                    insert_detail,
-                    {
-                        "quote_id": quote_id,
-                        "spare_part_id": part["id"],
-                        "quantity": part["quantity"],
-                        "unit_price": part["unit_price"],
-                        "subtotal": part["subtotal"],
-                    },
+                    text("""INSERT INTO public.quote_details
+                        (quote_id, spare_part_id, quantity, unit_price, subtotal)
+                        VALUES (:quote_id, :spare_part_id, :quantity, :unit_price, :subtotal)"""),
+                    {"quote_id": quote_id, **part},
                 )
-            payment = session.execute(
-                insert_payment,
-                {
-                    "ticket_id": ticket_id,
-                    "quote_id": quote_id,
-                    "customer_id": customer_id,
-                    "payment_code": payment_code,
-                    "amount": total_amount,
-                },
-            ).mappings().one()
+            payment = session.execute(text("""
+                INSERT INTO public.payments (
+                    ticket_id, quote_id, customer_id, commercial_customer_id,
+                    payment_code, amount, status
+                ) VALUES (
+                    :ticket_id, :quote_id, :user_id, :customer_id, :payment_code,
+                    :amount, CAST('PENDING' AS payment_status_enum)
+                ) RETURNING id, payment_code, status::text AS status
+            """), {
+                "ticket_id": ticket_id, "quote_id": quote_id,
+                "user_id": actor_user_id, "customer_id": customer_id,
+                "payment_code": payment_code, "amount": total_amount,
+            }).mappings().one()
+            session.execute(text("""
+                INSERT INTO public.ticket_audit_events (ticket_id, actor_user_id, event_type, changed_fields)
+                VALUES (:ticket_id, :actor, 'CREATED', jsonb_build_object('origin','ONLINE','request_type',:request_type))
+            """), {"ticket_id": ticket_id, "actor": actor_user_id, "request_type": request_type})
+            session.execute(text("""
+                INSERT INTO public.quote_audit_events (quote_id, actor_user_id, event_type, changed_fields)
+                VALUES (:quote_id, :actor, 'ACCEPTED', jsonb_build_object('origin','CHAT','payment_status','PENDING'))
+            """), {"quote_id": quote_id, "actor": actor_user_id})
         return {
             "ticket_id": int(ticket_id),
             "ticket_code": ticket_code,
@@ -1501,8 +1551,8 @@ class ServiceRepository:
             raise ValueError("Indica un pedido pagado o un ticket de armado.")
         if request_type == "SALE" and sales_order_id is None:
             raise ValueError("La garantía de venta requiere un pedido pagado.")
-        if request_type == "PC_BUILD" and ticket_id is None:
-            raise ValueError("La garantía de armado requiere un ticket de servicio.")
+        if request_type == "PC_BUILD" and ticket_id is not None:
+            raise ValueError("La garantía de armado se vincula al pedido pagado, no a un ticket de servicio.")
         with self._session_factory() as session, session.begin():
             customer = session.execute(text("SELECT user_id FROM customers WHERE id=:id AND active IS TRUE"),
                 {"id": customer_id}).mappings().first()
@@ -1510,13 +1560,15 @@ class ServiceRepository:
                 raise LookupError("El cliente comercial no existe o está inactivo.")
             if sales_order_id is not None:
                 quote = session.execute(text("""SELECT q.id,q.status::text AS status,o.status AS order_status
-                    FROM quotes q JOIN sales_orders o ON o.quote_id=q.id
+                    FROM quotes q JOIN sales_orders o ON o.quote_id=q.id JOIN payments p ON p.id=o.payment_id
                     WHERE q.id=:quote_id AND o.id=:order_id AND o.customer_id=:customer_id
-                      AND q.customer_id=:customer_id AND q.quote_type='DIRECT_SALE'
+                      AND q.customer_id=:customer_id AND q.quote_type=CAST(:quote_type AS quote_type_enum)
+                      AND o.status='PAID' AND p.status='COMPLETED'
                     FOR UPDATE OF q,o"""), {
                     "quote_id": quote_id, "order_id": sales_order_id, "customer_id": customer_id,
+                    "quote_type": "PC_BUILD" if request_type == "PC_BUILD" else "DIRECT_SALE",
                 }).mappings().first()
-                valid_order = quote is not None and quote["status"] == "ACCEPTED" and quote["order_status"] != "CANCELLED"
+                valid_order = quote is not None and quote["status"] == "ACCEPTED" and quote["order_status"] == "PAID"
             else:
                 quote = session.execute(text("""SELECT q.id,q.status::text AS status
                     FROM quotes q JOIN tickets t ON t.id=q.ticket_id

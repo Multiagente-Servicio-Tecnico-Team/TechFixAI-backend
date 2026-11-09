@@ -166,6 +166,7 @@ Copiar `.env.example` a `.env` y completar:
 | `GROQ_API_KEY` | Modelo de los agentes de los patrones |
 | `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGSMITH_PROJECT` | Trazabilidad en LangSmith |
 | `LANGSMITH_HIDE_INPUTS`, `LANGSMITH_HIDE_OUTPUTS` | Ocultamiento de contenido en las trazas |
+| `RAG_RETRIEVAL_MODE` | `lexical` por defecto para los tres patrones; `hybrid` activa el índice vectorial local |
 
 El archivo único `requirements.txt` reúne las dependencias de API, agentes, RAG,
 Streamlit y pruebas. Instálalas desde la raíz del backend con:
@@ -174,15 +175,19 @@ Streamlit y pruebas. Instálalas desde la raíz del backend con:
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
 
-Para crear o actualizar el índice vectorial local después de instalarlas, ejecuta:
+El chat usa búsqueda léxica compartida por defecto y no necesita crear un índice
+vectorial. Para probar el modo híbrido opcional, establece
+`RAG_RETRIEVAL_MODE=hybrid` y crea o actualiza el índice local:
 
 ```powershell
 .\.venv\Scripts\python.exe -m app.rag.ingest
 ```
 
 La ingesta descarga el modelo FastEmbed la primera vez y guarda el índice en
-`data/chroma/`, que está excluido de Git. Debe repetirse cuando cambie el
-contenido de `data/knowledge/`.
+`data/chroma/`, que está excluido de Git. Este modo no se recomienda para el
+servicio gratuito de Render: su disco es efímero y la instancia tiene recursos
+limitados. Si cambian los documentos, vuelve a generar el índice antes de usar
+el modo híbrido.
 
 El frontend ([TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
 `/auth` y `VITE_CHAT_URL` al mismo origen del chat. Los valores locales por defecto

@@ -69,6 +69,8 @@ def test_markdown_source_manifest_marks_demo_faq_as_unverified():
 def test_vector_relevance_is_preserved_and_low_relevance_abstains(monkeypatch):
     import app.rag.retriever as retrieval
 
+    monkeypatch.setenv("RAG_RETRIEVAL_MODE", "hybrid")
+
     source = Document(
         page_content="El equipo presenta sobrecalentamiento del procesador.",
         metadata={"source_id": "test:semantic", "trust_level": "verified_guide"},

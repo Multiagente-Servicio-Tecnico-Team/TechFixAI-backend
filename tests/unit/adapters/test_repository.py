@@ -82,10 +82,15 @@ class FakeSession:
 class RepositoryTests(unittest.TestCase):
     def test_accepted_ticket_quote_and_pending_payment_are_atomic(self):
         session = FakeSession([
+            FakeResult(row={"user_id": 9, "display_name": "Cliente", "phone": "900000001",
+                            "email": "cliente@example.com", "user_active": True, "user_role": "CUSTOMER"}),
             FakeResult(scalar=55),
+            FakeResult(row={"id": 4, "unit_price": Decimal("180.00"), "current_stock": 3}),
             FakeResult(scalar=77),
             FakeResult(),
             FakeResult(row={"id": 88, "payment_code": "PAY-TEST", "status": "PENDING"}),
+            FakeResult(),
+            FakeResult(),
         ])
         repository = ServiceRepository(lambda: session)
 
@@ -113,18 +118,18 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(result["quote_id"], 77)
         self.assertEqual(result["payment_id"], 88)
         self.assertEqual(result["payment_status"], "PENDING")
-        self.assertEqual(len(session.calls), 4)
-        self.assertIn("PAYMENT_PENDING", session.calls[0][0])
-        self.assertIn("ACCEPTED", session.calls[1][0])
-        self.assertIn("quote_details", session.calls[2][0])
-        self.assertIn("payment_status_enum", session.calls[3][0])
+        self.assertEqual(len(session.calls), 8)
+        self.assertIn("commercial_customer_id", session.calls[1][0])
+        self.assertIn("ACCEPTED", session.calls[3][0])
+        self.assertIn("quote_details", session.calls[4][0])
+        self.assertIn("commercial_customer_id", session.calls[5][0])
         self.assertTrue(session.transaction.committed)
 
     def test_accepted_ticket_quote_rejects_mismatched_request_type_before_writes(self):
         session = FakeSession([])
         repository = ServiceRepository(lambda: session)
 
-        with self.assertRaisesRegex(ValueError, "no corresponde"):
+        with self.assertRaisesRegex(ValueError, "cotizaciones de reparación o soporte"):
             repository.create_accepted_ticket_quote(
                 customer_id=9,
                 request_type="SALE",
@@ -258,7 +263,12 @@ class RepositoryTests(unittest.TestCase):
         self.assertTrue(session.transaction.committed)
 
     def test_service_intake_ticket_starts_new(self):
-        session = FakeSession([FakeResult(scalar=7), FakeResult(scalar=55), FakeResult()])
+        session = FakeSession([
+            FakeResult(row={"user_id": 9, "display_name": "Cliente", "phone": "900000001",
+                            "email": "cliente@example.com", "user_active": True, "user_role": "CUSTOMER"}),
+            FakeResult(),
+            FakeResult(scalar=55), FakeResult(),
+        ])
         repository = ServiceRepository(lambda: session)
 
         ticket_id = repository.create_intake_ticket(
@@ -269,12 +279,12 @@ class RepositoryTests(unittest.TestCase):
             request_type="REPAIR",
         )
 
-        query, parameters = session.calls[1]
+        query, parameters = session.calls[2]
         self.assertEqual(ticket_id, 55)
         self.assertIn("CAST('NEW' AS ticket_status_enum)", query)
         self.assertEqual(parameters["request_type"], "REPAIR")
         self.assertIn("commercial_customer_id", query)
-        self.assertIn("INSERT INTO ticket_audit_events", session.calls[2][0])
+        self.assertIn("INSERT INTO ticket_audit_events", session.calls[3][0])
         self.assertTrue(session.transaction.committed)
 
     def test_service_diagnosis_updates_existing_ticket_columns(self):
@@ -320,6 +330,10 @@ class RepositoryTests(unittest.TestCase):
     def test_accepted_repair_quote_creates_pending_payment_atomically(self):
         session = FakeSession(
             [
+                FakeResult(row={"id": 55, "commercial_customer_id": 9, "ticket_status": "IN_DIAGNOSIS",
+                                "request_type": "REPAIR", "legacy_user_id": 19, "user_id": 19,
+                                "display_name": "Cliente", "phone": "900000001", "email": "cliente@example.com",
+                                "user_active": True, "user_role": "CUSTOMER"}),
                 FakeResult(),
                 FakeResult(scalar=77),
                 FakeResult(
@@ -331,6 +345,8 @@ class RepositoryTests(unittest.TestCase):
                     }
                 ),
                 FakeResult(rowcount=1),
+                FakeResult(),
+                FakeResult(),
             ]
         )
         repository = ServiceRepository(lambda: session)
@@ -350,9 +366,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(result["quote_id"], 77)
         self.assertEqual(result["payment_id"], 88)
         self.assertEqual(result["payment_code"], "PAY-TEST")
-        self.assertIn("ACCEPTED", session.calls[1][0])
-        self.assertIn("PENDING", session.calls[2][0])
-        self.assertIn("PAYMENT_PENDING", session.calls[3][0])
+        self.assertIn("ACCEPTED", session.calls[2][0])
+        self.assertIn("PENDING", session.calls[3][0])
+        self.assertIn("PAYMENT_PENDING", session.calls[4][0])
         self.assertTrue(session.transaction.committed)
 
     def test_quote_and_ticket_update_share_one_transaction(self):

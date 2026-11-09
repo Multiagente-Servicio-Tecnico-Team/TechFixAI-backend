@@ -19,6 +19,11 @@ MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "sql" / "migrations"
 _MIGRATION_NAME = re.compile(r"^(?P<version>\d{3})_[a-z0-9_]+\.sql$")
 
 
+def _migration_checksum(contents: bytes) -> str:
+    """Hash SQL independent of the checkout's CRLF/LF line-ending policy."""
+    return hashlib.sha256(contents.replace(b"\r\n", b"\n")).hexdigest()
+
+
 @dataclass(frozen=True)
 class MigrationStatus:
     version: str
@@ -41,7 +46,10 @@ def _migration_files(directory: Path = MIGRATIONS_DIR) -> list[tuple[str, Path, 
     for path in sorted(directory.glob("*.sql")):
         match = _MIGRATION_NAME.fullmatch(path.name)
         if match:
-            checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            # Git may check out these SQL files with CRLF on Windows while the
+            # ledger was created from LF bytes. Treat both representations as
+            # the same migration so status remains stable across platforms.
+            checksum = _migration_checksum(path.read_bytes())
             files.append((match.group("version"), path, checksum))
     versions = [version for version, _, _ in files]
     if len(versions) != len(set(versions)):

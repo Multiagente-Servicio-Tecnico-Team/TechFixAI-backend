@@ -30,20 +30,20 @@ class SupplierPurchaseService:
             raise SupplierNotFound()
         return supplier
 
-    def create_supplier(self, values: Mapping[str, object]):
+    def create_supplier(self, values: Mapping[str, object], *, actor_id: int):
         try:
-            return self.repository.create_supplier(validate_supplier(values))
+            return self.repository.create_supplier(validate_supplier(values), actor_id=actor_id)
         except PurchaseValidationFailure as exc:
             raise _as_error(exc) from exc
 
-    def update_supplier(self, supplier_id: int, values: Mapping[str, object]):
+    def update_supplier(self, supplier_id: int, values: Mapping[str, object], *, actor_id: int):
         if supplier_id < 1:
             raise PurchaseError("El identificador de proveedor no es válido.", field="supplier_id")
         try:
             validated = validate_supplier(values, partial=True)
             if not validated:
                 raise PurchaseValidationFailure("Indica al menos un campo para actualizar.")
-            supplier = self.repository.update_supplier(supplier_id, validated)
+            supplier = self.repository.update_supplier(supplier_id, validated, actor_id=actor_id)
         except PurchaseValidationFailure as exc:
             raise _as_error(exc) from exc
         if supplier is None:

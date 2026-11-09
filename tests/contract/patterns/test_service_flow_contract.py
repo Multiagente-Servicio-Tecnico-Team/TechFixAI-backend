@@ -195,11 +195,11 @@ def test_clarification_and_support_intake_are_non_persisting(pattern_id, monkeyp
         result = atencion.atencion_node({"messages": messages, "user_id": 41})
         assert result["awaiting_clarification"] is True
     else:
-        import app.agents.decentralized.soporte as soporte
+        import app.agents.decentralized.support as soporte
         class SupportModel:
             def invoke(self, _messages):
                 return AIMessage(content="¿Qué modelo de equipo tienes?")
-        monkeypatch.setattr(soporte, "soporte_llm", SupportModel())
-        result = soporte.soporte_node({"messages": messages, "turn_start_index": 0})
+        monkeypatch.setattr(soporte, "llm", SupportModel())
+        result = soporte.support_node({"messages": messages, "turn_start_index": 0})
         assert not result["messages"][0].tool_calls
     assert repository.writes == []

@@ -5,15 +5,13 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Iterable
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
-from app.rag.embeddings import COLLECTION_NAME, EMBEDDING_MODEL, create_embeddings
+from app.settings import load_settings
 
-BASE_DIR = __import__("pathlib").Path(__file__).resolve().parents[2]
-CHROMA_DIR = BASE_DIR / "data" / "chroma"
 _QUERY_STOP_WORDS = {
     "ademas", "algo", "alguna", "algunas", "algunos", "como", "con", "cuando",
     "de", "del", "desde", "donde", "el", "ella", "ellos", "en", "es", "esta",
@@ -37,7 +35,7 @@ class RetrievedPassage:
     audience: str
     language: str
     corpus_version: str
-    embedding_model: str
+    embedding_model: str | None
     score: float
     match_type: str
 
@@ -50,6 +48,14 @@ def _normalize(text: str) -> str:
 
 def _metadata(document: Document) -> dict[str, str]:
     return {str(key): str(value) for key, value in document.metadata.items()}
+
+
+@lru_cache(maxsize=1)
+def load_lexical_corpus() -> tuple[Document, ...]:
+    """Carga y fragmenta el corpus común una vez por proceso."""
+    from app.rag.ingest import cargar_documentos, dividir_documentos
+
+    return tuple(dividir_documentos(cargar_documentos()))
 
 
 def _passage(document: Document, score: float, match_type: str) -> RetrievedPassage:
@@ -66,7 +72,11 @@ def _passage(document: Document, score: float, match_type: str) -> RetrievedPass
         audience=metadata.get("audience", "internal"),
         language=metadata.get("language", "es"),
         corpus_version=metadata.get("corpus_version", "1"),
-        embedding_model=metadata.get("embedding_model", EMBEDDING_MODEL),
+        embedding_model=(
+            metadata.get("embedding_model")
+            if match_type in {"semantic", "hybrid"}
+            else None
+        ),
         score=score,
         match_type=match_type,
     )
@@ -86,17 +96,21 @@ def retrieve_documents(
     query_norm = _normalize(query)
     if not query_norm:
         return []
-    semantic_corpus = [] if documents is not None else _search_index(query, limit)
+    retrieval_mode = load_settings().rag_retrieval_mode
+    semantic_corpus = _search_index(query, limit) if retrieval_mode == "hybrid" else []
     if documents is None:
-        from app.rag.ingest import cargar_documentos, dividir_documentos
-
-        lexical_corpus = dividir_documentos(cargar_documentos())
+        lexical_corpus = load_lexical_corpus()
         corpus = semantic_corpus + lexical_corpus
     else:
-        corpus = list(documents)
+        corpus = semantic_corpus + list(documents)
     allowed = allowed_trust_levels
     scored: list[tuple[float, Document, str]] = []
     code_query = bool(re.search(r"[A-Z]{2,}[\w-]*\d[\w-]*|\b\d{3,}\b", query, re.I))
+    query_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]{3,}", query_norm)
+        if token not in _QUERY_STOP_WORDS
+    }
     for document in corpus:
         metadata = _metadata(document)
         trust = metadata.get("trust_level", "unverified")
@@ -115,24 +129,24 @@ def retrieve_documents(
             metadata.get("section", ""),
         )))
         semantic_score = float(metadata.get("_semantic_score", "0"))
-        if semantic_score >= 0.35:
+        if retrieval_mode == "hybrid" and semantic_score >= 0.35:
             scored.append((semantic_score, document, "semantic"))
         if code_query and query_norm in content_norm:
             scored.append((1.0, document, "lexical_code"))
             continue
-        query_tokens = {
-            token
-            for token in re.findall(r"[a-z0-9]{3,}", query_norm)
-            if token not in _QUERY_STOP_WORDS
-        }
         content_tokens = set(re.findall(r"[a-z0-9]{3,}", content_norm))
         overlap = len(query_tokens & content_tokens)
         coverage = overlap / max(len(query_tokens), 1)
         # Lexical-only matches need stronger query coverage to avoid turning a
         # single generic word (for example "atención") into an answer.
         if coverage >= 0.34:
-            match_type = "hybrid" if semantic_score >= 0.35 else "lexical"
-            scored.append((max(coverage, semantic_score), document, match_type))
+            match_type = (
+                "hybrid"
+                if retrieval_mode == "hybrid" and semantic_score >= 0.35
+                else "lexical"
+            )
+            score = max(coverage, semantic_score) if retrieval_mode == "hybrid" else coverage
+            scored.append((score, document, match_type))
     scored.sort(key=lambda item: (-item[0], _metadata(item[1]).get("source_id", "")))
     deduplicated: list[tuple[float, Document, str]] = []
     seen_content: set[str] = set()
@@ -170,9 +184,17 @@ def _search_index(query: str, limit: int) -> list[Document]:
 
 
 @lru_cache(maxsize=1)
-def obtener_vectorstore() -> Chroma:
+def obtener_vectorstore():
+    # Las dependencias locales de embeddings se importan únicamente si se activa
+    # RAG_RETRIEVAL_MODE=hybrid.
+    from langchain_chroma import Chroma
+
+    from app.rag.constants import COLLECTION_NAME
+    from app.rag.embeddings import create_embeddings
+
+    base_dir = Path(__file__).resolve().parents[2]
     return Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=create_embeddings(),
-        persist_directory=str(CHROMA_DIR),
+        persist_directory=str(base_dir / "data" / "chroma"),
     )

@@ -94,6 +94,32 @@ def is_customer_service_query(text):
     return bool(re.search(r"\b(citas?|presencial|horarios?|direccion|contacto|contactar)\b", normalize_text(text)))
 
 
+def is_faq_query(text):
+    """Recognize informational questions that should use the shared FAQ RAG."""
+    normalized = normalize_text(text)
+    if re.search(
+        r"\b(?:quiero|quisiera|necesito|deseo|solicito)\s+(?:comprar|cotizar|armar|"
+        r"ensamblar|reparar|registrar|iniciar)\b",
+        normalized,
+    ):
+        return False
+    return bool(
+        re.search(
+            r"\b(ubicacion|ubicado|ubicada|ubicados|ubicadas|direccion|donde estan|"
+            r"horario|horarios|abren|atienden|servicios|que hacen|medios? de pago|"
+            r"formas? de pago|aceptan (?:yape|plin|efectivo|tarjetas?)|"
+            r"que cubre (?:la )?garantia|cobertura de garantia|retiro presencial|"
+            r"envio por courier)\b",
+            normalized,
+        )
+        or re.search(
+            r"\bcomo (?:puedo )?(?:crear|obtener|solicitar|hacer) (?:una )?(?:cotizacion|presupuesto)\b",
+            normalized,
+        )
+        or re.search(r"\b(?:pasos|proceso) (?:para|de) (?:una )?(?:cotizacion|compra)\b", normalized)
+    )
+
+
 def cannot_perform_checks(text):
     text = normalize_text(text)
     return any(w in text for w in ("no se hacer", "no se conectar", "no sabria", "ni idea", "no puedo hacer", "no se realizar"))
@@ -215,14 +241,15 @@ CUSTOMER_SERVICE_UNAVAILABLE = (
 ATENCION_NO_CONFIGURADA = CUSTOMER_SERVICE_UNAVAILABLE
 
 
-def build_verified_quote(inventory, errors, pending=False, scope=None, request_type=None):
+def build_verified_quote(inventory, errors, pending=False, scope=None, request_type=None, labor_cost=None):
     """Propuesta conversacional: precios verificados, nunca aceptación ni commit."""
     quote = {"currency": "PEN", "status": "incomplete", "parts": [],
              "labor_total": None, "total": None, "known_parts_subtotal": None}
     if scope == "solo_servicio":
         if request_type in {"REPAIR", "SUPPORT"} and not errors and not pending:
-            quote.update(status="proposed", labor_total="35.00", known_parts_subtotal="0.00", total="35.00")
-            return quote, "La mano de obra del servicio es S/ 35.00. No incluye repuestos. Es una propuesta; no se ha registrado aceptación, pago ni reserva."
+            labor = Decimal(str(labor_cost if labor_cost is not None else "35.00")).quantize(Decimal("0.01"))
+            quote.update(status="proposed", labor_total=str(labor), known_parts_subtotal="0.00", total=str(labor))
+            return quote, f"La mano de obra del servicio es S/ {labor}. No incluye repuestos. Es una propuesta; no registra aceptacion, pago ni reserva."
         return quote, "La tarifa de revisión o mano de obra está pendiente de validación. No puedo confirmar un precio. No incluye repuestos."
     if errors or pending:
         return quote, "No puedo confirmar disponibilidad ni precios: el inventario sigue pendiente o tiene errores."
@@ -251,24 +278,12 @@ def build_verified_quote(inventory, errors, pending=False, scope=None, request_t
                 continue
             lines.append(f"{item['name']}: no se encontró una referencia única coincidente. Confirma la capacidad, interfaz y nombre; no sustituiré el repuesto por otro.")
             continue
-        price = Decimal(item["precio_unitario"]).quantize(Decimal("0.01"))
-        amount = None
-        if item["disponible"]:
-            amount = calculate_shared_quote(
-                labor_cost=Decimal("0.00"),
-                labor_task_type="sale",
-                parts=[{
-                    "name": item["nombre"],
-                    "quantity": item["cantidad"],
-                    "unit_price": price,
-                    "current_stock": item["stock"],
-                }],
-            )["parts"][0]["subtotal"]
-        quote["parts"].append({"name": item["nombre"], "quantity": item["cantidad"],
         price = Decimal(item["unit_price"]).quantize(Decimal("0.01"))
         amount = (price * item["quantity"]).quantize(Decimal("0.01")) if item["available"] else None
         quote["parts"].append({"name": item["name"], "quantity": item["quantity"],
                                "stock": item["stock"], "unit_price": str(price),
+                               "inventory_id": item.get("inventory_id"),
+                               "code": item.get("code"),
                                "available": item["available"], "subtotal": str(amount) if amount is not None else None})
         lines.append(f"{item['name']}: cantidad solicitada {item['quantity']}; stock {item['stock']}; "
                      f"precio unitario S/ {price}; " + (f"subtotal S/ {amount}." if amount is not None else "stock insuficiente."))
@@ -292,7 +307,9 @@ def build_verified_quote(inventory, errors, pending=False, scope=None, request_t
     complete = (bool(quote["parts"]) and len(quote["parts"]) == len(seen)
                 and all(item["available"] for item in quote["parts"]))
     if complete and request_type in {"SALE", "REPAIR", "SUPPORT"}:
-        labor = Decimal("0.00") if request_type == "SALE" else Decimal("35.00")
+        labor = Decimal("0.00") if request_type == "SALE" else Decimal(
+            str(labor_cost if labor_cost is not None else "35.00")
+        ).quantize(Decimal("0.01"))
         quote.update(status="proposed", labor_total=str(labor), total=str((subtotal + labor).quantize(Decimal("0.01"))))
         lines.append(f"Mano de obra: S/ {labor}. Total propuesto: S/ {quote['total']}. No se ha registrado una cotización aceptada ni un pago.")
     elif complete and request_type == "PC_BUILD":

@@ -90,6 +90,9 @@ components:
         title: { type: string }
         failure_description: { type: string }
         request_type: { $ref: '#/components/schemas/RequestType' }
+        diagnosis_type: { type: string, enum: [NONE, HARDWARE, SOFTWARE, HYBRID] }
+        hardware_diagnosis: { type: [string, 'null'], maxLength: 10000 }
+        software_diagnosis: { type: [string, 'null'], maxLength: 10000 }
         origin: { type: string, enum: [MANUAL, ONLINE] }
         status: { type: string }
         quotes:
@@ -338,7 +341,31 @@ paths:
       security: [{ sessionCookie: [] }]
       summary: List service tickets for the authenticated customer's linked profile
       responses:
-        '200': { description: Own tickets only, without accepting a customer ID parameter }
+        '200':
+          description: Own tickets only, including persisted hardware/software assessment; no customer ID is accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tickets]
+                properties:
+                  tickets:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, code, customer_id, title, failure_description, request_type, diagnosis_type, status]
+                      properties:
+                        id: { type: integer, minimum: 1 }
+                        code: { type: string }
+                        customer_id: { type: integer, minimum: 1 }
+                        title: { type: string }
+                        failure_description: { type: string }
+                        request_type: { $ref: '#/components/schemas/RequestType' }
+                        diagnosis_type: { type: string, enum: [NONE, HARDWARE, SOFTWARE, HYBRID] }
+                        hardware_diagnosis: { type: [string, 'null'], maxLength: 10000 }
+                        software_diagnosis: { type: [string, 'null'], maxLength: 10000 }
+                        status: { type: string }
+                        quotes: { type: array, items: { type: object } }
         '401': { description: Missing or invalid session }
         '403': { description: Customer role required }
   /api/admin/sales-quotes:

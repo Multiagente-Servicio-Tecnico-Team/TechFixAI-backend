@@ -151,7 +151,8 @@ def test_decentralized_adapter_maps_proposed_quote_to_shared_reply():
     assert reply.quote is not None
     assert reply.quote.status == "proposed"
     assert reply.quote.total == Decimal("55.50")
-    assert reply.ticket is None
+    assert reply.ticket is not None
+    assert reply.ticket.code == "TCK-CONTRACT"
 
 
 @pytest.mark.parametrize(
@@ -179,20 +180,23 @@ def test_quote_actions_have_the_same_chat_contract_for_every_pattern(
         def get_state(self, config):
             return SimpleNamespace(values={})
 
-        def invoke(self, state, *, config):
+        def invoke(self, state, *, config, **_kwargs):
             del config
             turn = state["messages"][-1].content.casefold()
             if "rechazo" in turn or turn.strip() == "no":
                 if self.pattern_id == "hierarchical":
                     return {"messages": [AIMessage(content="Rechazada")],
-                            "outcome": "declined", "quote": quote_data}
+                            "outcome": "declined", "ticket_code": "TCK-TEST",
+                            "ticket_status": "IN_DIAGNOSIS", "quote": quote_data}
                 if self.pattern_id == "orchestrator":
                     return {"messages": [AIMessage(content="Rechazada")],
+                            "ticket_code": "TCK-TEST", "ticket_status": "IN_DIAGNOSIS",
                             "ticket_cancelled": True, "total": quote_data["total_amount"],
                             "labor_cost": quote_data["labor_cost"],
                             "available_parts": quote_data["parts"]}
                 return {"messages": [AIMessage(content="Rechazada")],
                         "quote_status": "rejected",
+                        "ticket_code": "TCK-TEST", "ticket_status": "IN_DIAGNOSIS",
                         "quote": {**quote_data, "status": "rejected"}}
             if "confirmo" in turn:
                 if self.pattern_id == "hierarchical":
@@ -211,15 +215,18 @@ def test_quote_actions_have_the_same_chat_contract_for_every_pattern(
                         "quote": {**quote_data, "status": "confirmed"}}
             if self.pattern_id == "hierarchical":
                 return {"messages": [AIMessage(content="Propuesta")],
-                        "outcome": "awaiting_confirmation", "quote": quote_data}
+                        "outcome": "awaiting_confirmation", "ticket_code": "TCK-TEST",
+                        "ticket_status": "IN_DIAGNOSIS", "quote": quote_data}
             if self.pattern_id == "orchestrator":
                 return {"messages": [AIMessage(content="Propuesta")],
+                        "ticket_code": "TCK-TEST", "ticket_status": "IN_DIAGNOSIS",
                         "awaiting_ticket_confirmation": True,
                         "total": quote_data["total_amount"],
                         "labor_cost": quote_data["labor_cost"],
                         "available_parts": quote_data["parts"]}
             return {"messages": [AIMessage(content="Propuesta")],
                     "quote_status": "proposed",
+                    "ticket_code": "TCK-TEST", "ticket_status": "IN_DIAGNOSIS",
                     "quote": {**quote_data, "status": "proposed"}}
 
     patterns = build_patterns(
@@ -241,6 +248,9 @@ def test_quote_actions_have_the_same_chat_contract_for_every_pattern(
             customer_id=41, pattern=pattern_id, message="Necesito una cotización"
         )
         assert proposal.reply.pending_quote is True
+        assert proposal.reply.ticket is not None
+        assert proposal.reply.ticket.code == "TCK-TEST"
+        assert proposal.reply.ticket.status != "PAYMENT_PENDING"
         confirmed = chat.execute(
             customer_id=41,
             pattern=pattern_id,
@@ -251,3 +261,5 @@ def test_quote_actions_have_the_same_chat_contract_for_every_pattern(
         assert confirmed.reply.quote is not None
         assert confirmed.reply.quote.status == expected_status
         assert confirmed.reply.quote.total == Decimal("55.50")
+        assert confirmed.reply.ticket is not None
+        assert confirmed.reply.ticket.code == "TCK-TEST"

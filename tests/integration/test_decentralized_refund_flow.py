@@ -34,5 +34,6 @@ def test_decentralized_supplier_purchase_handoff_returns_unavailable_without_ord
 
     assert result.get("outcome") == "procurement_unavailable", result
     assert "precio" in result["messages"][-1].content.casefold()
-    assert "no se creó una orden" in result["messages"][-1].content.casefold()
+    response = result["messages"][-1].content.casefold()
+    assert "no se consult" in response and "orden" in response
     assert not result.get("purchase_order_id")

@@ -6,18 +6,12 @@ from app.agents.decentralized.warranty import warranty_node, garantia_node, warr
 from app.agents.decentralized.warranty_operations import validate_pending_warranty_operation
 from app.agents.decentralized.policy import handoff
 
-from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from app.agents.decentralized.state import AgentState
 from app.agents.decentralized.policy import repuesto_confirmado
-from app.agents.decentralized.soporte import soporte_node, soporte_tools
-from app.agents.decentralized.tecnico import tecnico_node, tecnico_tools
-from app.agents.decentralized.ventas import ventas_node, ventas_tools
-from app.agents.decentralized.almacen import almacen_node, almacen_tools
-from app.agents.decentralized.compras import procurement_node
 from app.agents.refund_requests import make_refund_agent
 from app.database.repository import ServiceRepository
 from app.agents.decentralized.policy import is_part_reference_confirmed, is_software_commercially_eligible
@@ -53,14 +47,6 @@ class FinancialContext(TypedDict, total=False):
 MAX_HANDOFFS = 5
 MAX_TOOL_ITERATIONS = 6
 
-HANDOFF_TOOLS = {
-    "solicitar_inventario": "almacen",
-    "transferir_a_soporte": "soporte",
-    "transferir_a_tecnico": "tecnico",
-    "transferir_a_ventas": "ventas",
-    "transferir_a_almacen": "almacen",
-    "transferir_a_reembolsos": "reembolsos",
-    "transferir_a_compras": "compras",
 _INITIAL_PURCHASING_TOOLS = purchasing_tools
 
 
@@ -167,6 +153,7 @@ AGENT_NODES = {
     "facturacion": billing_node,
     "logistica": logistics_node,
     "garantia": warranty_node,
+    "reembolsos": make_refund_agent(ServiceRepository()),
 }
 
 
@@ -406,22 +393,6 @@ def record_handoff(state: AgentState, origin: str = _MISSING_ORIGIN, *, origen: 
         "tool_iterations": iterations,
         "handoff_records": [*state.get("handoff_records", []), record],
     }
-    if repuesto_pendiente is not None:
-        repuestos = list(state.get("required_parts", []))
-        if repuesto_pendiente not in repuestos:
-            repuestos.append(repuesto_pendiente)
-        actualizacion["required_parts"] = repuestos
-        actualizacion["inventory_pending"] = True
-        actualizacion["quote_scope"] = "repuestos"
-        actualizacion["quote_type"] = "REPAIR"
-        actualizacion["quote_task_type"] = "maintenance"
-    elif origen == "tecnico" and destino == "ventas":
-        actualizacion["quote_scope"] = "solo_servicio"
-        actualizacion["quote_type"] = "REPAIR"
-        actualizacion["quote_task_type"] = "diagnosis"
-    elif origen == "almacen" and destino == "ventas":
-        actualizacion["quote_scope"] = "repuestos"
-    return actualizacion
     if inventory_query is not None:
         update["inventory_query"] = inventory_query
     if destination == "almacen":
@@ -442,13 +413,20 @@ def record_handoff(state: AgentState, origin: str = _MISSING_ORIGIN, *, origen: 
     if destination == "compras":
         update["supplier_offers"] = []
     if origin == "compras" and destination == "ventas":
-        update.update(inventory_requested_by=None, quote_scope="repuestos")
+        update.update(inventory_requested_by=None, quote_scope="repuestos",
+                      quote_type="REPAIR", quote_task_type="maintenance")
     if pending_part is not None:
         update["quote_scope"] = "repuestos"
+        update["quote_type"] = "REPAIR"
+        update["quote_task_type"] = "maintenance"
     elif origin in {"tecnico", "software"} and destination == "ventas":
         update["quote_scope"] = "solo_servicio"
+        update["quote_type"] = "REPAIR"
+        update["quote_task_type"] = "diagnosis"
     elif origin == "almacen" and destination == "ventas":
         update["quote_scope"] = "repuestos"
+        update["quote_type"] = "REPAIR"
+        update["quote_task_type"] = "maintenance"
     return update
 
 
@@ -587,31 +565,6 @@ def route_next_agent(state: AgentState):
     return state.get("next_agent") or "finalizar"
 
 
-builder = StateGraph(AgentState)
-for name, node in (
-    ("soporte", soporte_node),
-    ("tecnico", tecnico_node),
-    ("ventas", ventas_node),
-    ("almacen", almacen_node),
-    ("reembolsos", make_refund_agent(ServiceRepository())),
-    ("compras", procurement_node),
-):
-    builder.add_node(name, node)
-
-for name, tools in (
-    ("soporte", soporte_tools),
-    ("tecnico", tecnico_tools),
-    ("ventas", ventas_tools),
-    ("almacen", almacen_tools),
-):
-    builder.add_node(f"{name}_tools", ToolNode(tools, handle_tool_errors=True))
-
-builder.add_node("guardar_inventario", guardar_inventario)
-builder.add_node("auditar_soporte", auditar_soporte)
-builder.add_node("auditar_tecnico", auditar_tecnico)
-builder.add_node("auditar_ventas", auditar_ventas)
-builder.add_node("auditar_almacen", auditar_almacen)
-
 def route_entry(state: AgentState):
     """Retoma al agente activo; las conversaciones nuevas empiezan en Soporte."""
     agent = state.get("current_agent", "soporte")
@@ -638,30 +591,6 @@ def prepare_turn(state: AgentState):
     }
 
 
-rutas = {
-    "soporte": "soporte",
-    "tecnico": "tecnico",
-    "almacen": "almacen",
-    "ventas": "ventas",
-    "reembolsos": "reembolsos",
-    "compras": "compras",
-    "finalizar": END,
-}
-for auditor in (
-    "auditar_soporte", "auditar_tecnico",
-    "auditar_almacen", "auditar_ventas",
-):
-    builder.add_conditional_edges(auditor, route_next_agent, rutas)
-
-builder.add_edge("reembolsos", END)
-builder.add_edge("compras", END)
-
-
-def build_graph(*, checkpointer=None):
-    """Compila la red con el checkpointer opcional del consumidor."""
-    return builder.compile(checkpointer=checkpointer)
-
-
 detectar_handoff = detect_handoff
 extraer_repuesto_handoff = extract_part_handoff
 guardar_inventario = record_inventory_results
@@ -680,7 +609,86 @@ def registrar_handoff(state: AgentState, origen: str):
     return record_handoff(state, origin=origen)
 
 
-def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=False, quote_writes=False):
+def _diagnosis_candidate(state: AgentState, *, origin: str, result=None, handoff=False) -> str | None:
+    """Return a concise specialist assessment, never a user message or tool arguments."""
+    assessment = state.get("technical_assessment") or {}
+    field = "hardware_diagnosis" if origin == "tecnico" else "software_diagnosis"
+    start = state.get("turn_start_index", 0)
+    messages = state.get("messages", [])[start:]
+    for message in reversed(messages):
+        if isinstance(message, ToolMessage) and message.name in {
+            "diagnose_issue", "diagnosticar_problema",
+        } and message.status != "error" and isinstance(message.content, str):
+            text = message.content.strip()
+            if text:
+                return text[:3000]
+
+    if handoff:
+        reason = handoff_reason(state.get("messages", []))
+        return f"Evaluación preliminar del especialista: {reason.strip()}"[:3000] if reason else None
+
+    if result is not None:
+        for message in reversed(result.get("messages", [])):
+            if not isinstance(message, AIMessage) or message.tool_calls:
+                continue
+            content = message.content
+            if not isinstance(content, str):
+                continue
+            text = content.strip()
+            if text.startswith("¿"):
+                return None
+            if "¿" in text:
+                text = text.split("¿", 1)[0].strip()
+            elif "?" in text:
+                text = text.split("?", 1)[0].strip()
+            if text.casefold().startswith("no fue posible atender la consulta"):
+                return None
+            return text[:3000] if len(text) >= 20 else None
+    existing = assessment.get(field)
+    if isinstance(existing, str) and existing.strip():
+        return existing.strip()[:3000]
+    return None
+
+
+def _persist_diagnosis_patch(
+    state: AgentState,
+    *,
+    origin: str,
+    diagnosis: str,
+    authenticated_customer_id: int | None,
+    repository,
+) -> dict[str, object]:
+    customer_id = state.get("customer_id")
+    ticket_id = state.get("ticket_id")
+    if (state.get("request_type") not in {"REPAIR", "SUPPORT"}
+            or type(customer_id) is not int or type(ticket_id) is not int
+            or type(authenticated_customer_id) is not int
+            or customer_id != authenticated_customer_id):
+        raise PermissionError("No se pudo validar la titularidad del ticket.")
+    if state.get("ticket_status") not in {None, "NEW", "IN_DIAGNOSIS"}:
+        return {}
+
+    diagnosis_type = "HARDWARE" if origin == "tecnico" else "SOFTWARE"
+    repository.update_ticket_diagnosis(
+        ticket_id=ticket_id,
+        customer_id=customer_id,
+        diagnosis=diagnosis[:3000],
+        diagnosis_type=diagnosis_type,
+    )
+    assessment = dict(state.get("technical_assessment") or {})
+    field = "hardware_diagnosis" if diagnosis_type == "HARDWARE" else "software_diagnosis"
+    assessment[field] = diagnosis[:3000]
+    assessment["diagnosis_type"] = diagnosis_type
+    return {
+        "technical_assessment": assessment,
+        "ticket_status": "IN_DIAGNOSIS",
+        "diagnosis_persisted": True,
+    }
+
+
+def build_graph(checkpointer=None, *, financial_repository=None, ticket_repository=None,
+                ticket_writes=False, quote_writes=False, sales_quote_writes=False,
+                sales_quote_repository=None, service_quote_repository=None):
     """Construye la misma red; el consumidor puede aportar su checkpointer.
 
     Sin checkpointer admite invoke(state) y el historial gestionado por Conversation.
@@ -690,9 +698,18 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         raise ValueError("Preparación financiera requiere checkpointer explícito")
     if quote_writes and (financial_repository is None or checkpointer is None):
         raise ValueError("Aceptación de cotizaciones requiere repositorio y checkpointer")
+    if sales_quote_writes and checkpointer is None:
+        raise ValueError("Commercial chat quotes require a conversation checkpointer")
     builder = StateGraph(AgentState, context_schema=FinancialContext)
     for name, node in AGENT_NODES.items():
-        if name == "ventas" and quote_writes:
+        if name == "ventas" and sales_quote_writes:
+            def sales_entry(state: AgentState, runtime: Runtime[FinancialContext]):
+                customer_id = (runtime.context or {}).get("authenticated_customer_id")
+                return sales_node(state, authenticated_customer_id=customer_id,
+                                  quote_repository=sales_quote_repository,
+                                  service_quote_repository=service_quote_repository)
+            node = sales_entry
+        elif name == "ventas" and quote_writes:
             def sales_entry(state: AgentState, config, runtime: Runtime[FinancialContext]):
                 from app.agents.decentralized.quote_operations import build_proposal, QuoteConflict
                 from app.database.decentralized_repository import RetryConflict
@@ -716,7 +733,38 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                     patch.update(inventory_revision=proposal["request_revision"], inventory_pending=False)
                 return patch
             node = sales_entry
-        if name == "soporte" and financial_repository is not None:
+        if name in {"tecnico", "software"} and ticket_writes:
+            specialist_node = node
+
+            def make_specialist_entry(wrapped_node, origin):
+                def specialist_entry(state: AgentState, runtime: Runtime[FinancialContext]):
+                    result = wrapped_node(state)
+                    if (state.get("ticket_id") is None
+                            or state.get("request_type") not in {"REPAIR", "SUPPORT"}):
+                        return result
+                    diagnosis = _diagnosis_candidate(state, origin=origin, result=result)
+                    if not diagnosis:
+                        return result
+                    customer_id = (runtime.context or {}).get("authenticated_customer_id")
+                    try:
+                        patch = _persist_diagnosis_patch(
+                            state, origin=origin, diagnosis=diagnosis,
+                            authenticated_customer_id=customer_id,
+                            repository=ticket_repository,
+                        )
+                    except Exception:
+                        messages = list(result.get("messages", []))
+                        messages.append(AIMessage(content=(
+                            "No pude guardar la evaluación en el ticket. No continuaré con la cotización "
+                            "hasta que se pueda actualizar el caso."
+                        )))
+                        return {**result, "messages": messages,
+                                "errors": [*state.get("errors", []), "No se pudo guardar el diagnóstico"]}
+                    return {**result, **patch}
+                return specialist_entry
+
+            node = make_specialist_entry(specialist_node, name)
+        if name == "soporte" and (financial_repository is not None or ticket_writes):
             def support_entry(state: AgentState, runtime: Runtime[FinancialContext]):
                 customer = (runtime.context or {}).get("authenticated_customer_id")
                 return support_node(state, authenticated_customer_id=customer) if customer is not None else support_node(state)
@@ -737,7 +785,12 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
                 return billing_node(state, repository=financial_repository,
                     authenticated_customer_id=(runtime.context or {}).get("authenticated_customer_id"))
             node = financial_entry
+        elif name == "reembolsos":
+            node = make_refund_agent(financial_repository or ticket_repository or ServiceRepository())
         builder.add_node(name, node)
+        if name == "reembolsos":
+            # Pending-only request handler: deterministic, no model/tool cycle.
+            continue
 
     if quote_writes:
         def prepare_quote(state: AgentState, runtime: Runtime[FinancialContext]):
@@ -791,7 +844,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
             {"execute": "ejecutar_cotizacion", "done": END})
         builder.add_edge("ejecutar_cotizacion", END)
 
-    if ticket_writes and (financial_repository is None or checkpointer is None):
+    if ticket_writes and (ticket_repository is None or checkpointer is None):
         raise ValueError("Creación de tickets requiere repositorio y checkpointer")
 
     def prepare_ticket(state: AgentState, runtime: Runtime[FinancialContext]):
@@ -818,7 +871,12 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
             "thread_id": config["configurable"]["thread_id"], "checkpoint_ns": ""}})
         if saved is None or saved.checkpoint.get("channel_values", {}).get("pending_ticket_operation") != operation:
             raise RuntimeError("Operación pendiente no confirmada en checkpoint")
-        row = financial_repository.create_ticket(**operation["payload"])
+        ticket_repository.create_intake_ticket(**operation["payload"])
+        row = next((item for item in ticket_repository.list_customer_tickets(
+            operation["payload"]["customer_id"])
+            if item.get("code") == operation["payload"]["code"]), None)
+        if row is None:
+            raise RuntimeError("El ticket creado no se pudo recuperar para el cliente autenticado")
         if any(row.get(key) != value for key, value in operation["payload"].items()):
             raise RuntimeError("Respuesta de ticket incompatible")
         ticket_id = _id(row.get("id"))
@@ -940,6 +998,7 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         ("facturacion", _resolve_billing_tools()),
         ("logistica", _resolve_logistics_tools()),
         ("garantia", _resolve_warranty_tools()),
+        ("reembolsos", []),
     ):
         if name in {"soporte", "software", "tecnico", "compras", "facturacion", "logistica", "garantia", "almacen", "ventas"}:
             if name == "soporte":
@@ -991,10 +1050,51 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
 
     builder.add_node("guardar_inventario", record_inventory_results)
     builder.add_node("auditar_soporte", audit_support)
-    builder.add_node("auditar_tecnico", audit_hardware)
+    if ticket_writes:
+        def audit_specialist_diagnosis(state: AgentState, runtime: Runtime[FinancialContext], origin: str):
+            update = record_handoff(state, origin)
+            destination = update.get("next_agent")
+            allowed_destinations = {
+                "tecnico": {"ventas", "almacen", "software"},
+                "software": {"ventas", "tecnico"},
+            }
+            if destination not in allowed_destinations[origin]:
+                return update
+            diagnosis = _diagnosis_candidate(state, origin=origin, handoff=True)
+            if not diagnosis:
+                return update
+            customer_id = (runtime.context or {}).get("authenticated_customer_id")
+            try:
+                patch = _persist_diagnosis_patch(
+                    state, origin=origin, diagnosis=diagnosis,
+                    authenticated_customer_id=customer_id,
+                    repository=ticket_repository,
+                )
+            except Exception:
+                return {
+                    **update,
+                    "next_agent": "finalizar",
+                    "errors": [*update.get("errors", []), "No se pudo guardar el diagnóstico"],
+                    "messages": [AIMessage(content=(
+                        "No pude guardar la evaluación en el ticket. No continuaré con la cotización "
+                        "hasta que se pueda actualizar el caso."
+                    ))],
+                }
+            return {**update, **patch}
+
+        def audit_hardware_with_diagnosis(state: AgentState, runtime: Runtime[FinancialContext]):
+            return audit_specialist_diagnosis(state, runtime, "tecnico")
+
+        def audit_software_with_diagnosis(state: AgentState, runtime: Runtime[FinancialContext]):
+            return audit_specialist_diagnosis(state, runtime, "software")
+
+        builder.add_node("auditar_tecnico", audit_hardware_with_diagnosis)
+        builder.add_node("auditar_software", audit_software_with_diagnosis)
+    else:
+        builder.add_node("auditar_tecnico", audit_hardware)
+        builder.add_node("auditar_software", audit_software)
     builder.add_node("auditar_ventas", audit_sales)
     builder.add_node("auditar_almacen", audit_warehouse)
-    builder.add_node("auditar_software", audit_software)
     builder.add_node("auditar_compras", audit_purchasing)
     builder.add_node("auditar_facturacion", audit_billing)
     builder.add_node("auditar_logistica", audit_logistics)
@@ -1016,6 +1116,9 @@ def build_graph(checkpointer=None, *, financial_repository=None, ticket_writes=F
         builder.add_conditional_edges("preparar_turno", route_entry,
                                       {name: name for name in AGENT_NODES})
     for agent in AGENT_NODES:
+        if agent == "reembolsos":
+            builder.add_edge(agent, END)
+            continue
         if agent == "soporte" and ticket_writes:
             def support_route(state):
                 if tools_condition(state) == "tools":

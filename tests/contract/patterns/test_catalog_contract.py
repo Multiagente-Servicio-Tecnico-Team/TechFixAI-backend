@@ -74,13 +74,14 @@ def run_pattern_catalog(pattern_id, repository, monkeypatch, quantity=2):
         return inventory.consultar_inventario.invoke({
             "nombre_repuesto": "SSD NVMe 512GB", "cantidad": quantity,
         })
-    from app.agents.decentralized.tools import almacen_tools
+    from app.agents.decentralized.tools import warehouse_tools
 
-    monkeypatch.setattr(almacen_tools, "catalog_service", CatalogService(repository))
-    return almacen_tools.consultar_inventario.func(
-        "SSD NVMe 512GB",
-        {"customer_id": 41, "conversation_id": "catalog-contract"},
-        quantity,
+    monkeypatch.setattr(
+        warehouse_tools, "lookup_inventory",
+        lambda requested_name, quantity: repository.lookup_inventory(requested_name, quantity),
+    )
+    return warehouse_tools.consultar_inventario.func(
+        nombre_repuesto="SSD NVMe 512GB", cantidad=quantity,
     )
 
 

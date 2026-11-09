@@ -2,7 +2,7 @@
 import re
 from decimal import Decimal, InvalidOperation
 from langchain_core.messages import AIMessage
-from app.agents.decentralized.policy import normalize_text, latest_user_message, classify_support_triage
+from app.agents.decentralized.policy import normalize_text, latest_user_message, classify_support_triage, handoff, is_faq_query
 from app.agents.decentralized.state import invalidate_request
 from app.agents.decentralized.ticket_operations import generate_ticket_code, prepare_pending_ticket_operation
 from app.database.decentralized_repository import _id, RetryConflict
@@ -30,13 +30,34 @@ def natural_fields(text, intent):
     if intent in {"REPAIR", "SUPPORT", "WARRANTY_CLAIM"} and any(term in normalized for term in SYMPTOMS):
         fields["failure_description"] = text.strip()
     if intent == "SALE":
-        purchase = re.search(r"\bcomprar\s+(\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+([^;\n]+)", text, re.I)
+        purchase = re.search(r"\bcomprar\s+(?:(\d+|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+)?([^;\n]+)", text, re.I)
         if purchase:
-            number = purchase[1].lower()
-            quantity = int(number) if number.isdigit() else NUMBERS[number]
-            if not 0 < quantity <= 2147483647:
-                raise ValueError("Cantidad inválida")
-            fields.update(quantity=quantity, product_description=purchase[2].strip())
+            number = purchase[1]
+            product = purchase[2].strip(" .!?\n")
+            if number:
+                number = number.lower()
+                quantity = int(number) if number.isdigit() else NUMBERS[number]
+                if not 0 < quantity <= 2147483647:
+                    raise ValueError("Cantidad inválida")
+                fields["quantity"] = quantity
+            if product:
+                fields["product_description"] = product
+    if intent == "PC_BUILD":
+        use_terms = {
+            "gaming": ("gaming", "gamer", "juegos", "jugar"),
+            "trabajo": ("trabajo", "oficina", "productividad"),
+            "estudio": ("estudio", "estudiar", "clases"),
+            "edicion": ("edicion", "renderizado", "diseno"),
+        }
+        for use, terms in use_terms.items():
+            if any(re.search(r"\b" + re.escape(term) + r"\b", normalized) for term in terms):
+                fields["intended_use"] = use
+                break
+        budget = re.search(r"(?:presupuesto(?:\s+maximo)?|hasta|con)\s*(?:de\s*)?(?:s/?\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:soles|pen)?", normalized)
+        if not budget:
+            budget = re.search(r"(\d+(?:[.,]\d{1,2})?)\s*(?:soles|pen)\b", normalized)
+        if budget:
+            fields["budget"] = Decimal(budget[1].replace(",", "."))
     return fields
 
 
@@ -86,9 +107,31 @@ def capture_ticket_request(state, *, authenticated_customer_id):
         return reply("Aclara si solicitas una acción o solo información. No he preparado ni creado un ticket.")
     if intent in {"INFO_QUERY", "WARRANTY_STATUS_CHECK"}:
         return None
+    # Informational FAQs must not inherit a stale SALE/REPAIR intent from a
+    # previous message in this conversation and prepare a new ticket.
+    if intent is None and is_faq_query(text):
+        return None
     if intent == "REFUND":
-        return reply("REFUND no es un tipo de ticket permitido. La ruta administrativa de reembolso no está habilitada; no se preparó un ticket.", intent="REFUND")
+        # Refund requests use the shared pending-only handler, not tickets.
+        return None
     if state.get("ticket_id") is not None:
+        return None
+    if state.get("quote_id") is not None and state.get("quote_status") == "PENDING":
+        from app.application.quotes import interpret_quote_decision
+        if interpret_quote_decision(text) is None:
+            return reply(
+                "Tienes una cotización comercial pendiente. Responde «acepto» o «rechazo» antes de iniciar otra solicitud.",
+                intent=state.get("intent"), request_type=state.get("request_type"),
+                quote_id=state["quote_id"], quote_status="PENDING",
+            )
+    restart_commercial = (
+        state.get("quote_id") is not None
+        and state.get("quote_status") in {"ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"}
+        and intent in {"SALE", "PC_BUILD"}
+    )
+    if (state.get("quote_id") is not None
+            and state.get("quote_status") in {"ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"}
+            and intent is None):
         return None
     pending = state.get("pending_ticket_operation")
     if pending and (state.get("ticket_correction_required") or re.search(
@@ -103,11 +146,12 @@ def capture_ticket_request(state, *, authenticated_customer_id):
     customer = _id(authenticated_customer_id)
     if state.get("customer_id") != customer:
         raise RetryConflict("Identidad incompatible con Atención")
-    intake = dict(state.get("intake") or {})
-    patch = {}
+    patch = invalidate_request(state, new_request=True) if restart_commercial else {}
+    intake = {} if restart_commercial else dict(state.get("intake") or {})
     if previous in TYPES and previous != intent:
-        patch = invalidate_request(state, new_request=True)
-        intake = {}
+        if not patch:
+            patch = invalidate_request(state, new_request=True)
+            intake = {}
     fields = natural_fields(text, intent)
     # Answers to the last intake question are data, not new intentions. Never
     # reconcile an already prepared operation by reconstructing its payload.
@@ -119,6 +163,19 @@ def capture_ticket_request(state, *, authenticated_customer_id):
             if not 0 < quantity <= 2147483647:
                 raise ValueError("Cantidad inválida")
             fields["quantity"] = quantity
+    if not pending and missing_before == ["budget"]:
+        amount = re.fullmatch(r"(?:s/?\s*)?(\d+(?:[.,]\d{1,2})?)(?:\s*(?:soles|pen))?", value)
+        if amount:
+            fields["budget"] = Decimal(amount[1].replace(",", "."))
+    if not pending and missing_before == ["intended_use"]:
+        fields.update(natural_fields(text, "PC_BUILD"))
+    if not pending and intent == "SALE" and type(intake.get("quantity")) is int:
+        correction = re.search(r"\bquiero\s+(\d+)\s+en lugar de\s+\d+\b", normalize_text(text))
+        if correction:
+            corrected_quantity = int(correction[1])
+            if not 0 < corrected_quantity <= 2147483647:
+                return reply("Indica una cantidad entera positiva válida.")
+            fields["quantity"] = corrected_quantity
     if (not pending and "product_description" in missing_before
             and normalize_text(str(intake.get("product_description", ""))) == "ssd"
             and re.search(r"\b(sata|nvme|\d+\s*(?:gb|tb))\b", value)
@@ -185,9 +242,16 @@ def capture_ticket_request(state, *, authenticated_customer_id):
     description = "\n".join(f"{key}: {value}" for key, value in intake.items() if key not in {"missing_fields", "title"})
     subject = next((str(intake[key]) for key in ("equipment", "product_description", "warranty_code", "intended_use") if intake.get(key)), intent)
     title = f"{intent}: {subject}"[:200]
-    code = None if pending else generate_ticket_code()
-    update.update(prepare_pending_ticket_operation({**state, **update}, authenticated_customer_id=customer,
-        intent=intent, title=title, failure_description=description, code=code))
+    if intent not in {"SALE", "PC_BUILD"}:
+        code = None if pending else generate_ticket_code()
+        update.update(prepare_pending_ticket_operation({**state, **update}, authenticated_customer_id=customer,
+            intent=intent, title=title, failure_description=description, code=code))
+    else:
+        update.update({"pending_ticket_operation": None, "ticket_preparation_ready": False,
+                       "ticket_id": None, "ticket_code": None, "ticket_status": None})
     update["next_agent"] = {"SALE":"ventas", "PC_BUILD":"ventas", "WARRANTY_CLAIM":"garantia",
                             "SUPPORT":"software", "REPAIR":"software" if classify_support_triage(state)=="software" else "tecnico"}[intent]
+    if intent in {"SALE", "PC_BUILD"}:
+        transfer = handoff("soporte", "transfer_to_sales", reason="Continuar solicitud comercial del cliente autenticado")
+        return {**transfer, **update}
     return reply("Solicitud preparada con código estable, pendiente de la futura creación en PostgreSQL. No se ha creado ningún ticket ni transferido una operación persistida.", **update)

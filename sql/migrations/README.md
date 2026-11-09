@@ -44,3 +44,15 @@ La base de prueba permanente confirmada por el usuario se identifica como `multi
 - Aplicar sólo en ventana con escritores de stock pausados y tras copia de seguridad. No ejecutar el script de esquema vacío como sustituto de esta migración. La migración no elimina órdenes, comprobantes, recepciones ni movimientos existentes.
 - Después de aplicar, comprobar restricciones de origen de `inventory_movements`, relaciones entre orden/línea/recepción, auditoría, snapshots y unicidad de idempotencia. Probar en una base desechable con `PURCHASE_ORDER_TEST_DATABASE_URL`; el fixture exige que el nombre incluya `test` y nunca carga `.env`.
 - El bloque SQL es transaccional. Si falla antes de `COMMIT`, PostgreSQL revierte los cambios; corregir la causa y revisar nuevamente el diff antes de reintentar. El rollback posterior a nuevas recepciones no es automático: sólo retirar columnas/tablas nuevas después de comprobar que no contengan dependencias ni historial.
+
+## Migración 015: cotizaciones PC_BUILD independientes
+
+- `015_pc_build_standalone_quotes.sql` permite que cotizaciones comerciales `DIRECT_SALE` y `PC_BUILD` no se relacionen con tickets de servicio; las cotizaciones `REPAIR` siguen requiriendo ticket.
+- Conserva identificadores, líneas, pagos, auditoría y snapshots; solo separa las cotizaciones PC_BUILD históricas de tickets de reparación.
+- Aplicada y verificada en la base local de prueba `multiagentedb`; `python -m app.database.migrations status` la muestra `RECORDED` con el checksum esperado. No implica que esté aplicada en otros entornos.
+
+## Migración 016: auditoría de proveedores
+
+- `016_supplier_audit_events.sql` agrega auditoría append-only a nivel de aplicación para altas y cambios de proveedores, con el ADMIN autenticado como actor.
+- No modifica filas de `suppliers`; cada evento guarda los campos modificados y su fecha. La FK impide borrar el actor o proveedor mientras haya auditoría asociada.
+- Aplicada y verificada en `multiagentedb`; las escrituras administrativas de proveedores requieren que la migración equivalente esté aplicada en cada entorno destino.

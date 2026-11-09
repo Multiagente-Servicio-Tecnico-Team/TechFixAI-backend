@@ -43,9 +43,13 @@ class InventoryService:
         return self.repository.record_opening_balance(part_id=part_id, count=self._count(count), actor_id=actor_id,
             reason=self._reason(reason), idempotency_key=idempotency_key, request_hash=request_hash)
 
-    def adjust_stock(self, *, part_id: int, count: object, actor_id: int, reason: object, idempotency_key, request_hash: str):
-        return self.repository.adjust_stock(part_id=part_id, count=self._count(count), actor_id=actor_id,
+    def adjust_stock(self, *, part_id: int, count: object, actor_id: int, reason: object, idempotency_key, request_hash: str,
+                     expected_stock: int | None = None):
+        values = dict(part_id=part_id, count=self._count(count), actor_id=actor_id,
             reason=self._reason(reason), idempotency_key=idempotency_key, request_hash=request_hash)
+        if expected_stock is not None:
+            values["expected_stock"] = expected_stock
+        return self.repository.adjust_stock(**values)
 
     def list_movements(self, **filters):
         return self.repository.list_movements(**filters)

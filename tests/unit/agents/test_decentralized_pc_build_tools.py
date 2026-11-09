@@ -1,66 +1,55 @@
-from decimal import Decimal
-from types import SimpleNamespace
-
-import app.agents.decentralized.tools.ventas_tools as tools
-import app.agents.decentralized.soporte as soporte
-from app.agents.decentralized import ventas
 from langchain_core.messages import HumanMessage
-from app.application.pc_builds import load_pc_build_profiles
+
+from app.agents.decentralized.graph import AGENT_NODES
+from app.agents.decentralized.sales import _pc_build_option, _persist_pc_build_quote, sales_node
+from app.agents.decentralized.support import support_node
 
 
-class Repository:
-    def __init__(self):
-        self.items = {}
-        for profile in load_pc_build_profiles():
-            for category, code in profile.components:
-                self.items[code] = {
-                    "id": len(self.items) + 1, "code": code, "name": code,
-                    "category": category, "unit_price": Decimal("100"),
-                    "current_stock": 2,
-                }
-        self.items["RAM-TEST-32G"] = {
-            "id": 90, "code": "RAM-TEST-32G", "name": "RAM 32GB nueva",
-            "category": "RAM Desktop", "unit_price": Decimal("150"),
-            "current_stock": 2,
-        }
-
-    def find_spare_part_by_code(self, code): return self.items.get(code)
-
-
-def setup(monkeypatch):
-    repository = Repository()
-    monkeypatch.setattr(tools, "ServiceRepository", lambda: repository)
-    monkeypatch.setattr(tools, "load_settings", lambda: SimpleNamespace(
-        labor_price_for=lambda _task: Decimal("50")
-    ))
-    return repository
-
-
-def test_decentralized_pc_build_tool_prices_only_complete_current_profiles(monkeypatch):
-    setup(monkeypatch)
-    result = tools.consultar_armados_pc.invoke({"intended_use": "juegos"})
-    assert result
-    assert all(option["total"] == Decimal("50") + sum(
-        (part["unit_price"] for part in option["parts"]), Decimal("0")
-    ) for option in result)
-    assert all(option["parts"] for option in result)
-
-
-def test_decentralized_pc_build_modification_rechecks_catalog_and_budget(monkeypatch):
-    setup(monkeypatch)
-    result = tools.modificar_armado_pc.invoke({
-        "profile_id": "gaming-inicial", "intended_use": "juegos",
-        "category": "RAM Desktop", "replacement_code": "RAM-TEST-32G",
-    })
-    assert result["total"] == Decimal("900")
-    assert next(part for part in result["parts"] if part["category"] == "RAM Desktop")["code"] == "RAM-TEST-32G"
-
-
-def test_decentralized_support_hands_pc_build_requests_to_sales():
-    result = soporte.soporte_node({
+def test_pc_build_intent_routes_to_the_active_sales_node():
+    result = support_node({
         "messages": [HumanMessage(content="Quiero armar una PC gamer")],
     })
-    tool_call = result["messages"][0].tool_calls[0]
-    assert tool_call["name"] == "transferir_a_ventas"
-    assert tools.consultar_armados_pc in ventas.ventas_tools
-    assert tools.modificar_armado_pc in ventas.ventas_tools
+
+    call = result["messages"][0].tool_calls[0]
+    assert call["name"] == "transfer_to_sales"
+    assert AGENT_NODES["ventas"] is sales_node
+
+
+def test_pc_build_quote_components_require_catalog_ids():
+    option = {
+        "code": "gaming-basic", "name": "PC gamer inicial",
+        "labor_cost": "50.00", "total": "150.00",
+        "compatibility_notes": "Compatibilidad final por validar.",
+        "parts": [{
+            "id": 90, "code": "RAM-32", "name": "RAM 32GB",
+            "category": "RAM Desktop", "quantity": 1,
+            "current_stock": 2, "unit_price": "100.00", "subtotal": "100.00",
+        }],
+    }
+
+    prepared = _pc_build_option(option)
+
+    assert prepared["parts"][0]["inventory_id"] == 90
+    assert prepared["parts"][0]["stock"] == 2
+    assert prepared["total"] == "150.00"
+
+
+def test_pc_build_quote_uses_shared_ticketless_sales_quote_writer(monkeypatch):
+    import app.application.chat_sales_quotes as chat_quotes
+
+    calls = []
+    monkeypatch.setattr(chat_quotes, "save_chat_sales_quote", lambda **values: calls.append(values) or {"id": 17})
+    option = {
+        "code": "gaming-basic", "name": "PC gamer inicial",
+        "labor_cost": "50.00", "total": "150.00",
+        "compatibility_notes": "Compatibilidad final por validar.",
+        "parts": [{"inventory_id": 90, "name": "RAM 32GB", "code": "RAM-32",
+                   "quantity": 1, "unit_price": "100.00", "subtotal": "100.00"}],
+    }
+
+    _persist_pc_build_quote(customer_id=41, option=option)
+
+    assert calls[0]["customer_id"] == 41
+    assert calls[0]["quote_type"] == "PC_BUILD"
+    assert calls[0]["parts"][0]["inventory_id"] == 90
+    assert "ticket_id" not in calls[0]

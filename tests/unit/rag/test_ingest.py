@@ -53,7 +53,8 @@ def test_reingestion_removes_stale_ids_without_touching_old_collection(monkeypat
 
     monkeypatch.setattr(ingest, "cargar_documentos", lambda: [Document(page_content="source")])
     monkeypatch.setattr(ingest, "dividir_documentos", lambda _: [current])
-    monkeypatch.setattr(ingest, "Chroma", FakeVectorStore)
+    monkeypatch.setattr(ingest, "_load_vectorstore_class", lambda: FakeVectorStore)
+    monkeypatch.setattr(ingest, "crear_embeddings", lambda: None)
 
     store, _, _ = ingest.crear_base_vectorial()
 

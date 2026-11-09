@@ -91,28 +91,48 @@ class SupplierPurchaseRepositoryAdapter:
         except SQLAlchemyError as exc:
             raise self._storage_error(exc) from exc
 
-    def create_supplier(self, values):
+    def create_supplier(self, values, *, actor_id: int):
         try:
             with self._session_factory() as session, session.begin():
                 row = session.execute(text("""INSERT INTO suppliers
                     (name,tax_id,contact_name,contact_email,phone,address,delivery_lead_days,active)
                     VALUES (:name,:tax_id,:contact_name,:contact_email,:phone,:address,:delivery_lead_days,TRUE)
                     RETURNING id,name,tax_id,contact_name,contact_email,phone,address,delivery_lead_days,active,created_at"""), values).mappings().one()
+                session.execute(text("""INSERT INTO supplier_audit_events
+                    (supplier_id, actor_user_id, event_type, changed_fields)
+                    VALUES (:supplier, :actor, 'CREATED', CAST(:fields AS JSONB))"""), {
+                    "supplier": row["id"], "actor": actor_id,
+                    "fields": json.dumps({"name": row["name"], "tax_id": row["tax_id"]}),
+                })
             return self._supplier(row)
         except IntegrityError as exc:
             raise PurchaseConflict("El identificador tributario ya está asociado a otro proveedor.") from exc
         except SQLAlchemyError as exc:
             raise self._storage_error(exc) from exc
 
-    def update_supplier(self, supplier_id, values):
+    def update_supplier(self, supplier_id, values, *, actor_id: int):
         allowed = {"name", "tax_id", "contact_name", "contact_email", "phone", "address", "delivery_lead_days", "active"}
         if not values or set(values) - allowed:
             raise PurchaseError("Los campos de proveedor no son válidos.")
         assignments = ",".join(f"{key} = :{key}" for key in values)
         try:
             with self._session_factory() as session, session.begin():
+                before = session.execute(text("""SELECT name,tax_id,contact_name,contact_email,phone,address,
+                        delivery_lead_days,active FROM suppliers WHERE id=:id FOR UPDATE"""),
+                    {"id": supplier_id}).mappings().first()
+                if before is None:
+                    return None
                 row = session.execute(text(f"""UPDATE suppliers SET {assignments}
                     WHERE id=:id RETURNING id,name,tax_id,contact_name,contact_email,phone,address,delivery_lead_days,active,created_at"""), {**values, "id": supplier_id}).mappings().first()
+                changes = {key: {"from": before[key], "to": row[key]} for key in values
+                           if before[key] != row[key]}
+                if changes:
+                    session.execute(text("""INSERT INTO supplier_audit_events
+                        (supplier_id, actor_user_id, event_type, changed_fields)
+                        VALUES (:supplier, :actor, 'UPDATED', CAST(:fields AS JSONB))"""), {
+                        "supplier": supplier_id, "actor": actor_id,
+                        "fields": json.dumps(changes, ensure_ascii=False, default=str),
+                    })
             return self._supplier(row)
         except IntegrityError as exc:
             raise PurchaseConflict("El identificador tributario ya está asociado a otro proveedor.") from exc

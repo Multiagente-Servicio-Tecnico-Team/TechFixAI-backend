@@ -14,7 +14,7 @@ Keep the three LangGraph topologies for academic comparison while moving busines
 
 **Primary Dependencies**: FastAPI 0.142.2, LangGraph 1.2.2, LangChain Core 1.6.6, LangChain Groq 1.1.3, SQLAlchemy 2.1.1, Pydantic 2.13.5, Chroma 1.1.0, FastEmbed 0.8.1, pytest 8.4.2.
 
-**Storage**: PostgreSQL through SQLAlchemy and pg8000; Chroma persistent collection for document retrieval; current conversation registries/checkpointers remain in process memory.
+**Storage**: PostgreSQL through SQLAlchemy and pg8000; the current RAG runtime searches Markdown lexically, with the Chroma collection retained for optional hybrid retrieval; current conversation registries/checkpointers remain in process memory.
 
 **Testing**: Existing pytest unit/integration/e2e suites plus new pattern contract tests, using fake LLMs, repository ports, deterministic knowledge fixtures, and isolated test database transactions where needed.
 
@@ -22,7 +22,7 @@ Keep the three LangGraph topologies for academic comparison while moving busines
 
 **Project Type**: Python backend web service with three LangGraph orchestration adapters.
 
-**Performance Goals**: No regression to existing request latency caused by duplicate embedding loads or duplicate catalog calls; load the shared embedding model/vector collection once per process. Establish numeric latency baselines during implementation rather than inventing an SLA.
+**Performance Goals**: Keep the default retrieval path light enough for Render Free by avoiding model downloads and vector-store initialization; if hybrid retrieval is enabled later, load the shared embedding model/vector collection once per process. Establish numeric latency baselines during implementation rather than inventing an SLA.
 
 **Constraints**: Preserve the `/api/chat` contract and pattern selection. Keep topology and graph-state differences for academic comparison. Business writes must validate customer ownership and use existing transaction boundaries. No supplier price/lead-time claims without supplier-item data. No payment gateway or automatic refund settlement. No conversation-persistence redesign in this scope.
 
@@ -43,7 +43,7 @@ No constitution violations identified. Re-check after design: keep in-memory che
 
 ## Phase 0: Research Decisions
 
-See [research.md](research.md). The important choices are: share application capabilities and tool schemas, not orchestration graphs; unify retrieval with stable document provenance and demo-data labels; use versioned Chroma collections when embedding model changes; use an explicit pending refund request; and leave supplier purchasing unavailable until a real supplier-item quote source exists.
+See [research.md](research.md). The important choices are: share application capabilities and tool schemas, not orchestration graphs; use the reviewed hierarchical Markdown corpus and one lexical retrieval implementation by default; keep versioned Chroma collections available for a future hybrid mode; use an explicit pending refund request; and leave supplier purchasing unavailable until a real supplier-item quote source exists.
 
 ## Phase 1: Design & Contracts
 

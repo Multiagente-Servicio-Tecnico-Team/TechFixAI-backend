@@ -155,19 +155,20 @@ class MarkdownKnowledgeRetriever:
     def retrieve(self, query: str, *, limit: int = 3) -> list[KnowledgeDocument]:
         if limit < 1:
             raise ValueError("El límite de recuperación debe ser mayor que cero.")
-        by_source = {f"hierarchical:case:{item.id}": item for item in self._documents}
+        by_source = {f"hierarchical:manual_servicio#{item.id}": item for item in self._documents}
         searchable = [
             Document(
                 page_content="\n".join(
                     [item.title, *item.keywords, item.diagnosis, item.solution]
                 ),
                 metadata={
-                    "source_id": f"hierarchical:case:{item.id}",
-                    "source_path": f"knowledge_base/{item.id}",
+                    "source_id": f"hierarchical:manual_servicio#{item.id}",
+                    "source_refs": "hierarchical:manual_servicio",
+                    "source_path": "app/agents/jerarquico/knowledge_base/manual_servicio.md",
                     "title": item.title,
                     "area": "technical",
                     "trust_level": "verified_guide",
-                    "audience": "internal",
+                    "audience": "customer",
                     "language": "es",
                     "content_digest": item.id,
                 },
@@ -177,6 +178,7 @@ class MarkdownKnowledgeRetriever:
         passages = retrieve_documents(
             query,
             documents=searchable,
+            allowed_sources={"hierarchical:manual_servicio"},
             allowed_areas={"technical"},
             allowed_trust_levels={"verified_guide"},
             limit=limit,

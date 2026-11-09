@@ -3,9 +3,7 @@ from functools import lru_cache
 
 from langchain_community.embeddings import FastEmbedEmbeddings
 
-EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-CORPUS_VERSION = "v2"
-COLLECTION_NAME = f"servicio_tecnico_{CORPUS_VERSION.replace('.', '_')}"
+from app.rag.constants import COLLECTION_NAME, CORPUS_VERSION, EMBEDDING_MODEL
 
 
 @lru_cache(maxsize=1)

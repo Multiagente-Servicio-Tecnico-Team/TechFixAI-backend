@@ -10,6 +10,9 @@ from app.agents.orquestador.agentes import ventas
 def quote_state():
     return {
         "user_id": 41,
+        "ticket_id": 31,
+        "ticket_code": "TCK-31",
+        "ticket_status": "IN_DIAGNOSIS",
         "product": "Laptop",
         "category": "Soporte técnico",
         "symptoms": "No inicia",
@@ -47,7 +50,7 @@ def test_orchestrator_reprices_before_persisting_if_catalog_price_changed(
 
     result = ventas.persistencia_node(quote_state)
 
-    database.create_accepted_ticket_quote.assert_not_called()
+    database.accept_ticket_quote.assert_not_called()
     assert result["awaiting_ticket_confirmation"] is True
     assert result["ticket_confirmed"] is False
     assert result["total"] == Decimal("84.90")
@@ -69,7 +72,7 @@ def test_orchestrator_never_persists_a_quote_after_stock_becomes_insufficient(
 
     result = ventas.persistencia_node(quote_state)
 
-    database.create_accepted_ticket_quote.assert_not_called()
+    database.accept_ticket_quote.assert_not_called()
     assert result["awaiting_ticket_confirmation"] is False
     assert "stock" in result["response"].casefold()
 
@@ -85,21 +88,20 @@ def test_orchestrator_persists_after_current_catalog_values_match(
     }
     monkeypatch.setattr(ventas, "catalog_service", repository, raising=False)
     database = Mock()
-    database.create_accepted_ticket_quote.return_value = {
-        "ticket_id": 81, "quote_id": 91,
-        "total_amount": Decimal("79.90"), "ticket_code": "TCK-81",
+    database.accept_ticket_quote.return_value = {
+        "quote_id": 91, "payment_id": 92,
         "payment_code": "PAY-81", "payment_status": "PENDING",
     }
     monkeypatch.setattr(ventas, "sales_repository", database, raising=False)
 
     result = ventas.persistencia_node(quote_state)
 
-    database.create_accepted_ticket_quote.assert_called_once()
+    database.accept_ticket_quote.assert_called_once()
     assert result["quote_id"] == 91
-    assert result["ticket_code"] == "TCK-81"
+    assert result["ticket_code"] == "TCK-31"
 
 
-def test_orchestrator_acceptance_uses_atomic_accepted_quote_and_pending_payment(
+def test_orchestrator_acceptance_uses_existing_ticket_and_leaves_payment_pending(
     monkeypatch, quote_state
 ):
     catalog = Mock()
@@ -112,17 +114,18 @@ def test_orchestrator_acceptance_uses_atomic_accepted_quote_and_pending_payment(
     legacy_writer = Mock()
     monkeypatch.setattr(ventas, "create_ticket_with_quote", legacy_writer, raising=False)
     database = Mock()
-    database.create_accepted_ticket_quote.return_value = {
-        "ticket_id": 81, "ticket_code": "TCK-81", "quote_id": 91,
+    database.accept_ticket_quote.return_value = {
+        "quote_id": 91, "payment_id": 92,
         "payment_code": "PAY-91", "payment_status": "PENDING",
-        "total_amount": Decimal("79.90"),
     }
     monkeypatch.setattr(ventas, "sales_repository", database, raising=False)
 
     result = ventas.persistencia_node(quote_state)
 
     legacy_writer.assert_not_called()
-    database.create_accepted_ticket_quote.assert_called_once()
+    database.accept_ticket_quote.assert_called_once()
     assert result["quote_id"] == 91
     assert result["payment_code"] == "PAY-91"
+    assert result["ticket_id"] == 31
+    assert result["ticket_code"] == "TCK-31"
     assert result["ticket_status"] == "PAYMENT_PENDING"

@@ -1,6 +1,7 @@
 """Caso de uso: transcribe una entrada y la entrega al chat compartido."""
 from dataclasses import dataclass
-from typing import Literal
+from collections.abc import Callable
+from typing import Any, Literal
 from uuid import UUID
 
 from app.application.audio_requests import AudioRequestLease, AudioRequestRegistry
@@ -23,7 +24,7 @@ SUPPORTED_AUDIO_TYPES = frozenset({
 @dataclass(frozen=True)
 class AudioChatResult:
     transcript: str
-    turn: ChatTurn
+    turn: Any
 
 
 class SendAudioChatMessage:
@@ -38,7 +39,9 @@ class SendAudioChatMessage:
 
     def execute(self, *, customer_id: int, audio: bytes, content_type: str, duration_ms: int,
                 pattern: Literal["hierarchical", "orchestrator", "decentralized"],
-                request_id: str, conversation_id: str | None = None) -> AudioChatResult:
+                request_id: str, conversation_id: str | None = None,
+                principal_role: Literal["CUSTOMER", "ADMIN"] = "CUSTOMER",
+                message_handler: Callable[[str], Any] | None = None) -> AudioChatResult:
         try:
             UUID(request_id)
         except (ValueError, TypeError, AttributeError) as exc:
@@ -53,9 +56,10 @@ class SendAudioChatMessage:
             raise AudioTooLarge()
 
         fingerprint = self._registry.fingerprint(
-            audio, duration_ms=duration_ms, pattern=pattern, conversation_id=conversation_id
+            audio, duration_ms=duration_ms, pattern=pattern, conversation_id=conversation_id,
+            role=principal_role,
         )
-        lease = self._registry.begin(customer_id, request_id, fingerprint)
+        lease = self._registry.begin(customer_id, request_id, fingerprint, role=principal_role)
         if lease.cached is not None:
             return lease.cached
         try:
@@ -63,10 +67,15 @@ class SendAudioChatMessage:
             text = " ".join(transcription.text.split())
             if not text or len(text) > 2000:
                 raise AudioRequestError()
-            turn = self._send_message.execute(
-                customer_id=customer_id, pattern=pattern, message=text,
-                conversation_id=conversation_id,
-            )
+            if message_handler is not None:
+                turn = message_handler(text)
+            elif principal_role == "CUSTOMER":
+                turn = self._send_message.execute(
+                    customer_id=customer_id, pattern=pattern, message=text,
+                    conversation_id=conversation_id,
+                )
+            else:
+                raise AudioRequestError()
             result = AudioChatResult(text, turn)
             self._registry.complete(lease, result)
             return result

@@ -30,6 +30,14 @@ def transfer_to_billing(reason: str) -> str:
     return _billing.invoke({"motivo": reason})
 
 
+@tool
+def transfer_to_refund(reason: str) -> str:
+    """Deriva una solicitud de reembolso al registro de revisión manual."""
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("El motivo de transferencia es obligatorio.")
+    return f"TRANSFER_REFUND: {reason.strip()}"
+
+
 @tool(description=_logistics.description)
 def transfer_to_logistics(reason: str) -> str:
     return _logistics.invoke({"motivo": reason})
@@ -40,4 +48,4 @@ def transfer_to_warranty(reason: str) -> str:
     return _warranty.invoke({"motivo": reason})
 
 
-legacy_handoff_tools = [_warranty, _logistics, _billing, _hardware, _sales, _software]
+legacy_handoff_tools = [_warranty, _logistics, _billing, _hardware, _sales, _software, transfer_to_refund]

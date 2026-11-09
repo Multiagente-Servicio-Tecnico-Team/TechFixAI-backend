@@ -10,7 +10,7 @@ from app.agents.decentralized.data_compat import (
 
 
 ALLOWED_HANDOFFS = {
-    "soporte": frozenset({"tecnico", "software", "ventas", "garantia", "logistica", "facturacion"}),
+    "soporte": frozenset({"tecnico", "software", "ventas", "garantia", "logistica", "facturacion", "reembolsos"}),
     "ventas": frozenset({"tecnico", "software", "almacen", "facturacion", "soporte"}),
     "tecnico": frozenset({"software", "almacen", "ventas", "logistica", "garantia", "soporte"}),
     "software": frozenset({"tecnico", "almacen", "ventas", "logistica", "garantia", "soporte"}),
@@ -19,6 +19,7 @@ ALLOWED_HANDOFFS = {
     "facturacion": frozenset({"ventas", "logistica", "soporte"}),
     "logistica": frozenset({"garantia", "soporte"}),
     "garantia": frozenset({"logistica", "tecnico", "software", "facturacion", "soporte"}),
+    "reembolsos": frozenset(),
 }
 HANDOFF_TOOLS = {
     "transferir_a_soporte": "soporte", "transfer_to_support": "soporte",
@@ -30,6 +31,7 @@ HANDOFF_TOOLS = {
     "transferir_a_facturacion": "facturacion", "transfer_to_billing": "facturacion",
     "transferir_a_logistica": "logistica", "transfer_to_logistics": "logistica",
     "transferir_a_garantia": "garantia", "transfer_to_warranty": "garantia",
+    "transfer_to_refund": "reembolsos",
     "solicitar_inventario": "almacen", "request_inventory": "almacen",
 }
 

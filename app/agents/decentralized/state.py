@@ -15,7 +15,7 @@ from app.agents.decentralized.handoffs import HandoffRecord
 
 # Identidades lógicas; soporte/tecnico conservan Atención/Hardware existentes.
 AgentName = Literal["soporte", "ventas", "tecnico", "software", "almacen",
-                    "compras", "facturacion", "logistica", "garantia"]
+                    "compras", "facturacion", "logistica", "garantia", "reembolsos"]
 ConversationIntent = Literal["REPAIR", "SUPPORT", "SALE", "PC_BUILD",
                              "WARRANTY_CLAIM", "WARRANTY_STATUS_CHECK",
                              "INFO_QUERY", "REFUND"]
@@ -248,6 +248,7 @@ class PendingWarrantyOperation(TypedDict):
 
 class AgentState(TypedDict, total=False):
     ticket_preparation_ready: bool
+    diagnosis_persisted: bool
     # Historial compartido entre agentes
     messages: Annotated[list[AnyMessage], add_messages]
     customer_id: int
@@ -313,6 +314,7 @@ class AgentState(TypedDict, total=False):
     logistics_preparation_ready: bool
     quote_id: int | None
     quote_status: QuoteStatus | None
+    pc_build_options: list[dict[str, Any]]
     payment_id: int | None
     payment_code: str | None
     refund_id: int | None
@@ -386,6 +388,7 @@ def invalidate_request(state: AgentState, *, new_request: bool = False) -> Agent
         "supplier_offers": [], "technical_assessment": {}, "rag_evidence": [],
         "inventory_requested_by": None, "next_agent": None,
         "quote_id": None, "quote_status": None, "payment_id": None,
+        "pc_build_options": [],
         "payment_code": None, "refund_id": None, "logistics_record_id": None,
         "warranty_id": None, "warranty_code": None, "warranty_claim_id": None,
         "claim_code": None, "supplier_id": None, "purchase_order_id": None,

@@ -4,6 +4,7 @@ from typing import Literal
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage, SystemMessage
+from app.application.prompts import build_system_prompt
 from pydantic import BaseModel, Field
 
 from app.application.logistics import record_customer_logistics_preference
@@ -81,6 +82,7 @@ def postventa_node(state: dict[str, object]) -> dict[str, object]:
             return {"logistics_pending": False, "response": reply,
                     "messages": [AIMessage(content=reply)]}
         decision = create_chat_model().with_structured_output(LogisticsDecision).invoke([
+            SystemMessage(content=build_system_prompt(role="CUSTOMER", pattern_id="orchestrator")),
             SystemMessage(content=(
                 "Interpreta la preferencia explícita: retiro presencial o envío por courier. "
                 "Para courier extrae empresa y dirección solo si están en el mensaje. "

@@ -160,236 +160,124 @@ def test_ventas_usa_el_calculador_compartido_para_inventario_verificado(monkeypa
     )
     monkeypatch.setattr(ventas_tools, "catalog_service", CatalogService(Repository()))
     monkeypatch.setattr(ventas_tools, "load_settings", lambda: settings)
+    monkeypatch.setattr(ventas, "load_settings", lambda: settings)
     monkeypatch.setattr(ventas, "sales_repository", Repository(), raising=False)
     result = ventas_node({
         "customer_id": 41,
         "conversation_id": "conversation-1",
+        "ticket_id": 84,
+        "ticket_code": "TCK-84",
+        "request_type": "REPAIR",
         "quote_type": "REPAIR",
         "quote_task_type": "maintenance",
         "quote_scope": "repuestos",
+        "request_revision": 0,
+        "inventory_revision": 0,
         "inventory_pending": False,
         "inventory_results": [{
             "tool_call_id": "inventory-1", "requested_name": "SSD 512GB",
-            "name": "SSD 512GB", "quantity": 1, "stock": 3,
+            "inventory_id": 7, "name": "SSD 512GB", "quantity": 1, "stock": 3,
             "unit_price": "35.50", "code": "SSD-512", "found": True,
             "available": True,
         }],
-        "required_parts": [], "errors": [],
+        "required_parts": [{"name": "SSD 512GB", "quantity": 1}], "errors": [],
         "messages": [HumanMessage(content="Cotiza el componente revisado")],
     })
 
-    assert result["quote"]["total_amount"] == Decimal("55.50")
+    assert Decimal(result["quote"]["total"]) == Decimal("55.50")
+    assert result["quote_status"] == "PENDING"
     assert "S/ 55.50" in result["messages"][0].content
 
 
-@pytest.mark.parametrize("decision", ["Sí, confirmo", "No, rechazo"])
-def test_ventas_resuelve_confirmacion_explicita_de_cotizacion(monkeypatch, decision):
-    from app.application.catalog import CatalogService
-    from app.settings import Settings
-    from app.agents.decentralized import ventas
-    import app.agents.decentralized.tools.ventas_tools as ventas_tools
+@pytest.mark.parametrize("decision", ["confirmo", "rechazo"])
+def test_ventas_resuelve_confirmacion_explicita_de_cotizacion(decision):
+    from app.agents.decentralized.sales import sales_node
 
-    class Repository:
-        price = Decimal("35.50")
-        accepted = None
-        cancelled = None
-
-        def find_spare_part_by_code(self, code):
-            return {
-                "id": 7, "code": code, "name": "SSD 512GB",
-                "category": "Almacenamiento", "unit_price": self.price,
-                "current_stock": 3,
-            }
-
-        def lookup_inventory(self, name, quantity): raise AssertionError
-        def find_spare_parts(self, term): return []
-        def find_catalog_items(self, term, *, limit=20): return []
-        def find_spare_part_alternatives(self, term): return []
+    class Writer:
+        def __init__(self): self.calls = []
         def accept_ticket_quote(self, **values):
-            self.accepted = values
-            return {"quote_id": 93, "payment_code": "PAY-TEST", "payment_status": "PENDING"}
-        def cancel_ticket(self, ticket_id, customer_id):
-            self.cancelled = (ticket_id, customer_id)
+            self.calls.append(values)
+            return {"quote_id": 93, "payment_id": 94, "payment_code": "PAY-TEST",
+                    "payment_status": "PENDING"}
 
-    repository = Repository()
-    settings = Settings(
-        groq_api_key="test", groq_model="test", database_url="test",
-        langsmith_api_key=None, langsmith_tracing=False,
-        langsmith_project="test", langsmith_hide_inputs=True,
-        langsmith_hide_outputs=True,
-        labor_maintenance_price=Decimal("20.00"),
-        labor_diagnosis_price=Decimal("15.00"),
-    )
-    monkeypatch.setattr(ventas_tools, "catalog_service", CatalogService(repository))
-    monkeypatch.setattr(ventas_tools, "load_settings", lambda: settings)
-    monkeypatch.setattr(ventas, "sales_repository", repository, raising=False)
-    draft = generar_cotizacion.invoke({
-        "parts": [{"code": "SSD-512", "quantity": 1}],
-        "state": {
-            "customer_id": 41, "conversation_id": "conversation-1",
-            "quote_type": "REPAIR", "quote_task_type": "maintenance",
-        },
-    })
-    draft.update(ticket_id=84, status="proposed")
+    writer = Writer()
     state = {
-        "customer_id": 41, "conversation_id": "conversation-1",
-        "ticket_id": 84, "ticket_code": "TCK-84",
-        "quote_type": "REPAIR", "quote_task_type": "maintenance",
-        "quote": draft, "quote_status": "proposed",
+        "customer_id": 41, "ticket_id": 84, "ticket_code": "TCK-84",
+        "request_type": "REPAIR", "quote_task_type": "maintenance",
+        "quote_status": "PENDING",
+        "quote": {"status": "proposed", "labor_task_type": "maintenance",
+                  "labor_total": "35.00", "known_parts_subtotal": "20.00",
+                  "total": "55.00", "parts": [{"inventory_id": 17, "quantity": 1,
+                  "unit_price": "20.00", "subtotal": "20.00", "available": True}]},
         "messages": [HumanMessage(content=decision)],
     }
-
-    result = ventas.ventas_node(state)
-
-    if decision.startswith("Sí"):
-        assert repository.accepted is not None
-        assert result["quote_status"] == "confirmed"
-        assert result["quote"]["total_amount"] == Decimal("55.50")
+    result = sales_node(state, authenticated_customer_id=41, service_quote_repository=writer)
+    if decision == "confirmo":
+        assert result["quote_status"] == "ACCEPTED"
+        assert result["quote_id"] == 93 and result["payment_id"] == 94
+        assert writer.calls[0]["customer_id"] == 41 and writer.calls[0]["ticket_id"] == 84
     else:
-        assert repository.cancelled == (84, 41)
-        assert repository.accepted is None
-        assert result["quote_status"] == "rejected"
+        assert result["quote_status"] == "REJECTED"
+        assert writer.calls == []
+def test_ventas_pide_nueva_confirmacion_si_cambio_precio():
+    from app.agents.decentralized.sales import sales_node
+    from app.domain.errors import StaleQuote
 
+    class Writer:
+        def accept_ticket_quote(self, **_values): raise StaleQuote("live price changed")
 
-def test_ventas_pide_nueva_confirmacion_si_cambio_precio(monkeypatch):
-    from app.application.catalog import CatalogService
-    from app.settings import Settings
-    from app.agents.decentralized import ventas
-    import app.agents.decentralized.tools.ventas_tools as ventas_tools
-
-    class Repository:
-        price = Decimal("39.50")
-        accepted = None
-
-        def find_spare_part_by_code(self, code):
-            return {"id": 7, "code": code, "name": "SSD 512GB",
-                    "category": "Almacenamiento", "unit_price": self.price,
-                    "current_stock": 3}
-        def lookup_inventory(self, name, quantity): raise AssertionError
-        def find_spare_parts(self, term): return []
-        def find_catalog_items(self, term, *, limit=20): return []
-        def find_spare_part_alternatives(self, term): return []
-        def accept_ticket_quote(self, **values): self.accepted = values
-
-    repository = Repository()
-    settings = Settings(
-        groq_api_key="test", groq_model="test", database_url="test",
-        langsmith_api_key=None, langsmith_tracing=False,
-        langsmith_project="test", langsmith_hide_inputs=True,
-        langsmith_hide_outputs=True,
-        labor_maintenance_price=Decimal("20.00"),
-        labor_diagnosis_price=Decimal("15.00"),
-    )
-    monkeypatch.setattr(ventas_tools, "catalog_service", CatalogService(repository))
-    monkeypatch.setattr(ventas_tools, "load_settings", lambda: settings)
-    monkeypatch.setattr(ventas, "sales_repository", repository, raising=False)
-    state = {
-        "customer_id": 41, "conversation_id": "conversation-1",
-        "ticket_id": 84, "ticket_code": "TCK-84",
-        "quote_type": "REPAIR", "quote_task_type": "maintenance",
-        "quote_status": "proposed",
-        "quote": {
-            "ticket_id": 84, "quote_type": "REPAIR",
-            "labor_task_type": "maintenance", "labor_cost": Decimal("20.00"),
-            "parts_cost": Decimal("35.50"), "total_amount": Decimal("55.50"),
-            "parts": [{"id": 7, "code": "SSD-512", "quantity": 1,
-                       "unit_price": Decimal("35.50"), "subtotal": Decimal("35.50"),
-                       "current_stock": 3}],
-        },
-        "messages": [HumanMessage(content="Sí, confirmo")],
-    }
-
-    result = ventas.ventas_node(state)
-
-    assert repository.accepted is None
-    assert result["quote_status"] == "proposed"
-    assert result["quote"]["total_amount"] == Decimal("59.50")
-    assert "Cambió el precio" in result["messages"][0].content
-
-
+    result = sales_node({
+        "customer_id": 41, "request_type": "REPAIR", "ticket_id": 84,
+        "quote_status": "PENDING", "quote_task_type": "maintenance",
+        "quote": {"status": "proposed", "labor_task_type": "maintenance",
+                  "labor_total": "35.00", "known_parts_subtotal": "20.00",
+                  "total": "55.00", "parts": [{"inventory_id": 17, "quantity": 1,
+                  "unit_price": "20.00", "subtotal": "20.00", "available": True}]},
+        "messages": [HumanMessage(content="confirmo")],
+    }, authenticated_customer_id=41, service_quote_repository=Writer())
+    assert result.get("quote_id") is None
+    assert result["quote"]["status"] == "incomplete"
+    assert "registr" in result["messages"][0].content.lower()
 def test_ventas_no_duplica_una_cotizacion_ya_aceptada():
-    from app.agents.decentralized.ventas import ventas_node
-
-    result = ventas_node({
-        "quote_status": "confirmed",
-        "payment_code": "PAY-TEST",
-        "quote": {"total_amount": Decimal("55.50"), "status": "confirmed"},
-        "messages": [HumanMessage(content="Sí, confirmo")],
+    from app.agents.decentralized.sales import sales_node
+    result = sales_node({
+        "quote_id": 93, "quote_status": "ACCEPTED", "payment_code": "PAY-TEST",
+        "quote": {"total": "55.50", "status": "confirmed"},
+        "messages": [HumanMessage(content="confirmo")],
     })
-
-    assert result["quote_status"] == "confirmed"
-    assert "PAY-TEST" in result["messages"][0].content
-    assert "otro pago" in result["messages"][0].content
-
-
+    assert result["quote_status"] == "ACCEPTED"
+    assert "cotización ya fue aceptada" in result["messages"][0].content.lower()
+    assert "pago sigue pendiente" in result["messages"][0].content.lower()
 def test_ventas_mantiene_cotizacion_pendiente_si_respuesta_es_ambigua():
-    from app.agents.decentralized.ventas import ventas_node
-
-    result = ventas_node({
-        "quote_status": "proposed",
-        "quote": {"total_amount": Decimal("55.50"), "status": "proposed"},
+    from app.agents.decentralized.sales import sales_node
+    result = sales_node({
+        "customer_id": 41, "request_type": "REPAIR", "ticket_id": 84,
+        "quote_status": "PENDING", "quote_task_type": "maintenance",
+        "quote": {"status": "proposed", "total": "55.50", "labor_total": "35.00",
+                  "known_parts_subtotal": "20.00", "parts": []},
         "messages": [HumanMessage(content="Lo voy a revisar")],
     })
+    assert result["quote_status"] == "PENDING"
+    assert "sigue pendiente" in result["messages"][0].content.lower()
+def test_ventas_rechaza_aceptacion_si_el_stock_cambio():
+    from app.agents.decentralized.sales import sales_node
+    from app.domain.errors import StaleQuote
 
-    assert result["quote_status"] == "proposed"
-    assert "sigue pendiente" in result["messages"][0].content
+    class Writer:
+        def accept_ticket_quote(self, **_values): raise StaleQuote("stock changed")
 
-
-def test_ventas_rechaza_aceptacion_si_el_stock_cambio(monkeypatch):
-    from app.application.catalog import CatalogService
-    from app.settings import Settings
-    from app.agents.decentralized import ventas
-    import app.agents.decentralized.tools.ventas_tools as ventas_tools
-
-    class Repository:
-        cancelled = None
-        accepted = None
-        def find_spare_part_by_code(self, code):
-            return {"id": 7, "code": code, "name": "SSD 512GB",
-                    "category": "Almacenamiento", "unit_price": Decimal("35.50"),
-                    "current_stock": 0}
-        def lookup_inventory(self, name, quantity): raise AssertionError
-        def find_spare_parts(self, term): return []
-        def find_catalog_items(self, term, *, limit=20): return []
-        def find_spare_part_alternatives(self, term): return []
-        def cancel_ticket(self, ticket_id, customer_id):
-            self.cancelled = (ticket_id, customer_id)
-        def accept_ticket_quote(self, **values): self.accepted = values
-
-    repository = Repository()
-    settings = Settings(
-        groq_api_key="test", groq_model="test", database_url="test",
-        langsmith_api_key=None, langsmith_tracing=False,
-        langsmith_project="test", langsmith_hide_inputs=True,
-        langsmith_hide_outputs=True,
-        labor_maintenance_price=Decimal("20.00"),
-        labor_diagnosis_price=Decimal("15.00"),
-    )
-    monkeypatch.setattr(ventas_tools, "catalog_service", CatalogService(repository))
-    monkeypatch.setattr(ventas_tools, "load_settings", lambda: settings)
-    monkeypatch.setattr(ventas, "sales_repository", repository, raising=False)
-    result = ventas.ventas_node({
-        "customer_id": 41, "conversation_id": "conversation-1",
-        "ticket_id": 84, "ticket_code": "TCK-84",
-        "quote_type": "REPAIR", "quote_task_type": "maintenance",
-        "quote_status": "proposed",
-        "quote": {
-            "ticket_id": 84, "quote_type": "REPAIR",
-            "labor_task_type": "maintenance", "labor_cost": Decimal("20.00"),
-            "parts_cost": Decimal("35.50"), "total_amount": Decimal("55.50"),
-            "parts": [{"id": 7, "code": "SSD-512", "quantity": 1,
-                       "unit_price": Decimal("35.50"), "subtotal": Decimal("35.50"),
-                       "current_stock": 3}],
-        },
-        "messages": [HumanMessage(content="Sí, confirmo")],
-    })
-
-    assert repository.cancelled == (84, 41)
-    assert repository.accepted is None
-    assert result["quote_status"] == "rejected"
-    assert "stock válidos" in result["messages"][0].content
-
-
+    result = sales_node({
+        "customer_id": 41, "request_type": "REPAIR", "ticket_id": 84,
+        "quote_status": "PENDING", "quote_task_type": "maintenance",
+        "quote": {"status": "proposed", "labor_task_type": "maintenance",
+                  "labor_total": "35.00", "known_parts_subtotal": "20.00",
+                  "total": "55.00", "parts": [{"inventory_id": 17, "quantity": 1,
+                  "unit_price": "20.00", "subtotal": "20.00", "available": True}]},
+        "messages": [HumanMessage(content="confirmo")],
+    }, authenticated_customer_id=41, service_quote_repository=Writer())
+    assert result.get("quote_id") is None
+    assert result["quote"]["status"] == "incomplete"
+    assert "registr" in result["messages"][0].content.lower()
 def test_cotizacion_rechaza_tipo_de_trabajo_no_validado():
     with pytest.raises(ValueError, match="tipo de cotizaci"):
         generar_cotizacion.invoke({

@@ -2,7 +2,7 @@ import pytest
 
 from app.agents.jerarquico.agents.procurement import purchasing_agent
 from app.agents.orquestador.agentes.compras import procurement_node as orchestrator_procurement
-from app.agents.decentralized.compras import procurement_node as decentralized_procurement
+from app.agents.decentralized.purchasing import purchasing_node as decentralized_procurement
 from app.agents.jerarquico.supervisor import make_customer_care_supervisor
 from langchain_core.messages import HumanMessage
 

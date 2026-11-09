@@ -5,8 +5,8 @@ from app.rag.retriever import retrieve_documents
 def retrieve_technical_knowledge(query: str, limit: int = 3) -> list[str]:
     passages = retrieve_documents(
         query,
-        allowed_sources={"orchestrator:fallas_comunes"},
         allowed_trust_levels={"verified_guide", "technical_reference"},
+        allowed_areas={"technical"},
         limit=limit,
     )
     return [

@@ -1,7 +1,7 @@
-from dotenv import load_dotenv
 from app.rag.tools import consultar_base_conocimiento
-from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
+from app.config import create_chat_model
+from app.application.prompts import customer_domain_prompt
 from app.agents.decentralized.state import AgentState
 from app.agents.decentralized.policy import is_diagnostic_pricing_query, latest_user_message, handoff, cannot_perform_checks, is_customer_service_query
 from app.agents.decentralized.policy import classify_support_triage, is_handoff_without_progress, has_reported_physical_hazard
@@ -12,16 +12,7 @@ from app.agents.decentralized.tools.tecnico_tools import (
     diagnose_issue,
 )
 
-load_dotenv()
-
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    reasoning_effort="low",
-    model_kwargs={
-        "parallel_tool_calls": False,
-    },
-)
+llm = create_chat_model()
 
 
 hardware_tools = [
@@ -234,7 +225,7 @@ def hardware_node(state: AgentState):
         ))]}
 
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=customer_domain_prompt(SYSTEM_PROMPT)),
         *state["messages"],
     ]
 

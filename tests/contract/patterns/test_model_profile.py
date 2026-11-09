@@ -27,7 +27,7 @@ def test_patterns_share_model_profile_but_keep_distinct_pattern_metadata():
     configs = [pattern.config("conversation-secret") for pattern in patterns]
 
     assert {config["metadata"]["model_profile_id"] for config in configs} == {
-        "groq:test-model:temperature=0"
+        "groq:test-model:temperature=0:parallel_tool_calls=false"
     }
     assert {config["metadata"]["pattern_id"] for config in configs} == {
         "hierarchical", "orchestrator", "decentralized"

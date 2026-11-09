@@ -49,6 +49,9 @@ def to_ticket(row: dict[str, Any]) -> CustomerTicket:
         updated_at=row.get("updated_at"),
         customer_id=row.get("customer_id"),
         id=row.get("id"),
+        diagnosis_type=row.get("diagnosis_type") or "NONE",
+        hardware_diagnosis=row.get("hardware_diagnosis"),
+        software_diagnosis=row.get("software_diagnosis"),
         quote=(
             TicketQuote(
                 status=quote["status"],

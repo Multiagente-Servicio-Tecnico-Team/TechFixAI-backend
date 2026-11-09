@@ -1,5 +1,3 @@
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 from langchain_core.messages import (
     SystemMessage,
     HumanMessage,
@@ -8,6 +6,8 @@ from langchain_core.messages import (
 )
 
 from app.agents.decentralized.state import AgentState
+from app.config import create_chat_model
+from app.application.prompts import customer_domain_prompt
 from app.agents.decentralized.policy import handoff, latest_user_message, extract_inventory_reference, contains_placeholder
 from app.agents.decentralized.policy import prepare_inventory_request, evaluate_supply, build_supply_handoff
 from app.agents.decentralized.tools.almacen_tools import (
@@ -20,16 +20,7 @@ from app.agents.decentralized.tools.warehouse_handoff_tools import transfer_to_s
 # CONFIGURACIÓN DEL MODELO
 # =========================================================
 
-load_dotenv()
-
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    reasoning_effort="low",
-    model_kwargs={
-        "parallel_tool_calls": False,
-    },
-)
+llm = create_chat_model()
 
 # =========================================================
 # HERRAMIENTAS
@@ -202,11 +193,13 @@ def warehouse_node(state: AgentState):
         from app.agents.decentralized.policy import selected_inventory_reference, current_inventory_results, inventory_candidates, extract_inventory_query
         user = latest_user_message(state)
         selected = selected_inventory_reference(state)
-        name = selected or extract_inventory_query(user)
         intake = state.get("intake") or {}
-        requested = extract_inventory_reference(str(intake.get("product_description", "")))
-        if not name and state.get("request_type") == "SALE":
-            name = requested
+        raw_product = str(intake.get("product_description", "")).strip()
+        requested = extract_inventory_reference(raw_product) or raw_product
+        if state.get("request_type") == "SALE":
+            name = selected or requested
+        else:
+            name = selected or extract_inventory_query(user)
         quantity = 1
         if selected:
             quantities = {result["quantity"] for result in current_inventory_results(state)
@@ -246,7 +239,7 @@ def warehouse_node(state: AgentState):
         return build_supply_handoff({**state, **prepared})
 
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=customer_domain_prompt(SYSTEM_PROMPT)),
         *build_warehouse_context(state),
     ]
 

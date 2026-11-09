@@ -6,11 +6,10 @@ import re
 from pathlib import Path
 from typing import Iterable
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
-from app.rag.embeddings import COLLECTION_NAME, CORPUS_VERSION, EMBEDDING_MODEL, create_embeddings
+from app.rag.constants import COLLECTION_NAME, CORPUS_VERSION, EMBEDDING_MODEL
 from app.rag.sources import KnowledgeSource, knowledge_sources
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -93,16 +92,29 @@ def dividir_documentos(documentos: Iterable[Document]) -> list[Document]:
 
 
 def crear_embeddings():
+    # La dependencia de FastEmbed se carga solo cuando se construye el índice
+    # vectorial explícitamente; la API léxica no necesita importar el modelo.
+    from app.rag.embeddings import create_embeddings
+
     return create_embeddings()
 
 
+def _load_vectorstore_class():
+    """Importa Chroma solo cuando se solicita construir el índice híbrido."""
+    from langchain_chroma import Chroma
+
+    return Chroma
+
+
 def crear_base_vectorial():
+    # La ruta de ingesta vectorial se conserva para habilitar el modo híbrido
+    # en el futuro. No se ejecuta al iniciar ni al consultar el RAG léxico.
     documents = cargar_documentos()
     if not documents:
         raise RuntimeError("No se encontraron documentos Markdown en las fuentes registradas.")
     chunks = dividir_documentos(documents)
     ids = [chunk.metadata["chunk_id"] for chunk in chunks]
-    vectorstore = Chroma(
+    vectorstore = _load_vectorstore_class()(
         collection_name=COLLECTION_NAME,
         embedding_function=crear_embeddings(),
         persist_directory=str(CHROMA_DIR),

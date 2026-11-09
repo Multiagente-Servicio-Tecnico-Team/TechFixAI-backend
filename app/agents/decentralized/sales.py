@@ -3,8 +3,6 @@ import json
 import re
 from decimal import Decimal, InvalidOperation
 
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 from langchain_core.messages import (
     SystemMessage,
     HumanMessage,
@@ -14,6 +12,9 @@ from langchain_core.messages import (
 
 from app.rag.tools import consultar_base_conocimiento
 from app.agents.decentralized.state import AgentState
+from app.config import create_chat_model
+from app.settings import load_settings
+from app.application.prompts import customer_domain_prompt
 from app.agents.decentralized.policy import (
     latest_user_message, is_compatibility_query, is_customer_service_query, handoff, build_verified_quote,
     is_inventory_query, contains_placeholder,
@@ -21,27 +22,14 @@ from app.agents.decentralized.policy import (
     extract_inventory_reference,
 )
 from app.agents.decentralized.tools.sales_handoff_tools import transfer_to_support, transfer_to_hardware, transfer_to_billing
-from app.agents.decentralized.tools.ventas_tools import (
-    generar_cotizacion,
-    identify_quote_service,
-)
+from app.agents.decentralized.tools.ventas_tools import generar_cotizacion, identify_quote_service
 
 
 # =========================================================
 # CONFIGURACIÓN DEL MODELO
 # =========================================================
 
-load_dotenv()
-
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    reasoning_effort="low",
-    model_kwargs={
-        "parallel_tool_calls": False,
-        "tool_choice": "auto",
-    },
-)
+llm = create_chat_model()
 
 
 # =========================================================
@@ -117,9 +105,13 @@ def validate_inventory(state: AgentState):
             stock = result["stock"]
             price = Decimal(str(result["unit_price"]))
             available = result["available"]
+            inventory_id = result.get("inventory_id")
 
             if not isinstance(name, str) or not name.strip():
                 raise ValueError("Nombre inválido")
+
+            if result.get("found", True) is True and (type(inventory_id) is not int or inventory_id < 1):
+                raise ValueError("Invalid inventory identifier")
 
             if type(quantity) is not int or quantity <= 0:
                 raise ValueError("Cantidad inválida")
@@ -143,6 +135,8 @@ def validate_inventory(state: AgentState):
                 "stock": stock,
                 "unit_price": str(price),
                 "available": available,
+                "inventory_id": inventory_id,
+                "code": result.get("code"),
                 "subtotal": (
                     str(price * quantity)
                      if available
@@ -355,11 +349,113 @@ def build_sales_context(state: AgentState):
     return context
 
 
+def _quote_card(saved: dict, *, status: str = "PENDING") -> dict:
+    """Build the common chat card from the persisted commercial quote snapshot."""
+    return {
+        "currency": "PEN",
+        "status": {"PENDING": "proposed", "ACCEPTED": "confirmed", "REJECTED": "rejected"}.get(status, "rejected"),
+        "quote_id": saved.get("id") or saved.get("quote_id"),
+        "labor_total": str(saved.get("labor_cost", Decimal("0.00"))),
+        "known_parts_subtotal": str(saved.get("parts_cost", Decimal("0.00"))),
+        "total": str(saved.get("total_amount", saved.get("total", "0.00"))),
+        "parts": [
+            {
+                "inventory_id": part.get("inventory_id", part.get("spare_part_id")),
+                "code": part.get("code", part.get("code_snapshot")),
+                "name": part.get("name", part.get("name_snapshot")),
+                "quantity": int(part["quantity"]),
+                "unit_price": str(part["unit_price"]),
+                "subtotal": str(part["subtotal"]),
+                "available": True,
+            }
+            for part in saved.get("parts", saved.get("lines", []))
+        ],
+    }
+
+
+def _quote_summary(quote: dict, *, build: bool = False) -> str:
+    lines = [f"- {part['name']} × {part['quantity']}: S/ {part['subtotal']}" for part in quote["parts"]]
+    if build:
+        lines.insert(0, f"Ensamblaje: S/ {quote['labor_total']}")
+    return "\n".join(lines)
+
+
+def _pc_build_option(option: dict) -> dict:
+    parts = []
+    for part in option["parts"]:
+        part_id = part.get("id", part.get("spare_part_id"))
+        if type(part_id) is not int or part_id < 1:
+            raise ValueError("El perfil incluye un componente sin ID de inventario.")
+        parts.append({
+            "inventory_id": part_id,
+            "id": part_id,
+            "code": str(part.get("code", "")),
+            "name": str(part["name"]),
+            "category": part.get("category"),
+            "quantity": int(part["quantity"]),
+            "stock": int(part["current_stock"]),
+            "unit_price": str(part["unit_price"]),
+            "subtotal": str(part["subtotal"]),
+        })
+    return {
+        "code": str(option["code"]),
+        "name": str(option["name"]),
+        "parts": parts,
+        "labor_cost": str(option["labor_cost"]),
+        "total": str(option["total"]),
+        "compatibility_notes": str(option["compatibility_notes"]),
+    }
+
+
+def _selected_pc_build(message: str, options: list[dict]) -> dict | None:
+    normalized = normalize_text(message).strip()
+    number = re.fullmatch(r"(?:opcion|perfil|el)?\s*(\d{1,2})", normalized)
+    if number:
+        index = int(number[1]) - 1
+        return options[index] if 0 <= index < len(options) else None
+    matches = [option for option in options if normalized in {
+        normalize_text(option["code"]), normalize_text(option["name"]),
+    }]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _pc_build_options(state: AgentState) -> list[dict]:
+    from app.application.pc_builds import available_pc_builds
+    from app.database.repository import ServiceRepository
+    from app.settings import load_settings
+
+    intake = state.get("intake") or {}
+    intended_use = intake.get("intended_use")
+    budget = intake.get("budget")
+    if not isinstance(intended_use, str) or not intended_use.strip() or budget is None:
+        return []
+    settings = load_settings()
+    options = available_pc_builds(
+        ServiceRepository(), intended_use=intended_use,
+        labor_cost=settings.labor_price_for("pc_build"), budget_max=budget,
+    )
+    return [_pc_build_option(option) for option in options if option.get("within_budget")]
+
+
+def _persist_pc_build_quote(*, customer_id: int, option: dict, repository=None) -> dict:
+    from app.application.chat_sales_quotes import save_chat_sales_quote
+
+    return save_chat_sales_quote(
+        customer_id=customer_id,
+        quote_type="PC_BUILD",
+        parts=option["parts"],
+        labor_cost=option["labor_cost"],
+        observations=f"Perfil {option['code']}: {option['name']}. {option['compatibility_notes']}",
+        repository=repository,
+    )
+
+
 # =========================================================
 # NODO DEL AGENTE VENTAS
 # =========================================================
 
-def sales_node(state: AgentState):
+def sales_node(state: AgentState, *, authenticated_customer_id: int | None = None,
+               quote_repository=None, service_quote_repository=None):
     """
     Procesa solicitudes comerciales utilizando
     el contexto del inventario validado.
@@ -376,6 +472,197 @@ def sales_node(state: AgentState):
                     "Inténtalo nuevamente más tarde."
                 ))]}
     user = latest_user_message(state)
+    pending_service_quote = (
+        state.get("quote_id") is None
+        and state.get("quote_status") == "PENDING"
+        and isinstance(state.get("quote"), dict)
+        and state["quote"].get("status") == "proposed"
+        and state.get("request_type") in {"REPAIR", "SUPPORT"}
+        and type(state.get("ticket_id")) is int
+    )
+    if pending_service_quote:
+        from app.application.quotes import interpret_quote_decision
+
+        decision = interpret_quote_decision(user)
+        if decision is None:
+            return {"current_agent": "ventas", "quote": state["quote"], "quote_status": "PENDING",
+                    "messages": [AIMessage(content=(
+                        "La propuesta de servicio sigue pendiente. Responde «acepto» para registrarla en tu ticket o «rechazo» para dejarla sin registrar."
+                    ))]}
+        if (type(authenticated_customer_id) is not int or authenticated_customer_id < 1
+                or state.get("customer_id") != authenticated_customer_id):
+            return {"current_agent": "ventas", "messages": [AIMessage(content=(
+                "No pude validar que este ticket pertenezca a tu sesión. No se modificó ni registró la cotización."
+            ))]}
+        if decision == "REJECT":
+            return {"current_agent": "ventas", "quote_status": "REJECTED",
+                    "quote": {**state["quote"], "status": "rejected"},
+                    "messages": [AIMessage(content=(
+                        "La propuesta fue rechazada y no se creó una cotización aceptada ni un pago. El ticket de servicio se conserva para seguimiento."
+                    ))]}
+        try:
+            if service_quote_repository is None:
+                from app.database.repository import ServiceRepository
+                service_quote_repository = ServiceRepository()
+            from app.application.chat_service_quotes import accept_chat_service_quote
+            from uuid import uuid4
+
+            accepted = accept_chat_service_quote(
+                writer=service_quote_repository,
+                customer_id=authenticated_customer_id,
+                ticket_id=state["ticket_id"],
+                draft={**state["quote"], "labor_task_type": state.get("quote_task_type") or "maintenance"},
+                payment_code=f"PAY-{uuid4().hex[:12].upper()}",
+            )
+        except Exception as error:
+            from app.domain.errors import StaleQuote
+            if isinstance(error, StaleQuote):
+                return {"current_agent": "ventas", "quote_status": None,
+                        "quote": {**state["quote"], "status": "incomplete"},
+                        "messages": [AIMessage(content=(
+                            "El precio o la disponibilidad cambió desde la propuesta. No se registró la cotización ni el pago. Vuelve a consultar los repuestos para preparar una propuesta actualizada."
+                        ))]}
+            if isinstance(error, (ValueError, LookupError, PermissionError)):
+                return {"current_agent": "ventas", "quote_status": "PENDING", "quote": state["quote"],
+                        "messages": [AIMessage(content=(
+                            "No pude registrar la propuesta para este ticket. No se creó un pago; revisa el ticket o consulta al administrador."
+                        ))]}
+            raise
+        confirmed_quote = {
+            **state["quote"], "status": "confirmed", "quote_id": accepted["quote_id"],
+        }
+        payment_code = accepted["payment_code"]
+        return {"current_agent": "ventas", "quote": confirmed_quote,
+                "quote_id": accepted["quote_id"], "quote_status": "ACCEPTED",
+                "payment_id": accepted["payment_id"], "payment_code": payment_code,
+                "ticket_status": "PAYMENT_PENDING",
+                "messages": [AIMessage(content=(
+                    f"La cotización quedó aceptada y registrada en el ticket {state.get('ticket_code', state['ticket_id'])}. "
+                    f"El pago {payment_code} por S/ {confirmed_quote['total']} está pendiente; no se ha confirmado el cobro ni se ha reservado inventario."
+                ))]}
+
+    if state.get("quote_id") is not None and state.get("quote_status") in {"ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"}:
+        from app.application.quotes import interpret_quote_decision
+        repeated_decision = interpret_quote_decision(user)
+        if repeated_decision:
+            if state.get("quote_status") == "ACCEPTED":
+                return {"current_agent": "ventas", "quote": state.get("quote", {}),
+                        "quote_id": state["quote_id"], "quote_status": "ACCEPTED",
+                        "payment_id": state.get("payment_id"), "payment_code": state.get("payment_code"),
+                        "messages": [AIMessage(content="Esta cotización ya fue aceptada. El stock está reservado temporalmente y el pago sigue pendiente.")]}
+            return {"current_agent": "ventas", "quote": state.get("quote", {}),
+                    "quote_id": state["quote_id"], "quote_status": state["quote_status"],
+                    "messages": [AIMessage(content="Esta cotización ya fue resuelta y no puede modificarse desde el chat.")]}
+    if (state.get("quote_id") is not None
+            and state.get("quote_status") == "PENDING"):
+        from app.application.quotes import interpret_quote_decision
+        decision = interpret_quote_decision(user)
+        if decision is None:
+            return {"current_agent": "ventas", "quote": state.get("quote", {}),
+                    "quote_id": state["quote_id"], "quote_status": "PENDING",
+                    "messages": [AIMessage(content=(
+                        "La cotización comercial sigue pendiente. Revisa el detalle y responde «acepto» para reservar el stock o «rechazo» para cerrarla."
+                    ))]}
+        if (type(authenticated_customer_id) is not int or authenticated_customer_id < 1
+                or state.get("customer_id") != authenticated_customer_id):
+            return {"current_agent": "ventas", "messages": [AIMessage(content=(
+                "No pude validar la sesión propietaria de la cotización; no se modificó su estado."
+            ))]}
+        try:
+            if quote_repository is None:
+                from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+                quote_repository = SalesQuoteRepositoryAdapter()
+            if decision == "ACCEPT":
+                resolution = quote_repository.accept_direct_sales_quote(
+                    quote_id=state["quote_id"], customer_id=authenticated_customer_id,
+                    actor_user_id=None, idempotency_key=f"decentralized-chat-{state['quote_id']}",
+                    confirmation_channel="CHAT",
+                )
+                if resolution.get("status") == "EXPIRED":
+                    return {"current_agent": "ventas", "quote_id": state["quote_id"],
+                            "quote_status": "EXPIRED", "quote": {**state.get("quote", {}), "status": "rejected"},
+                            "messages": [AIMessage(content="La cotización venció y no puede aceptarse. No se reservó inventario ni se registró un pago.")]}
+                card = {**state.get("quote", {}), "status": "confirmed"}
+                payment_code = resolution.get("payment_code")
+                return {"current_agent": "ventas", "quote": card, "quote_id": state["quote_id"],
+                        "quote_status": "ACCEPTED", "payment_id": resolution.get("payment_id"),
+                        "payment_code": payment_code,
+                        "messages": [AIMessage(content=(
+                            "La cotización fue aceptada y el stock quedó reservado temporalmente. "
+                            "El pago sigue pendiente; no se ha confirmado un cobro."
+                            + (f" Referencia de pago: {payment_code}." if payment_code else "")
+                        ))]}
+            resolution = quote_repository.resolve_direct_sales_quote(
+                quote_id=state["quote_id"], customer_id=authenticated_customer_id,
+                actor_user_id=None, target_status="REJECTED", notes="Rechazo explícito desde chat.",
+            )
+            return {"current_agent": "ventas", "quote": {**state.get("quote", {}), "status": "rejected"},
+                    "quote_id": state["quote_id"], "quote_status": resolution.get("status", "REJECTED"),
+                    "messages": [AIMessage(content="La cotización quedó rechazada. No se reservó inventario ni se registró un pago.")]}
+        except (ValueError, LookupError, PermissionError):
+            return {"current_agent": "ventas", "quote": state.get("quote", {}),
+                    "quote_id": state["quote_id"], "quote_status": "PENDING",
+                    "messages": [AIMessage(content="No se pudo resolver la cotización. No se confirmó ningún cambio; vuelve a intentarlo o consulta al administrador.")]}
+
+    if state.get("request_type") == "PC_BUILD":
+        intake = state.get("intake") or {}
+        if (not isinstance(intake.get("intended_use"), str) or not intake.get("intended_use")
+                or intake.get("budget") is None):
+            return {"current_agent": "ventas", "messages": [AIMessage(content="Para cotizar el armado, indica el uso principal y tu presupuesto máximo.")]}
+        options = state.get("pc_build_options") or []
+        if not options:
+            try:
+                options = _pc_build_options(state)
+            except (ValueError, LookupError, KeyError, TypeError):
+                return {"current_agent": "ventas", "messages": [AIMessage(content="No pude validar perfiles, precios y stock para el armado. No se creó una cotización.")]}
+            if not options:
+                return {"current_agent": "ventas", "pc_build_options": [],
+                        "messages": [AIMessage(content=(
+                            "No encontré un perfil completo con precio y stock dentro de ese presupuesto. "
+                            "Puedes indicar otro presupuesto o pedir una configuración distinta. No se creó un ticket ni una cotización."
+                        ))]}
+            choices = "\n".join(
+                f"{index}. {option['name']} — S/ {option['total']}"
+                for index, option in enumerate(options, start=1)
+            )
+            return {"current_agent": "ventas", "pc_build_options": options,
+                    "messages": [AIMessage(content=(
+                        "Encontré estos perfiles completos dentro del presupuesto. La compatibilidad corresponde al perfil documentado; revisa y elige uno por número o nombre:\n"
+                        + choices
+                    ))]}
+        selected = _selected_pc_build(user, options)
+        if selected is None:
+            return {"current_agent": "ventas", "pc_build_options": options,
+                    "messages": [AIMessage(content="Indica el número o nombre exacto del perfil que quieres cotizar. Todavía no se ha reservado stock.")]}
+        if type(authenticated_customer_id) is not int or authenticated_customer_id < 1:
+            return {"current_agent": "ventas", "messages": [AIMessage(content="Necesitas una sesión de cliente para registrar la cotización. No se creó ningún registro.")]}
+        try:
+            saved = _persist_pc_build_quote(customer_id=authenticated_customer_id,
+                                            option=selected, repository=quote_repository)
+        except (ValueError, LookupError, RuntimeError):
+            return {"current_agent": "ventas", "messages": [AIMessage(content="El precio o stock del perfil cambió antes de guardarlo. No se creó la cotización; vuelve a consultar los perfiles disponibles.")]}
+        card = _quote_card(saved)
+        summary = _quote_summary(card, build=True)
+        return {"current_agent": "ventas", "quote": card, "quote_id": saved["id"],
+                "quote_status": "PENDING", "pc_build_options": options,
+                "messages": [AIMessage(content=(
+                    f"Cotización de armado #{saved['id']} guardada, sin ticket de servicio y sin reserva todavía:\n{summary}\n"
+                    f"Total: S/ {card['total']}. Responde «acepto» para reservar el stock o «rechazo» para cerrarla."
+                ))]}
+
+    if (state.get("request_type") == "SALE" and state.get("quote_id") is None):
+        from app.agents.decentralized.policy import current_inventory_results, selected_inventory_reference
+        intake = state.get("intake") or {}
+        quantity = intake.get("quantity")
+        user_selection = selected_inventory_reference(state)
+        wanted_name = user_selection or str(intake.get("product_description", "")).strip()
+        required = state.get("required_parts") or []
+        active_requirement = next((part for part in required
+                                   if type(part.get("quantity")) is int and part.get("quantity") == quantity), None)
+        inventory_name = user_selection or (active_requirement or {}).get("name") or wanted_name
+        if (wanted_name and type(quantity) is int and quantity > 0
+                and not current_inventory_results(state, [{"name": inventory_name, "quantity": quantity}])):
+            return handoff("ventas", "request_inventory", query=f"{inventory_name} cantidad {quantity}")
     # An explicit quantity correction must invalidate earlier stock/proposals.
     # Pending commercial operations still require reconciliation first.
     if state.get("request_type") == "SALE" and state.get("ticket_id") and state.get("intake"):
@@ -426,7 +713,7 @@ def sales_node(state: AgentState):
         return handoff("ventas", "request_inventory", query=user)
 
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=customer_domain_prompt(SYSTEM_PROMPT)),
         *sales_context,
         build_inventory_context(state),
     ]
@@ -435,7 +722,47 @@ def sales_node(state: AgentState):
         inventory, problems = validate_inventory(state)
         problems.extend(e for e in state.get("errors", []) if "inventario" in e.lower())
         if inventory or problems or state.get("quote_scope") or state.get("inventory_pending"):
-            quote, reply = build_verified_quote(inventory, problems, state.get("inventory_pending", False), state.get("quote_scope"), request_type=state.get("request_type"))
+            request_type = state.get("request_type")
+            task_type = state.get("quote_task_type") or (
+                "diagnosis" if state.get("quote_scope") == "solo_servicio" else "maintenance"
+            )
+            labor_cost = Decimal("0.00")
+            if request_type in {"REPAIR", "SUPPORT"}:
+                labor_cost = load_settings().labor_price_for(task_type)
+            quote, reply = build_verified_quote(
+                inventory, problems, state.get("inventory_pending", False),
+                state.get("quote_scope"), request_type=request_type, labor_cost=labor_cost,
+            )
+            if state.get("request_type") == "SALE" and quote.get("status") == "proposed":
+                if (type(authenticated_customer_id) is not int or authenticated_customer_id < 1
+                        or state.get("customer_id") != authenticated_customer_id):
+                    quote = {**quote, "status": "incomplete", "total": None}
+                    reply = "El catálogo confirma los artículos, pero no pude validar la sesión propietaria para registrar una cotización. No se creó ningún registro."
+                else:
+                    try:
+                        from app.application.chat_sales_quotes import save_chat_sales_quote
+                        if quote_repository is None:
+                            from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+                            quote_repository = SalesQuoteRepositoryAdapter()
+                        saved = save_chat_sales_quote(
+                            customer_id=authenticated_customer_id,
+                            quote_type="DIRECT_SALE",
+                            parts=quote["parts"],
+                            labor_cost="0.00",
+                            observations="Cotización de venta directa preparada desde chat.",
+                            repository=quote_repository,
+                        )
+                        quote = _quote_card(saved)
+                        reply = (
+                            f"Cotización de venta #{saved['id']} guardada, sin ticket de servicio y sin reserva todavía:\n"
+                            f"{_quote_summary(quote)}\nTotal: S/ {quote['total']}. "
+                            "Responde «acepto» para reservar el stock o «rechazo» para cerrarla."
+                        )
+                        return {"current_agent": "ventas", "quote": quote, "quote_id": saved["id"],
+                                "quote_status": "PENDING", "messages": [AIMessage(content=reply)]}
+                    except (ValueError, LookupError, RuntimeError):
+                        quote = {**quote, "status": "incomplete", "total": None}
+                        reply = "El precio o stock cambió antes de guardar la cotización. No se creó ningún registro; vuelve a consultar el artículo."
             if state.get("quote_scope") == "solo_servicio" and state.get("technical_assessment", {}).get("software_diagnosis"):
                 reply = "La evaluación de software recibida es preliminar; no confirma una reparación ni ejecución del servicio. " + reply
             if "instalacion" in normalize_text(user) and any(w in normalize_text(user) for w in ("incluye", "incluido", "solo", "importe")):
@@ -448,6 +775,16 @@ def sales_node(state: AgentState):
                     reply = "Todavía no hay un importe de repuestos disponibles confirmado. La tarifa de instalación y mano de obra también está pendiente de validación."
             if state.get("out_of_stock_items"):
                 reply += "\nHay faltantes de inventario. Abastecimiento no tiene ofertas externas verificadas: costo, proveedor y plazo siguen pendientes. No hay pedido, reserva ni entrega comprometidos."
+            if (quote.get("status") == "proposed"
+                    and state.get("request_type") in {"REPAIR", "SUPPORT"}
+                    and type(state.get("ticket_id")) is int):
+                quote = {**quote, "labor_task_type": state.get("quote_task_type") or (
+                    "diagnosis" if state.get("quote_scope") == "solo_servicio" else "maintenance"
+                )}
+                return {"current_agent": "ventas", "quote": quote, "quote_status": "PENDING",
+                        "messages": [AIMessage(content=(
+                            reply + " Responde «acepto» para registrar esta cotización de servicio en el ticket o «rechazo» para dejarla sin registrar."
+                        ))]}
             return {"current_agent": "ventas", "quote": quote, "messages": [AIMessage(content=reply)]}
         response = _resolve_sales_llm().invoke(messages)
 

@@ -438,11 +438,9 @@ class DecentralizedRepository:
         """
         if explicitly_accepted is not True:
             raise ValueError("Falta aceptación explícita")
-        if quote_type not in {"REPAIR", "DIRECT_SALE", "PC_BUILD"}:
-            raise ValueError("quote_type no admitido")
+        if quote_type != "REPAIR":
+            raise ValueError("Los tickets de servicio solo admiten cotizaciones REPAIR; ventas usan cotizaciones independientes")
         labor_cost = _money(labor_cost)
-        if quote_type == "DIRECT_SALE" and labor_cost != 0:
-            raise ValueError("Venta directa sin mano de obra")
         if observations is not None:
             observations = _text(observations)
         normalized = []
@@ -462,15 +460,12 @@ class DecentralizedRepository:
             normalized.append(dict(spare_part_id=part_id, custom_item_name=None,
                                    quantity=quantity, unit_price=price, subtotal=subtotal))
         normalized.sort(key=lambda line: line["spare_part_id"])
-        if not normalized and quote_type != "REPAIR":
-            raise ValueError("Faltan artículos")
         parts_cost = _total(line["subtotal"] for line in normalized)
         total = _total([labor_cost, parts_cost])
         with self.engine.begin() as connection:
             self._customer(connection, customer_id)
             tickets, ticket = self._ticket(connection, customer_id, ticket_id, lock=True)
-            allowed = {"REPAIR": {"REPAIR", "SUPPORT"}, "DIRECT_SALE": {"SALE"}, "PC_BUILD": {"PC_BUILD"}}
-            if ticket["request_type"] not in allowed[quote_type]:
+            if ticket["request_type"] not in {"REPAIR", "SUPPORT", "WARRANTY_CLAIM"}:
                 raise ValueError("Tipo de cotización incompatible con ticket")
             quotes = self._table(connection, "quotes")
             existing = list(connection.execute(select(quotes).where(

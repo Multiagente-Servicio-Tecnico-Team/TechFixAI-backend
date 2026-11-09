@@ -5,7 +5,7 @@
 - Base de prueba: `multiagentedb`.
 - Fecha del snapshot del manifiesto: 2026-11-03.
 - Ocho tickets autorizados: IDs 3, 4, 7, 8, 9, 10, 11 y 12.
-- Manifiesto: [`sql/operations/sale-test-fixture-2026-11-03.json`](../../sql/operations/sale-test-fixture-2026-11-03.json).
+- El manifiesto JSON aprobado se utilizo durante esa ejecucion, pero no se conserva en este repositorio.
 - Ejecución transaccional después de migración 008 y antes de migración 009, el 2026-11-03, entre 20:31:04 y 20:31:41 (hora local America/Bogota).
 
 ## Resultado de preflight
@@ -51,4 +51,6 @@ El sistema quedó con 4 tickets de servicio (2 PC_BUILD, 2 SUPPORT), 1 cotizaci�
 - Tamaño: 130946 bytes.
 - SHA-256: `D53497A6C1FD21307B5BC988D85C6DAA328283024264C565CFA13E982A96B5BA`
 
-La herramienta [`cleanup_sale_test_fixture.py`](../../sql/operations/cleanup_sale_test_fixture.py) conserva el modo de solo lectura por defecto y aborta si el destino, manifiesto o dependencias difieren.
+## Estado del artefacto de limpieza
+
+El script y el manifiesto fueron herramientas de una sola ejecucion y ya no estan en el repositorio. Este archivo es un reporte historico, no un procedimiento repetible. No intentes reconstruir el manifiesto ni volver a borrar registros usando esos IDs. La prueba unitaria que importaba el script eliminado tambien fue reemplazada por una comprobacion de este reporte.

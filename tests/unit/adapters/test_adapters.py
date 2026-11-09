@@ -57,14 +57,15 @@ def test_base_sends_conversation_as_thread_and_customer_in_state():
 
 def test_hierarchical_maps_proposed_quote_and_saved_ticket():
     quote = {"labor_cost": Decimal("35"), "total_amount": Decimal("215"), "parts": [{"name": "SSD 480 GB", "quantity": 1, "subtotal": Decimal("180")}]}
-    proposed = HierarchicalPattern().to_reply({"messages": [AIMessage(content="¿Confirmas?")], "outcome": "awaiting_confirmation", "quote": quote})
+    proposed = HierarchicalPattern().to_reply({"messages": [AIMessage(content="¿Confirmas?")], "outcome": "awaiting_confirmation", "quote": quote, "ticket_code": "TCK-1"})
     saved = HierarchicalPattern().to_reply(
         {"messages": [AIMessage(content="Guardado")], "outcome": "quoted", "quote": quote, "ticket_code": "TCK-1", "ticket_status": "PAYMENT_PENDING"}
     )
 
     assert proposed.pending_quote and proposed.quote.status == "proposed"
     assert [(l.label, l.amount) for l in proposed.quote.lines] == [("Mano de obra", Decimal("35.00")), ("SSD 480 GB × 1", Decimal("180.00"))]
-    assert proposed.ticket is None
+    assert proposed.ticket is not None
+    assert (proposed.ticket.code, proposed.ticket.status) == ("TCK-1", "IN_DIAGNOSIS")
     assert saved.quote.status == "confirmed" and not saved.pending_quote
     assert (saved.ticket.code, saved.ticket.status) == ("TCK-1", "PAYMENT_PENDING")
 

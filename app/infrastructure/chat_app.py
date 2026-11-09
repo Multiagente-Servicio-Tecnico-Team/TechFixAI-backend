@@ -17,6 +17,7 @@ from app.accounts.config import Settings as AccountSettings
 from app.accounts.security import LoginLimiter
 from app.accounts.session import SessionCustomer, SessionError, SessionGuard
 from app.adapters.api.chat import create_chat_router
+from app.adapters.api.admin_chat import create_admin_chat_router
 from app.adapters.api.admin_tickets import create_admin_ticket_router
 from app.adapters.api.accounting import create_accounting_router
 from app.adapters.api.accounting_catalog import create_accounting_catalog_router
@@ -34,6 +35,9 @@ from app.adapters.persistence.accounting import AccountingRepositoryAdapter
 from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
 from app.adapters.persistence.purchase_orders import PurchaseOrderRepositoryAdapter
 from app.application.chat import SendChatMessage
+from app.application.admin_capabilities import AdminCapabilityService
+from app.application.admin_chat import AdminChatService
+from app.application.admin_conversations import AdminConversationRegistry
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.audio_requests import AudioRequestRegistry
 from app.application.ports import AudioTranscriber
@@ -80,7 +84,8 @@ def build_chat_app(
                 or request.url.path.startswith("/api/admin/purchases")
                 or request.url.path.startswith("/api/admin/purchase-orders")
                 or request.url.path.startswith("/api/admin/suppliers")
-                or request.url.path.startswith("/api/admin/sales-")):
+                or request.url.path.startswith("/api/admin/sales-")
+                or request.url.path.startswith("/api/admin/chat")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -141,6 +146,20 @@ def build_chat_app(
         conversations=ConversationRegistry(),
         limiter=LoginLimiter(MESSAGES_PER_MINUTE, 60),
     )
+    message_limiter = LoginLimiter(MESSAGES_PER_MINUTE, 60)
+    admin_chat = AdminChatService(
+        capabilities=AdminCapabilityService(
+            ticket_repository_factory=ticket_repository_factory,
+            inventory_repository_factory=inventory_repository_factory,
+            purchase_repository_factory=purchase_repository_factory,
+            purchase_order_repository_factory=purchase_order_repository_factory,
+            sales_repository_factory=sales_repository_factory,
+            accounting_repository_factory=accounting_repository_factory,
+        ),
+        conversations=AdminConversationRegistry(),
+        limiter=message_limiter,
+        settings_factory=settings_factory,
+    )
     list_tickets = ListCustomerTickets(lambda: RepositoryTicketReader(ticket_repository_factory))
     configured_transcriber = audio_transcriber
     if runtime_settings.audio_transcription_enabled and configured_transcriber is None and runtime_settings.groq_api_key:
@@ -171,6 +190,16 @@ def build_chat_app(
             create_portal_ticket=lambda **values: _create_portal_ticket(
                 repository_factory=ticket_repository_factory, **values
             ),
+        )
+    )
+    app.include_router(
+        create_admin_chat_router(
+            chat_service=admin_chat,
+            require_admin=require_admin,
+            pattern_names=PATTERN_NAMES,
+            audio_message=audio_use_case,
+            audio_enabled=runtime_settings.audio_transcription_enabled,
+            audio_max_bytes=runtime_settings.audio_max_bytes,
         )
     )
     app.include_router(

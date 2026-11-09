@@ -1,6 +1,7 @@
 """Transactional PostgreSQL persistence for direct-sale quotations and reservations."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -29,11 +30,12 @@ class SalesQuoteRepositoryAdapter:
             row = session.execute(text("""SELECT q.id,q.customer_id,q.quote_type::text AS kind,
                     q.ticket_id,q.status::text AS status,q.total_amount,q.expires_at,q.created_at,
                     q.customer_name_snapshot,q.customer_phone_snapshot,q.customer_email_snapshot,
+                    q.labor_cost,q.parts_cost,q.observations,
                     p.status::text AS payment_status,r.status AS inventory_reservation_status
                 FROM quotes q LEFT JOIN payments p ON p.quote_id=q.id
                   AND p.commercial_customer_id=q.customer_id
                 LEFT JOIN inventory_reservations r ON r.quote_id=q.id
-                WHERE q.id=:id AND q.quote_type='DIRECT_SALE'
+                WHERE q.id=:id AND q.quote_type IN ('DIRECT_SALE','PC_BUILD') AND q.ticket_id IS NULL
                   AND (CAST(:customer AS bigint) IS NULL OR q.customer_id=CAST(:customer AS bigint))
                 ORDER BY p.id DESC LIMIT 1"""), {"id": quote_id, "customer": customer_id}).mappings().first()
             if row is None:
@@ -52,7 +54,8 @@ class SalesQuoteRepositoryAdapter:
     def list_sales_quotes(self, *, customer_id: int | None = None, status: str | None = None,
                           limit: int = 50, offset: int = 0):
         with self._session_factory() as session:
-            rows = session.execute(text("""SELECT q.id FROM quotes q WHERE q.quote_type='DIRECT_SALE'
+            rows = session.execute(text("""SELECT q.id FROM quotes q
+                WHERE q.quote_type IN ('DIRECT_SALE','PC_BUILD') AND q.ticket_id IS NULL
                 AND (CAST(:customer AS bigint) IS NULL OR q.customer_id=CAST(:customer AS bigint))
                 AND (CAST(:status AS text) IS NULL OR q.status::text=CAST(:status AS text))
                 ORDER BY q.created_at DESC,q.id DESC LIMIT :limit OFFSET :offset"""),
@@ -72,7 +75,7 @@ class SalesQuoteRepositoryAdapter:
     def get_commercial_quote(self, quote_id: int, *, customer_id: int):
         with self._session_factory() as session:
             row = session.execute(text("""SELECT q.id,q.customer_id,q.quote_type::text AS kind,q.ticket_id,
-                    q.status::text AS status,q.total_amount,q.expires_at,q.created_at,q.observations,
+                    q.status::text AS status,q.labor_cost,q.parts_cost,q.total_amount,q.expires_at,q.created_at,q.observations,
                     p.status::text AS payment_status,r.status AS inventory_reservation_status
                 FROM quotes q LEFT JOIN payments p ON p.quote_id=q.id AND p.commercial_customer_id=q.customer_id
                 LEFT JOIN inventory_reservations r ON r.quote_id=q.id
@@ -96,7 +99,7 @@ class SalesQuoteRepositoryAdapter:
                 {"id": quote_id, "customer": customer_id}).mappings().first()
             if quote is None:
                 raise LookupError("Cotización no encontrada.")
-            if quote["kind"] == "DIRECT_SALE" or quote["ticket_id"] is None:
+            if quote["kind"] in {"DIRECT_SALE", "PC_BUILD"} or quote["ticket_id"] is None:
                 raise ValueError("La cotización no es de servicio.")
             if quote["status"] != "PENDING":
                 raise ValueError("La cotización ya no está pendiente.")
@@ -165,10 +168,12 @@ class SalesQuoteRepositoryAdapter:
         if target_status not in {"REJECTED", "CANCELLED"}:
             raise ValueError("La transición solicitada no está permitida.")
         with self._session_factory() as session, session.begin():
-            quote = session.execute(text("""SELECT q.id,q.customer_id,c.user_id,q.quote_type::text AS kind,q.status::text AS status
+            quote = session.execute(text("""SELECT q.id,q.customer_id,c.user_id,q.quote_type::text AS kind,q.status::text AS status,q.ticket_id
                 FROM quotes q JOIN customers c ON c.id=q.customer_id WHERE q.id=:id FOR UPDATE OF q"""),
                 {"id": quote_id}).mappings().first()
-            if quote is None or quote["kind"] != "DIRECT_SALE" or (customer_id is not None and int(quote["customer_id"] or 0) != customer_id):
+            if (quote is None or quote["kind"] not in {"DIRECT_SALE", "PC_BUILD"}
+                    or quote["ticket_id"] is not None
+                    or (customer_id is not None and int(quote["customer_id"] or 0) != customer_id)):
                 raise LookupError("Cotización no encontrada.")
             actor_user_id = actor_user_id or quote["user_id"]
             if actor_user_id is None:
@@ -198,7 +203,13 @@ class SalesQuoteRepositoryAdapter:
     def create_direct_sales_quote(
         self, *, customer_id: int, actor_user_id: int | None, lines: list[dict[str, int]],
         expires_at: datetime, observations: str | None = None, origin: str = "MANUAL",
+        quote_type: str = "DIRECT_SALE", labor_cost: Decimal | str = Decimal("0.00"),
     ) -> dict[str, Any]:
+        if quote_type not in {"DIRECT_SALE", "PC_BUILD"}:
+            raise ValueError("El tipo de cotización comercial no es válido.")
+        labor_cost = to_money(labor_cost)
+        if labor_cost < 0 or (quote_type == "DIRECT_SALE" and labor_cost != 0):
+            raise ValueError("La venta directa no admite costo de mano de obra.")
         if expires_at.tzinfo is None or expires_at <= datetime.now(timezone.utc):
             raise ValueError("La fecha de vencimiento debe ser futura e incluir zona horaria.")
         if not lines or len(lines) > 50:
@@ -235,22 +246,24 @@ class SalesQuoteRepositoryAdapter:
                 parts[part_id] = dict(row)
 
             priced_lines = []
-            total = Decimal("0.00")
+            parts_total = Decimal("0.00")
             for part_id in sorted(quantities):
                 part, quantity = parts[part_id], quantities[part_id]
                 price = to_money(part["unit_price"])
                 subtotal = to_money(price * quantity)
-                total += subtotal
+                parts_total += subtotal
                 priced_lines.append((part, quantity, price, subtotal))
-            total = to_money(total)
+            parts_total = to_money(parts_total)
+            total = to_money(parts_total + labor_cost)
             if total <= 0 or total > Decimal("99999999.99"):
                 raise ValueError("El importe total excede el límite admitido por el sistema.")
             quote_id = int(session.execute(text("""INSERT INTO quotes
                 (ticket_id,customer_id,quote_type,labor_cost,parts_cost,total_amount,status,observations,
                  origin,created_by_user_id,expires_at,customer_name_snapshot,customer_phone_snapshot,customer_email_snapshot)
-                VALUES (NULL,:customer,'DIRECT_SALE',0,:total,:total,'PENDING',:observations,
+                VALUES (NULL,:customer,CAST(:kind AS quote_type_enum),:labor,:parts,:total,'PENDING',:observations,
                         :origin,:actor,:expires,:name,:phone,:email) RETURNING id"""), {
-                "customer": customer_id, "total": total, "observations": observations,
+                "customer": customer_id, "kind": quote_type, "labor": labor_cost,
+                "parts": parts_total, "total": total, "observations": observations,
                 "actor": actor_user_id, "expires": expires_at, "name": customer["display_name"],
                 "phone": customer["phone"], "email": customer["email"], "origin": origin,
             }).scalar_one())
@@ -264,10 +277,12 @@ class SalesQuoteRepositoryAdapter:
             session.execute(text("""INSERT INTO quote_audit_events(quote_id,actor_user_id,event_type,changed_fields)
                 VALUES (:quote,:actor,'CREATED',CAST(:fields AS jsonb))"""), {
                 "quote": quote_id, "actor": actor_user_id,
-                "fields": '{"kind":"DIRECT_SALE","status":"PENDING"}',
+                "fields": json.dumps({"kind": quote_type, "status": "PENDING",
+                                      "labor_cost": format(labor_cost, ".2f")}),
             })
-            return {"id": quote_id, "customer_id": customer_id, "kind": "DIRECT_SALE",
+            return {"id": quote_id, "customer_id": customer_id, "kind": quote_type,
                     "ticket_id": None, "status": "PENDING", "total_amount": total,
+                    "labor_cost": labor_cost, "parts_cost": parts_total,
                     "payment_status": None, "inventory_reservation_status": "NOT_RESERVED",
                     "created_at": datetime.now(timezone.utc), "expires_at": expires_at, "lines": [
                         {"spare_part_id": int(p["id"]), "name_snapshot": p["name"],
@@ -293,8 +308,8 @@ class SalesQuoteRepositoryAdapter:
             actor_user_id = actor_user_id or quote["user_id"]
             if actor_user_id is None:
                 raise PermissionError("Una cuenta autenticada debe registrar la aceptación.")
-            if quote["kind"] != "DIRECT_SALE" or quote["ticket_id"] is not None:
-                raise ValueError("Solo se pueden aceptar cotizaciones de venta directa.")
+            if quote["kind"] not in {"DIRECT_SALE", "PC_BUILD"} or quote["ticket_id"] is not None:
+                raise ValueError("Solo se pueden aceptar cotizaciones de venta independientes de un ticket.")
             existing = session.execute(text("SELECT id,status,expires_at FROM inventory_reservations WHERE quote_id=:quote FOR UPDATE"),
                 {"quote": quote_id}).mappings().first()
             if quote["expires_at"] is None or quote["expires_at"].tzinfo is None or quote["expires_at"] <= now:
@@ -390,7 +405,7 @@ class SalesQuoteRepositoryAdapter:
         now = datetime.now(timezone.utc)
         with self._session_factory() as session, session.begin():
             quote = session.execute(text("""SELECT q.*,q.quote_type::text AS kind,q.status::text AS quote_status,
-                    c.display_name,c.phone,c.email
+                    c.display_name,c.phone,c.email,c.user_id
                 FROM quotes q JOIN customers c ON c.id=q.customer_id WHERE q.id=:id FOR UPDATE OF q"""),
                 {"id": quote_id}).mappings().first()
             if quote is None:
@@ -402,8 +417,8 @@ class SalesQuoteRepositoryAdapter:
                 if payment == idempotency_key:
                     return dict(order)
                 raise ValueError("La venta de esta cotización ya fue confirmada con otra clave.")
-            if quote["kind"] != "DIRECT_SALE" or quote["quote_status"] != "ACCEPTED":
-                raise ValueError("Solo una cotización de venta aceptada puede pagarse.")
+            if quote["kind"] not in {"DIRECT_SALE", "PC_BUILD"} or quote["ticket_id"] is not None or quote["quote_status"] != "ACCEPTED":
+                raise ValueError("Solo una cotización de venta independiente aceptada puede pagarse.")
             reservation = session.execute(text("SELECT * FROM inventory_reservations WHERE quote_id=:id FOR UPDATE"), {"id": quote_id}).mappings().first()
             if reservation is None or reservation["status"] != "RESERVED" or reservation["expires_at"] <= now:
                 if reservation is not None and reservation["status"] == "RESERVED":
@@ -465,5 +480,23 @@ class SalesQuoteRepositoryAdapter:
                 "quote": quote_id, "actor": actor_user_id,
                 "fields": '{"payment_status":"COMPLETED","order_status":"PAID","reservation":"CONSUMED"}',
             })
-            result = session.execute(text("SELECT id,code,status,total_amount,customer_id,quote_id,payment_id,created_at FROM sales_orders WHERE id=:id"), {"id": order_id}).mappings().one()
-            return dict(result)
+            result = dict(session.execute(text("SELECT id,code,status,total_amount,customer_id,quote_id,payment_id,created_at FROM sales_orders WHERE id=:id"), {"id": order_id}).mappings().one())
+            if quote["kind"] == "PC_BUILD":
+                parts = session.execute(text("""SELECT COALESCE(qd.custom_item_name,sp.name,'Componente') AS name
+                    FROM quote_details qd LEFT JOIN spare_parts sp ON sp.id=qd.spare_part_id
+                    WHERE qd.quote_id=:quote ORDER BY qd.id"""), {"quote": quote_id}).scalars().all()
+                warranty = session.execute(text("""INSERT INTO warranties
+                    (ticket_id,sales_order_id,quote_id,customer_id,commercial_customer_id,created_by_user_id,
+                     warranty_code,item_or_service_name,warranty_months,start_date,end_date,status,terms_and_conditions)
+                    VALUES (NULL,:order,:quote,:legacy_customer,:customer,:actor,:code,:item,3,CURRENT_DATE,
+                        (CURRENT_DATE + make_interval(months => 3))::date,'ACTIVE',
+                        'Garantía de 3 meses asociada al pedido pagado de armado de PC.')
+                    RETURNING id,warranty_code"""), {
+                    "order": order_id, "quote": quote_id, "legacy_customer": quote["user_id"],
+                    "customer": quote["customer_id"], "actor": actor_user_id,
+                    "code": f"WAR-{uuid4().hex[:12].upper()}",
+                    "item": ("Armado de PC: " + ", ".join(str(part) for part in parts))[:200],
+                }).mappings().one()
+                result["warranty_id"] = int(warranty["id"])
+                result["warranty_code"] = warranty["warranty_code"]
+            return result

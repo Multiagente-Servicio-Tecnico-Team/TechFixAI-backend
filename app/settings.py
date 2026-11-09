@@ -23,6 +23,7 @@ class Settings:
     audio_max_bytes: int = 25_000_000
     audio_max_duration_ms: int = 120_000
     audio_requests_per_minute: int = 5
+    rag_retrieval_mode: str = "lexical"
 
     def require_chat_configuration(self) -> None:
         missing = []
@@ -112,6 +113,13 @@ def _positive_float(name: str, default: float) -> float:
     return parsed
 
 
+def _rag_retrieval_mode() -> str:
+    value = os.getenv("RAG_RETRIEVAL_MODE", "lexical").strip().lower()
+    if value not in {"lexical", "hybrid"}:
+        raise ValueError("RAG_RETRIEVAL_MODE debe ser lexical o hybrid.")
+    return value
+
+
 def load_settings() -> Settings:
     load_dotenv()
     return Settings(
@@ -149,4 +157,5 @@ def load_settings() -> Settings:
         audio_max_bytes=_positive_integer("AUDIO_MAX_BYTES", 25_000_000),
         audio_max_duration_ms=_positive_integer("AUDIO_MAX_DURATION_MS", 120_000),
         audio_requests_per_minute=_positive_integer("AUDIO_REQUESTS_PER_MINUTE", 5),
+        rag_retrieval_mode=_rag_retrieval_mode(),
     )

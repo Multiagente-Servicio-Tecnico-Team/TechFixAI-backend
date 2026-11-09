@@ -55,6 +55,8 @@ El contrato backend de audio y su validacion local viven en
 | 26 | Desactivación temporal de guardas contables en la base local de pruebas | `sql/operations/accounting-test-triggers-disable.sql`, `accounting-test-triggers-restore.sql` | `docs/26-borrado-temporal-asientos-prueba.md` |
 | 27 | Propuesta de mejoras del backend inspiradas en Dolibarr | — | `docs/27-propuesta-mejoras-backend-basadas-dolibarr.md` |
 | 28 | Trazabilidad de movimientos de inventario | `specs/008-trazabilidad-movimientos-inventario/` | `docs/24-api-inventario.md` |
+| 29 | Chat multirol, capacidades compartidas y paridad de patrones | `specs/011-chat-multirole-patrones/` | `specs/011-chat-multirole-patrones/contracts/` |
+| 30 | Guía manual de pruebas de chat multirol desde el frontend | `specs/011-chat-multirole-patrones/` | `docs/30-guia-pruebas-manuales-chat-multirole-frontend.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.

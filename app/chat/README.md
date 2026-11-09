@@ -70,6 +70,12 @@ El contrato canonico es
 [`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](../../specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml).
 La tarea frontend se implementa y valida en el repositorio hermano.
 
+## «Mis Tickets» del cliente
+
+`GET /api/customer/tickets` toma el perfil comercial de la sesión autenticada y devuelve solo sus tickets. Cada ticket incluye `diagnosis_type`, `hardware_diagnosis` y `software_diagnosis`, además de sus cotizaciones y líneas. Los campos de diagnóstico corresponden a la evaluación persistida por los especialistas; para tickets aún sin evaluación, el tipo es `NONE` y los textos son `null`. La propiedad se valida en la consulta del repositorio mediante `commercial_customer_id`; el request no puede elegir otro cliente.
+
+El contrato vigente está en [`specs/007-gestion-clientes-comerciales/contracts/customer-commerce.openapi.yaml`](../../specs/007-gestion-clientes-comerciales/contracts/customer-commerce.openapi.yaml).
+
 ## API integrada
 
 El punto de entrada recomendado ejecuta cuentas y chat en el mismo servidor:

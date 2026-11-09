@@ -1,8 +1,5 @@
-"""Adaptador del patrón Red descentralizada (`app/agents/decentralized`).
-
-En `develop` sus herramientas son simuladas: no propone presupuestos, por eso
-los botones aceptar/rechazar no aplican (`supports_quotes = False`).
-"""
+"""Adaptador del patrón Red descentralizada (`app/agents/decentralized`)."""
+from decimal import Decimal
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -20,8 +17,18 @@ class DecentralizedPattern(GraphPattern):
         from langgraph.checkpoint.memory import MemorySaver
 
         from app.agents.decentralized.graph import build_graph
+        from app.database.repository import ServiceRepository
+        from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
 
-        return build_graph(checkpointer=MemorySaver())
+        service_repository = ServiceRepository()
+        return build_graph(
+            checkpointer=MemorySaver(), ticket_repository=service_repository, ticket_writes=True,
+            sales_quote_writes=True, sales_quote_repository=SalesQuoteRepositoryAdapter(),
+            service_quote_repository=service_repository,
+        )
+
+    def invocation_context(self, *, conversation_id: str, customer_id: int) -> dict[str, Any]:
+        return {"authenticated_customer_id": customer_id}
 
     def initial_state(self, customer_id: int, message: HumanMessage) -> dict[str, Any]:
         return {
@@ -44,52 +51,42 @@ class DecentralizedPattern(GraphPattern):
         )
 
     def to_reply(self, result: dict[str, Any]) -> PatternReply:
-        quote_data = result.get("quote") or {}
-        quote_status = result.get("quote_status")
-        quote = None
-        if (
-            quote_status in {"proposed", "confirmed", "saved", "rejected"}
-            and quote_data.get("total_amount") is not None
-        ):
-            if quote_data.get("quote_type") == "DIRECT_SALE":
-                labor_label = "Mano de obra (venta directa)"
-            elif quote_data.get("labor_task_type") == "diagnosis":
-                labor_label = "DiagnÃ³stico tÃ©cnico"
-            elif quote_data.get("labor_task_type") == "pc_build":
-                labor_label = "Ensamble"
-            else:
-                labor_label = "Mano de obra"
-            lines = []
-            if quote_data.get("labor_cost"):
-                lines.append(QuoteLine(labor_label, quote_data["labor_cost"]))
-            lines.extend(
-                QuoteLine(
-                    f"{part['name']} × {part['quantity']}", part["subtotal"]
-                )
-                for part in quote_data.get("parts", [])
-            )
-            quote = Quote(
-                status=quote_status,
-                lines=lines,
-                total=quote_data["total_amount"],
-            )
         ticket_code = result.get("ticket_code")
         ticket = (
             TicketRef(
                 code=ticket_code,
-                status=result.get("ticket_status", "QUOTED"),
+                status=result.get("ticket_status", "NEW"),
             )
-            if (
-                quote_status in {"confirmed", "saved"}
-                and isinstance(ticket_code, str)
-                and ticket_code
-            )
+            if isinstance(ticket_code, str) and ticket_code
             else None
         )
-        return PatternReply(
-            reply=last_message_text(result),
-            quote=quote,
-            ticket=ticket,
-            pending_quote=quote_status == "proposed",
-            quote_id=result.get("quote_id"),
-        )
+        quote = None
+        raw_quote = result.get("quote")
+        quote_id = result.get("quote_id")
+        raw_total = (raw_quote.get("total", raw_quote.get("total_amount"))
+                     if isinstance(raw_quote, dict) else None)
+        if isinstance(raw_quote, dict) and type(raw_total) in {int, float, str, Decimal}:
+            quote_status = result.get("quote_status")
+            status = ({"PENDING": "proposed", "ACCEPTED": "confirmed", "REJECTED": "rejected",
+                       "EXPIRED": "rejected", "CANCELLED": "rejected",
+                       "proposed": "proposed", "confirmed": "confirmed", "rejected": "rejected"}.get(quote_status)
+                      or {"proposed": "proposed", "confirmed": "confirmed", "rejected": "rejected"}.get(raw_quote.get("status")))
+            if status:
+                lines = []
+                labor = raw_quote.get("labor_total", raw_quote.get("labor_cost"))
+                if labor not in {None, "0", "0.00", 0, 0.0}:
+                    lines.append(QuoteLine(label="Ensamblaje", amount=labor))
+                for part in raw_quote.get("parts", []):
+                    amount = part.get("subtotal")
+                    if amount is None and part.get("unit_price") is not None:
+                        amount = Decimal(str(part["unit_price"])) * int(part["quantity"])
+                    if amount is not None:
+                        lines.append(QuoteLine(
+                            label=f"{part['name']} × {part['quantity']}",
+                            amount=amount,
+                        ))
+                quote = Quote(status=status, lines=tuple(lines), total=raw_total)
+        return PatternReply(reply=last_message_text(result), quote=quote, ticket=ticket,
+                            pending_quote=(result.get("quote_status") in {"PENDING", "proposed"}
+                                           or (isinstance(raw_quote, dict) and raw_quote.get("status") == "proposed")),
+                            quote_id=quote_id if type(quote_id) is int else None)

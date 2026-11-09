@@ -12,6 +12,19 @@ from app.database.repository import ServiceRepository
 from app.settings import load_settings
 
 
+def _save_build_quote(customer_id: int, profile: dict[str, object], parts: list[dict[str, object]], labor_cost) -> dict[str, object]:
+    """Use the common persistence contract for standalone sales quotations."""
+    from app.application.chat_sales_quotes import save_chat_sales_quote
+
+    return save_chat_sales_quote(
+        customer_id=customer_id,
+        quote_type="PC_BUILD",
+        parts=parts,
+        labor_cost=str(labor_cost),
+        observations=f"Armado de PC {profile.get('code', '')}: {profile.get('name', '')}. Requiere confirmación del cliente.",
+    )
+
+
 def _normalize(value: str) -> str:
     return "".join(
         char for char in unicodedata.normalize("NFD", value.casefold())
@@ -90,9 +103,30 @@ def pc_build_node(state: dict[str, object]) -> dict[str, object]:
             reply = f"El cambio suma {CURRENCY_SYMBOL} {total:.2f}, por encima del tope. No actualicé el armado."
             return {"pc_build_selected": True, "response": reply,
                     "messages": [AIMessage(content=reply)]}
-        reply = f"Actualicé la propuesta con el componente vigente. El nuevo total es {CURRENCY_SYMBOL} {total:.2f}."
+        quote_id = state.get("sales_quote_id")
+        if quote_id and state.get("sales_quote_status") == "PENDING":
+            from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+            SalesQuoteRepositoryAdapter().resolve_direct_sales_quote(
+                quote_id=int(quote_id), customer_id=int(state["user_id"]),
+                actor_user_id=None, target_status="CANCELLED",
+                notes="Reemplazada por modificación del perfil en el chat.",
+            )
+        profile = {"code": state.get("selected_build_profile_id", ""),
+                   "name": state.get("selected_build_profile_name", "")}
+        saved = _save_build_quote(int(state["user_id"]), profile, revised, state["build_labor_cost"])
+        quote_id = int(saved["id"])
+        revised = saved["parts"]
+        total = Decimal(str(saved["total_amount"]))
+        labor_cost = Decimal(str(saved["labor_cost"]))
+        reply = (f"Actualicé el armado con el componente vigente. La nueva cotización PC_BUILD #{quote_id} "
+                 f"suma {CURRENCY_SYMBOL} {total:.2f} y vence en 24 horas. No reservé inventario. "
+                 "¿Aceptas esta cotización? Responde **Sí, confirmo** o **No**.")
         return {"pc_build_selected": True, "matched_parts": revised,
-                "build_total": total, "response": reply,
+                "build_total": total, "build_labor_cost": labor_cost,
+                "sales_quote_id": quote_id,
+                "sales_quote_status": "PENDING", "sales_quote_kind": "PC_BUILD",
+                "awaiting_sales_quote_confirmation": True,
+                "response": reply,
                 "messages": [AIMessage(content=reply)]}
 
     intent = str(state.get("build_intended_use", "")).strip()
@@ -134,11 +168,24 @@ def pc_build_node(state: dict[str, object]) -> dict[str, object]:
 
     lines = [f"- {part['name']} ({part['code']}): {CURRENCY_SYMBOL} {part['unit_price']:.2f}"
              for part in selected["parts"]]
+    saved = _save_build_quote(int(state["user_id"]), selected, selected["parts"], selected["labor_cost"])
+    quote_id = int(saved["id"])
+    persisted_parts = saved["parts"]
+    persisted_labor = Decimal(str(saved["labor_cost"]))
+    persisted_total = Decimal(str(saved["total_amount"]))
+    lines = [f"- {part['name']} ({part['code']}): {CURRENCY_SYMBOL} {part['unit_price']:.2f}"
+             for part in persisted_parts]
     reply = (f"Perfil seleccionado: {selected['name']}\n" + "\n".join(lines) +
-             f"\nEnsamble: {CURRENCY_SYMBOL} {selected['labor_cost']:.2f}; total: {CURRENCY_SYMBOL} {selected['total']:.2f}. "
-             "Es una propuesta pendiente: no guardé cotización ni reservé stock. Verifica compatibilidad final con un técnico.")
+             f"\nEnsamble: {CURRENCY_SYMBOL} {persisted_labor:.2f}; total: {CURRENCY_SYMBOL} {persisted_total:.2f}. "
+             f"La cotización PC_BUILD #{quote_id} quedó pendiente y vence en 24 horas. "
+             "No reservé inventario. Verifica compatibilidad final con un técnico. "
+             "¿Aceptas esta cotización? Responde **Sí, confirmo** o **No**.")
     return {"pc_build_pending": False, "awaiting_build_selection": False,
             "pc_build_selected": True, "selected_build_profile_id": selected["code"],
-            "matched_parts": selected["parts"], "build_labor_cost": selected["labor_cost"],
-            "build_total": selected["total"], "build_options": options,
+            "selected_build_profile_name": selected["name"],
+            "matched_parts": persisted_parts, "build_labor_cost": persisted_labor,
+            "build_total": persisted_total, "build_options": options,
+            "sales_quote_id": quote_id, "sales_quote_status": "PENDING",
+            "sales_quote_kind": "PC_BUILD",
+            "awaiting_sales_quote_confirmation": True,
             "response": reply, "messages": [AIMessage(content=reply)]}

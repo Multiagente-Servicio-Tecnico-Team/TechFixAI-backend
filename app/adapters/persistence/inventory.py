@@ -205,11 +205,14 @@ class InventoryRepositoryAdapter:
         return self._record_count(part_id=part_id, count=count, actor_id=actor_id, reason=reason,
             idempotency_key=idempotency_key, request_hash=request_hash, opening=True)
 
-    def adjust_stock(self, *, part_id, count, actor_id, reason, idempotency_key, request_hash):
+    def adjust_stock(self, *, part_id, count, actor_id, reason, idempotency_key, request_hash,
+                     expected_stock=None):
         return self._record_count(part_id=part_id, count=count, actor_id=actor_id, reason=reason,
-            idempotency_key=idempotency_key, request_hash=request_hash, opening=False)
+            idempotency_key=idempotency_key, request_hash=request_hash, opening=False,
+            expected_stock=expected_stock)
 
-    def _record_count(self, *, part_id, count, actor_id, reason, idempotency_key, request_hash, opening):
+    def _record_count(self, *, part_id, count, actor_id, reason, idempotency_key, request_hash,
+                      opening, expected_stock=None):
         from app.application.errors import InventoryIdempotencyConflict, InventoryNotFound
         try:
             with self._session_factory() as session, session.begin():
@@ -226,6 +229,11 @@ class InventoryRepositoryAdapter:
                     return {"part": {"id": part_id, "code": prior["code_snapshot"], "current_stock": int(prior["stock_after"])},
                             "changed": True, "movement": movement_to_dict(prior), "replayed": True}
                 before = int(part["current_stock"])
+                if expected_stock is not None and before != expected_stock:
+                    raise InventoryConflict(
+                        "El stock cambió desde que se mostró la propuesta. Revísalo y formula de nuevo la operación.",
+                        code="stock_changed",
+                    )
                 if opening and before != 0:
                     raise InventoryConflict("El saldo inicial ya fue establecido.", code="opening_exists")
                 delta = int(count) - before

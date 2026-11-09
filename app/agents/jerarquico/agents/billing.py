@@ -12,7 +12,7 @@ from app.database.repository import ServiceRepository
 def make_billing_agent(repository: ServiceRepository):
     def billing_agent(state: ServiceState) -> dict[str, Any]:
         quote = state["quote"]
-        if state.get("request_type") == "SALE":
+        if state.get("request_type") in {"SALE", "PC_BUILD"}:
             from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
 
             accepted = traced_tool(

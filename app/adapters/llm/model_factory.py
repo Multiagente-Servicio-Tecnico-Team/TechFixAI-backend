@@ -10,10 +10,14 @@ class ModelProfile:
     provider: str
     model: str
     temperature: float = 0.0
+    parallel_tool_calls: bool = False
 
     @property
     def identifier(self) -> str:
-        return f"{self.provider}:{self.model}:temperature={self.temperature:g}"
+        return (
+            f"{self.provider}:{self.model}:temperature={self.temperature:g}"
+            f":parallel_tool_calls={str(self.parallel_tool_calls).lower()}"
+        )
 
 
 def model_profile(settings: Settings | None = None) -> ModelProfile:
@@ -33,4 +37,5 @@ def create_model(settings: Settings | None = None) -> Any:
         model=profile.model,
         api_key=settings.groq_api_key,
         temperature=profile.temperature,
+        model_kwargs={"parallel_tool_calls": profile.parallel_tool_calls},
     )

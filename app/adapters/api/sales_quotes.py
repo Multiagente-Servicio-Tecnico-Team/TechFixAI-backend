@@ -229,7 +229,7 @@ def create_sales_quote_router(*, require_admin: Callable[..., SessionCustomer],
             quote = repo.get_commercial_quote(quote_id, customer_id=customer_id)
             if quote is None:
                 raise HTTPException(404, "Cotización no encontrada.")
-            if quote["kind"] == "DIRECT_SALE":
+            if quote["kind"] in {"DIRECT_SALE", "PC_BUILD"}:
                 result = repo.accept_direct_sales_quote(quote_id=quote_id, customer_id=customer_id,
                     actor_user_id=customer.id, idempotency_key=idempotency_key)
                 if result.get("error"):

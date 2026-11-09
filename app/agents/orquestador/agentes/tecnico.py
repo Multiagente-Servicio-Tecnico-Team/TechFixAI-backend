@@ -2,6 +2,7 @@ from app.agents.orquestador.graph.state import AgentState, PartRequest, Technica
 from app.agents.orquestador.knowledge import retrieve_technical_knowledge
 from app.config import create_chat_model
 from app.settings import load_settings
+from app.application.prompts import build_system_prompt
 
 
 TECHNICAL_SYSTEM_PROMPT = f"""
@@ -10,6 +11,9 @@ Emite un diagnóstico provisional,
 no afirmes haber inspeccionado físicamente el equipo. Basa recomendaciones de
 fallas y componentes en el contexto recuperado del catálogo técnico Markdown.
 Ese catálogo es orientativo, no confirma la causa ni compatibilidad. La mano de obra tiene precios fijos configurados por tipo de tarea. Indica
+diagnosis_type="SOFTWARE" para fallas de software, "HARDWARE" para fallas de hardware
+y "HYBRID" cuando involucran ambos. No declares un tipo con certeza si los datos
+no permiten determinarlo; en ese caso usa "HARDWARE" como clasificación operativa provisional.
 labor_task_type="diagnosis" cuando no se conoce la causa exacta o se requiere
 inspección y no propongas repuestos en ese caso. Indica
 labor_task_type="maintenance" solo si el trabajo o cambio de componente ya está
@@ -25,6 +29,7 @@ def tecnico_node(state: AgentState) -> dict[str, object]:
     knowledge_context = "\n\n".join(passages) or "No hubo coincidencias en el catálogo Markdown."
     result = model.invoke(
         [
+            ("system", build_system_prompt(role="CUSTOMER", pattern_id="orchestrator")),
             ("system", TECHNICAL_SYSTEM_PROMPT),
             (
                 "human",
@@ -43,6 +48,7 @@ def tecnico_node(state: AgentState) -> dict[str, object]:
     )
     return {
         "diagnosis": result.diagnosis,
+        "diagnosis_type": result.diagnosis_type,
         "labor_task_type": labor_task_type,
         "labor_cost": load_settings().labor_price_for(labor_task_type),
         "requested_parts": required_parts,

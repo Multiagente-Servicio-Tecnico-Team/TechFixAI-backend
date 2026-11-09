@@ -48,6 +48,9 @@ class CustomerTicket:
     customer_id: int | None = None
     id: int | None = None
     quotes: tuple[TicketQuote, ...] = ()
+    diagnosis_type: str = "NONE"
+    hardware_diagnosis: str | None = None
+    software_diagnosis: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "quotes", tuple(self.quotes))

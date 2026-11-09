@@ -21,7 +21,13 @@ def make_sales_agent(settings: Settings, direct_sales_quotes=None):
             lines=[{"spare_part_id": int(part.get("inventory_id") or part.get("id")), "quantity": int(part["quantity"])}
                    for part in quote["parts"]],
             expires_at=datetime.now(UTC) + timedelta(hours=24),
-            observations="Cotización generada desde el chat; el cliente aún debe aceptarla.",
+            quote_type=quote["quote_type"],
+            labor_cost=quote["labor_cost"],
+            observations=(
+                "Cotización generada desde el chat; el cliente aún debe aceptarla."
+                + (f" Armado recomendado: {state.get('build_profile_id', '')}."
+                   if state.get("request_type") == "PC_BUILD" else "")
+            ),
             origin="PORTAL",
         )
 
@@ -57,7 +63,7 @@ def make_sales_agent(settings: Settings, direct_sales_quotes=None):
         if state.get("route") == "confirm" and state.get("quote"):
             previous = state["quote"]
             if quote_changed(previous, quote):
-                if request_type == "SALE" and quote_id:
+                if request_type in {"SALE", "PC_BUILD"} and quote_id:
                     direct_sales_quotes.resolve_direct_sales_quote(
                         quote_id=quote_id, customer_id=int(state["customer_id"]),
                         actor_user_id=None, target_status="CANCELLED",
@@ -71,7 +77,7 @@ def make_sales_agent(settings: Settings, direct_sales_quotes=None):
                     "outcome": "price_changed",
                     "quote_changed": True,
                 }
-        if request_type == "SALE" and quote_id is None:
+        if request_type in {"SALE", "PC_BUILD"} and quote_id is None:
             quote_id = int(persist_sale_quote(state, quote)["id"])
         return {"quote": quote, "quote_type": quote_type, "quote_id": quote_id}
 
@@ -173,11 +179,19 @@ def quote_suggestion_response(state: ServiceState) -> dict[str, Any]:
         lines.append(f"Para la propuesta consideré: {part_names}.")
     elif not quote["parts"] and quote["labor_task_type"] != "diagnosis":
         lines.append("Por ahora no hace falta incluir un repuesto específico.")
-    if state.get("request_type") == "SALE":
+    if state.get("request_type") in {"SALE", "PC_BUILD"}:
+        quote_label = (
+            "cotización de venta directa"
+            if state["request_type"] == "SALE"
+            else "cotización de armado de PC"
+        )
+        quote_reference = (
+            f" #{state['quote_id']}" if state.get("quote_id") is not None else ""
+        )
         lines.extend([
             f"Los productos suman S/ {quote['parts_cost']:.2f}; el total es S/ {quote['total_amount']:.2f}.",
-            (f"La cotización de venta #{state.get('quote_id')} quedó guardada como pendiente. "
-             "No hay ticket de reparación asociado. ¿Aceptas esta propuesta? Responde sí o no."),
+            (f"La {quote_label}{quote_reference} quedó guardada como pendiente. "
+             "No hay ticket de servicio asociado. ¿Aceptas esta propuesta? Responde sí o no."),
         ])
     else:
         lines.extend(

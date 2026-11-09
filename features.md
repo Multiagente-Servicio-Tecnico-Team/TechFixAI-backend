@@ -31,15 +31,15 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Chat autenticado `POST /api/chat` con selector de patrón | `app/main.py`, `app/chat/contract.py` | Listo | `test_pattern_api.py`, `test_portal.py` |
 | Límite de 20 mensajes por minuto por cliente | `app/main.py` | Listo | `test_pattern_api.py` |
 | Patrón Jerárquico (ventas, soporte, almacén, garantía, logística) | `app/agents/jerarquico/` | Funciona; ver pendientes | `test_hierarchical_workflows.py`, `test_multiagent_graph.py` |
-| Patrón Orquestador / supervisor | `app/agents/orquestador/` | Cotiza; guardar ticket falla (ver pendientes) | `test_graph_confirmation.py`, `test_quotes.py` |
-| Red descentralizada | `app/agents/decentralized/` | Herramientas simuladas en `develop` | `test_decentralized*.py`, `test_conversation.py` |
-| «Mis Tickets» del cliente `GET /api/customer/tickets` | `app/adapters/api/chat.py`, `app/database/repository.py` | Verificado contra `multiagentedb`: `200`, 12 tickets; 3 con líneas de cotización | Smoke de ruta con cliente inyectado; falta una prueba PostgreSQL automatizada |
+| Patrón Orquestador / supervisor | `app/agents/orquestador/` | Crea ticket de servicio antes del diagnóstico; persiste la cotización aceptada en ese ticket y deja el pago pendiente | `test_graph_confirmation.py`, `test_orchestrator_sales.py`, contratos de paridad |
+| Red descentralizada | `app/agents/decentralized/` | Flujos de cliente y capacidades ADMIN conectados a servicios compartidos; ticket de servicio y cotización respetan el contrato común | `tests/contract/patterns/`, `tests/integration/` |
+| «Mis Tickets» del cliente `GET /api/customer/tickets` | `app/adapters/api/chat.py`, `app/database/repository.py` | Lista propia por sesión e incluye tipo y texto de diagnóstico hardware/software, cotizaciones y líneas | Contrato en `specs/007-gestion-clientes-comerciales/contracts/customer-commerce.openapi.yaml` |
 | CRUD administrativo de tickets (`/api/admin/tickets`) | `app/adapters/api/admin_tickets.py`, `app/database/repository.py`, `app/accounts/session.py` | Implementado; requiere esquema completo y rol ADMIN | Guía Postman en `contexto/CRUD-tickets-admin-postman.md` |
 | CRUD de inventario (`/api/inventory/parts`, `/api/inventory/categories`) | `app/adapters/api/inventory.py`, `app/application/inventory.py`, `app/adapters/persistence/inventory.py`, `app/domain/inventory.py` | Implementado; sesiones de personal ADMIN/TECHNICIAN; usa `spare_parts` y respeta referencias de presupuestos | `tests/contract/test_inventory_contract.py`, `tests/integration/test_inventory_api.py` |
 | Trazas en LangSmith (contenido oculto) | `app/main.py` | Listo; se activa con `LANGSMITH_TRACING` | `test_api.py` |
 | Trazas locales del Jerárquico | `app/agents/jerarquico/trace.py` | Listo | `test_hierarchical_tracing.py` |
 | Correo de recuperación (SMTP u outbox local) | `app/accounts/mailer.py`, `app/email/` | Listo | `test_accounts_recovery.py` |
-| Búsqueda en conocimiento (RAG) | `app/rag/`, retrievers por patrón | Listo | `test_retriever.py`, `test_knowledge_base.py` |
+| Búsqueda en conocimiento (RAG) | `app/rag/`, adaptadores por patrón | Léxica compartida por defecto en los tres patrones; embeddings vectoriales optativos con `RAG_RETRIEVAL_MODE=hybrid` | `test_retriever.py`, `test_knowledge_base.py` |
 
 | Chat autenticado por voz `POST /api/chat/audio` | `app/application/audio_chat.py`, `app/adapters/speech/`, `app/adapters/api/chat.py` | Backend implementado; desactivado por defecto | `test_audio_chat_api.py`, `test_audio_chat_patterns.py` |
 | Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
@@ -50,6 +50,9 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 - El backend entrega todas las categorías activas por `/api/inventory/categories`; el frontend actual todavía tiene cinco opciones fijas y debe consumir esta ruta para exponer toda la taxonomía de la base de datos.
 
 ### Patrones multiagente coherentes (Spec Kit)
+- Estado de la feature 011: los tres patrones crean tickets para reparación/soporte, guardan la evaluación técnica en el ticket propio y exponen su código mientras la cotización espera confirmación. Al aceptar, guardan la cotización `REPAIR` en ese mismo ticket; el pago queda pendiente y el servicio no reserva stock. El Orquestador crea el ticket al completar la recepción, antes del diagnóstico, y conserva ese mismo ticket en la propuesta y aceptación. Ventas directas y PC_BUILD se cotizan sin ticket; aceptar revalida y reserva stock, dejando el pago pendiente. Los tres comparten políticas de rol, capacidades ADMIN, perfil efectivo de modelo y corpus RAG. Contratos, pruebas unitarias y de integración relacionadas anteriormente aprobadas: 167; contratos aislados: 124. En `multiagentedb`, las migraciones 015 y 016 figuran `RECORDED` en el ledger, verificado el 2026-11-09. Esta iteración no se probó manualmente con Groq/LangSmith ni desde el frontend; la matriz manual está en `docs/30-guia-pruebas-manuales-chat-multirole-frontend.md`.
+
+- Descentralizado persiste la evaluación de Hardware o Software en el ticket asociado al cliente autenticado. Si ambos especialistas actualizan el caso, se conserva el contenido de los dos campos; el `diagnosis_type` refleja el último especialista que guardó su evaluación y no se marca `HYBRID` solo por haber visitado ambos agentes. No requiere migración.
 
 ### Asientos contables internos (Spec Kit)
 
@@ -59,18 +62,14 @@ La API administrativa permite listar categorías, crear asientos balanceados en 
 
 `GET /api/admin/accounting/plans/{plan_id}/accounts` admite `q` opcional para buscar parcialmente por código o denominación (`ILIKE`), además de `status`, `postable`, `parent_id` y paginación. Sin `q`, devuelve la primera página ordenada por código. Verificación de lectura en `multiagentedb` el 2026-11-09: el plan PCGE predeterminado tiene 1,192 cuentas; 844 cumplen `ACTIVE` e imputable. Búsquedas parciales por `10`, `efectivo` y `caja` devolvieron coincidencias. No se cambió el backend en esta corrección porque la ruta y la consulta ya respondían correctamente; el frontend ahora carga una primera página automáticamente al elegir el plan y filtra por texto al escribir.
 
-Estado de esta iteración: en progreso en `feature/spec-kit`. Se conservan los tres grafos para comparación académica. El perfil Groq se centralizó y se añadieron escenarios/contratos iniciales.
-
-El cálculo Decimal de cotizaciones ahora tiene un único caso de uso compartido entre Jerárquico y Orquestador. La validación de consulta del catálogo se centralizó para Orquestador y la Red Descentralizada; la integración del mismo puerto en Jerárquico y la ejecución uniforme de cotizaciones todavía están pendientes.
-
-- El RAG común tiene manifiesto de fuentes, metadatos de confianza y procedencia, chunks deterministas y colección Chroma versionada. FAQ Jerárquico y recuperación técnica Orquestador llaman al contrato común. La recuperación técnica estructurada del Jerárquico todavía requiere integración de procedencia; la búsqueda semántica aún requiere validación con el modelo descargado.
-- Las FAQ del manual de Jerárquico están marcadas como demostrativas. Las respuestas no deben presentar ubicación, horarios, tarifas o medios de pago de ese archivo como datos reales.
-- La solicitud de reembolso puede registrarse transaccionalmente como `REQUESTED` tras validar titularidad, pago completado, saldo y duplicados. Falta conectar la conversación a esa operación en los tres patrones; no hay aprobación ni movimiento de dinero automático.
+- Se conservan los tres grafos para comparación académica. El RAG común usa búsqueda léxica por defecto: manifiesto de fuentes, metadatos de confianza y procedencia, fragmentación determinista y abstención compartida. FastEmbed y Chroma quedan detrás del modo híbrido optativo y no se cargan en el flujo léxico.
+- FAQ de prueba (2026-11-09): el corpus app/agents/jerarquico/knowledge_base/faq_servicio.md contiene valores provisionales; durante pruebas el asistente los comunica directamente, sin decir que son demostrativos. Reemplazar y verificar los datos antes de produccion.
+- El Orquestador enruta preguntas informativas al agente FAQ y reutiliza la recuperacion y respuesta comunes con el Jerarquico; precios y stock actuales siguen consultandose desde el catalogo.
+- El Descentralizado reconoce preguntas FAQ de ubicación, horarios, servicios, pagos, políticas y pasos para cotizar; responde con el mismo `MarkdownFaqRetriever` y `answer_faq` compartidos. Si falla el proveedor LLM, usa un extracto de la evidencia recuperada en lugar del mensaje genérico de error.
+- La solicitud de reembolso puede registrarse como `REQUESTED` tras validar titularidad, pago completado, saldo y duplicados; la resolución sigue siendo manual y no se transfiere dinero desde el chat.
 - La compra externa permanece no disponible. No existe una relación de ofertas confiables proveedor-artículo-precio-plazo.
-- No se declara paridad de capacidades: la Red Descentralizada aún conserva herramientas simuladas y Orquestador no cubre todos los flujos de Jerárquico. El avance restante está enumerado en `specs/001-patrones-multiagente-coherentes/tasks.md`.
 
 - **Esquema de bootstrap:** `sql/creacion_tablas_ingles_sin_inserciones.sql` es legado y omite objetos actuales. `contexto/tablas postgres v2.sql` se generó desde `multiagentedb` el 2026-11-03 y elimina/recrea los objetos exportados del esquema `public`; usar solo en una BD reinicializable. Para conservar datos, aplicar migraciones. “Mis Tickets” devolvió 200 contra la BD de referencia y serializó los tickets cotizados.
-- **Orquestador al aceptar:** `app/agents/orquestador/agentes/ventas.py` espera 4 valores de `create_ticket_with_quote` y `app/database/repository.py` devuelve 3 (`ValueError`, 502).
 - **Botón «No guardar»:** la API envía «No, rechazo el presupuesto»; el Orquestador `develop` solo reconoce «no», «rechazo», «cancelar»… La rama `alonso_orquestador` ya acepta frases que empiezan con «no, ».
 - **`GROQ_MODEL`:** sin esa variable el Jerárquico no arranca y el Orquestador usa `llama-3.3-70b-versatile`, que Groq ya no reconoce. Usar `openai/gpt-oss-20b`.
 - **Prueba conocida que falla:** `test_retriever.py::test_no_unrelated_documents_are_returned`.

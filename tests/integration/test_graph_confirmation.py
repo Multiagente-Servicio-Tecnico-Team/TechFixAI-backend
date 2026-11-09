@@ -21,7 +21,7 @@ class TicketConfirmationGraphTests(unittest.TestCase):
             clarification_question="",
         )
 
-    def test_intake_routes_to_technician_without_creating_ticket(self):
+    def test_intake_routes_to_ticket_creation_before_diagnosis(self):
         model = Mock()
         model.with_structured_output.return_value = model
         model.invoke.return_value = self.intake_result
@@ -33,7 +33,7 @@ class TicketConfirmationGraphTests(unittest.TestCase):
 
         self.assertFalse(result["awaiting_ticket_confirmation"])
         self.assertNotIn("ticket_id", result)
-        self.assertEqual(_supervisor_route(result), "tecnico")
+        self.assertEqual(_supervisor_route(result), "crear_ticket")
 
     def test_refund_intent_routes_to_manual_refund_agent_without_llm(self):
         with patch("app.agents.orquestador.agentes.atencion.create_chat_model") as model:
@@ -119,6 +119,9 @@ class TicketConfirmationGraphTests(unittest.TestCase):
     def test_affirmative_confirmation_routes_to_atomic_persistence(self):
         state = {
             "user_id": 12,
+            "ticket_id": 77,
+            "ticket_code": "TCK-77",
+            "ticket_status": "IN_DIAGNOSIS",
             "product": "Laptop HP Pavilion",
             "category": "Soporte técnico",
             "symptoms": "Se calienta y se apaga",
@@ -133,9 +136,12 @@ class TicketConfirmationGraphTests(unittest.TestCase):
         self.assertTrue(result["ticket_confirmed"])
         self.assertEqual(_supervisor_route({**state, **result}), "persistencia")
 
-    def test_negative_confirmation_does_not_create_ticket_or_quote(self):
+    def test_negative_confirmation_keeps_ticket_without_quote_or_payment(self):
         state = {
             "user_id": 12,
+            "ticket_id": 77,
+            "ticket_code": "TCK-77",
+            "ticket_status": "IN_DIAGNOSIS",
             "product": "Laptop HP Pavilion",
             "category": "Soporte técnico",
             "symptoms": "Se calienta y se apaga",
@@ -153,6 +159,8 @@ class TicketConfirmationGraphTests(unittest.TestCase):
 
     def test_sales_previews_spanish_quote_without_persisting(self):
         state = {
+            "ticket_id": 77,
+            "ticket_code": "TCK-77",
             "category": "Soporte técnico",
             "product": "Laptop HP Pavilion",
             "symptoms": "Se calienta y se apaga",
@@ -173,12 +181,16 @@ class TicketConfirmationGraphTests(unittest.TestCase):
         self.assertTrue(result["awaiting_ticket_confirmation"])
         self.assertNotIn("quote_id", result)
         self.assertIn("Falla descrita: Se calienta y se apaga", result["response"])
-        self.assertIn("Presupuesto sugerido (todavía no guardado)", result["response"])
+        self.assertIn("Cotización de servicio (todavía no guardada)", result["response"])
+        self.assertIn("El ticket TCK-77 ya está registrado", result["response"])
         self.assertIn("S/ 109.50", result["response"])
 
-    def test_confirmed_persistence_creates_ticket_and_quote_together(self):
+    def test_confirmed_persistence_saves_quote_on_the_existing_ticket(self):
         state = {
             "user_id": 12,
+            "ticket_id": 91,
+            "ticket_code": "TCK-TEST-91",
+            "ticket_status": "IN_DIAGNOSIS",
             "product": "Laptop HP Pavilion",
             "category": "Soporte técnico",
             "symptoms": "Se calienta y se apaga",
@@ -190,11 +202,10 @@ class TicketConfirmationGraphTests(unittest.TestCase):
             "total": 100,
         }
         with patch(
-            "app.agents.orquestador.agentes.ventas.sales_repository.create_accepted_ticket_quote",
+            "app.agents.orquestador.agentes.ventas.sales_repository.accept_ticket_quote",
             return_value={
-                "ticket_id": 91, "ticket_code": "TCK-TEST-91", "quote_id": 27,
+                "quote_id": 27, "payment_id": 28,
                 "payment_code": "PAY-TEST-91", "payment_status": "PENDING",
-                "total_amount": Decimal("100.00"),
             },
         ) as persist:
             result = persistencia_node(state)

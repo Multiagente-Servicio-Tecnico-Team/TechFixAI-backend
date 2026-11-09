@@ -14,13 +14,14 @@ from typing import Any
 
 from groq import APIError as GroqAPIError
 from langchain_core.exceptions import OutputParserException
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.adapters.llm.tracing import get_trace_context
 from app.adapters.llm.model_factory import model_profile
 from app.application.errors import PatternFailure, StorageUnavailable
+from app.application.prompts import build_system_prompt
 from app.domain.chat import PatternReply
 from app.settings import Settings, load_settings
 
@@ -58,6 +59,10 @@ class GraphPattern:
     def prepare(self, graph: Any, state: dict[str, Any], config: dict[str, Any]) -> None:
         """Ajustes previos a la invocación (por defecto, ninguno)."""
 
+    def invocation_context(self, *, conversation_id: str, customer_id: int) -> dict[str, Any] | None:
+        """Trusted per-call values; never copied from chat text or graph state."""
+        return None
+
     def to_reply(self, result: dict[str, Any]) -> PatternReply:
         raise NotImplementedError
 
@@ -89,10 +94,19 @@ class GraphPattern:
         try:
             graph = self.graph()
             state = self.initial_state(customer_id, HumanMessage(content=message))
+            policy = SystemMessage(
+                id=f"techfix-role-policy-{self.id}",
+                content=build_system_prompt(role="CUSTOMER", pattern_id=self.id),
+            )
+            state_messages = state.get("messages")
+            if not isinstance(state_messages, list):
+                raise ValueError("El estado del patrón no contiene una lista de mensajes.")
+            state["messages"] = [policy, *state_messages]
             config = self.config(conversation_id)
             self.prepare(graph, state, config)
             with self._trace_context_factory():
-                result = graph.invoke(state, config=config)
+                context = self.invocation_context(conversation_id=conversation_id, customer_id=customer_id)
+                result = graph.invoke(state, config=config, **({"context": context} if context is not None else {}))
             return self.to_reply(result)
         except (SQLAlchemyError, OSError) as exc:
             logger.error(

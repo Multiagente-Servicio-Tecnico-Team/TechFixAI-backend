@@ -4,8 +4,8 @@ from datetime import date
 
 import pytest
 
-from app.application.admin_capabilities import AdminCapabilityService, _normalize_entry_lines
-from app.application.admin_chat import AdminChatService, AdminCommand, capability_argument_hints
+from app.infrastructure.admin_capabilities import AdminCapabilityService, _normalize_entry_lines
+from app.infrastructure.admin_chat import AdminChatService, AdminCommand, capability_argument_hints
 
 
 @pytest.mark.parametrize(
@@ -67,8 +67,36 @@ def test_dictated_entry_lines_drop_invented_ids_and_normalize_amounts():
     ]
 
 
+class _AccountingCategories:
+    """Categorías contables en memoria; el servicio ya no debe consultar la BD de .env."""
+
+    def list_categories(self):
+        return [{"id": 2, "code": "SERVICE", "name": "Servicio técnico"}]
+
+    def create_entry(self, *_args, **_kwargs):
+        raise AssertionError("La vista previa no debe registrar el asiento.")
+
+
+class _AccountingCatalog:
+    def list_plans(self):
+        return [{"id": 1, "code": "PCGE_PE", "status": "ACTIVE", "is_default": True}]
+
+    def get_postable_account(self, *, plan_id, operation_date, account_id=None, account_code=None):
+        accounts = {"101": 1001, "70321": 1002}
+        if plan_id == 1 and account_code in accounts:
+            return {"id": accounts[account_code], "code": account_code, "plan_id": 1}
+        return None
+
+
+def _accounting_service():
+    return AdminCapabilityService(
+        accounting_repository_factory=_AccountingCategories,
+        accounting_catalog_repository_factory=_AccountingCatalog,
+    )
+
+
 def test_dictated_entry_is_previewed_with_valid_schema_and_no_write():
-    values, preview = AdminCapabilityService().prepare("accounting.entries.create", {
+    values, preview = _accounting_service().prepare("accounting.entries.create", {
         "operation_date": "2026-11-09", "concept": "Servicio de reparación",
         "detail": "Cobro en efectivo", "category_id": 2,
         "lines": [{"account_code": "101", "account_id": 101, "debit": "150", "credit": "0"},

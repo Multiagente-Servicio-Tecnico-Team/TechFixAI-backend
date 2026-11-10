@@ -78,6 +78,9 @@ class FakeCommercialRepository:
     def __init__(self):
         self.created_ticket = None
         self.saved_order = None
+        self.sales_quotes = []
+        self.resolved_sales_quotes = []
+        self.accepted_sales_quotes = []
         self.logistics = None
         self.warranties = []
         self.catalog_searches = []
@@ -202,7 +205,7 @@ class FakeCommercialRepository:
             "GPU-MSI-GTX1650-4G": (
                 "Tarjeta de Video", "MSI GeForce GTX 1650 4GB", "155.00"
             ),
-            "SSD-M2-NVME-500GB": (
+            "SSD-NVME-KINGSTON-NV2-500": (
                 "Almacenamiento", "SSD M.2 NVMe 500GB Kingston", "42.00"
             ),
             "CASE-MSI-FORGE-100R": (
@@ -239,6 +242,20 @@ class FakeCommercialRepository:
             "unit_price": Decimal(price),
             "current_stock": 5,
         }
+
+    # Cotizaciones de venta directa / armado (spec 007): se guardan en memoria, sin la BD de .env.
+    def create_direct_sales_quote(self, **values):
+        self.sales_quotes.append(values)
+        return {"id": 900 + len(self.sales_quotes), "status": "PENDING"}
+
+    def accept_direct_sales_quote(self, **values):
+        self.accepted_sales_quotes.append(values)
+        return {"quote_id": values["quote_id"], "status": "ACCEPTED", "reservation_status": "RESERVED",
+                "payment_id": 61, "payment_code": "PAY-TEST"}
+
+    def resolve_direct_sales_quote(self, **values):
+        self.resolved_sales_quotes.append(values)
+        return {"id": values["quote_id"], "status": values["target_status"]}
 
     def accept_ticket_quote(self, **values):
         self.saved_order = values
@@ -282,6 +299,7 @@ def test_direct_sale_queries_catalog_and_creates_payment_only_after_acceptance()
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=FakeSaleModel(),
     )
     config = {"configurable": {"thread_id": "sale-flow"}}
@@ -300,7 +318,8 @@ def test_direct_sale_queries_catalog_and_creates_payment_only_after_acceptance()
     assert proposal["quote_type"] == "DIRECT_SALE"
     assert proposal["quote"]["labor_cost"] == Decimal("0.00")
     assert proposal["quote"]["total_amount"] == Decimal("49.00")
-    assert repository.created_ticket["request_type"] == "SALE"
+    # Spec 007: una venta directa es una cotización de venta y no abre un ticket de servicio.
+    assert repository.created_ticket is None
     assert repository.saved_order is None
 
     accepted = graph.invoke(
@@ -308,21 +327,21 @@ def test_direct_sale_queries_catalog_and_creates_payment_only_after_acceptance()
         config=config,
     )
 
-    assert accepted["outcome"] == "quoted"
-    assert accepted["ticket_status"] == "PAYMENT_PENDING"
+    assert accepted["outcome"] == "direct_sale_accepted"
+    assert accepted["ticket_status"] is None
+
     assert accepted["payment_code"] == "PAY-TEST"
-    assert repository.saved_order["quote_type"] == "DIRECT_SALE"
-    assert repository.saved_order["parts"][0]["subtotal"] == Decimal("49.00")
+    # La venta directa se guarda como cotización de venta (spec 007), no como cotización de ticket.
+    assert repository.saved_order is None
+    assert repository.sales_quotes[0]["quote_type"] == "DIRECT_SALE"
+    assert repository.sales_quotes[0]["lines"][0]["quantity"] == 2
+    assert repository.accepted_sales_quotes[0]["quote_id"] == accepted["quote_id"]
+    assert proposal["quote"]["parts"][0]["subtotal"] == Decimal("49.00")
     assert "PENDIENTE" in accepted["messages"][-1].content
-
-    logistics = graph.invoke(
-        {"messages": [HumanMessage(content="Lo recojo en tienda")]},
-        config=config,
-    )
-
-    assert logistics["outcome"] == "order_completed"
-    assert repository.logistics["mode"] == "PHYSICAL_STORE"
-    assert logistics["warranty_code"].startswith("WAR-")
+    # La logística y la garantía llegan con el pedido, cuando ADMIN confirma el pago; no desde el chat.
+    assert accepted["awaiting_logistics"] is False
+    assert repository.logistics is None
+    assert repository.warranties == []
 
 
 def test_pc_build_quotes_a_curated_profile_and_registers_warranty_after_logistics():
@@ -330,6 +349,7 @@ def test_pc_build_quotes_a_curated_profile_and_registers_warranty_after_logistic
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=FakeSaleModel(route="pc_build"),
     )
 
@@ -364,18 +384,15 @@ def test_pc_build_quotes_a_curated_profile_and_registers_warranty_after_logistic
         {"messages": [HumanMessage(content="Sí, acepto")]},
         config={"configurable": {"thread_id": "pc-build-flow"}},
     )
-    assert accepted["outcome"] == "quoted"
+    # El armado se acepta como cotización de venta (spec 007): reserva stock y deja el pago pendiente.
+    assert accepted["outcome"] == "direct_sale_accepted"
     assert accepted["payment_code"] == "PAY-TEST"
-
-    completed = graph.invoke(
-        {"messages": [HumanMessage(content="Lo recojo en tienda")]},
-        config={"configurable": {"thread_id": "pc-build-flow"}},
-    )
-    assert completed["outcome"] == "order_completed"
-    assert completed["warranty_code"].startswith("WAR-")
-    assert repository.warranties[0]["warranty_months"] == 3
-    assert "pendiente" in completed["messages"][-1].content
-    assert "Gracias por tu preferencia" in completed["messages"][-1].content
+    assert repository.sales_quotes[-1]["quote_type"] == "PC_BUILD"
+    assert repository.accepted_sales_quotes[-1]["quote_id"] == accepted["quote_id"]
+    assert "PENDIENTE" in accepted["messages"][-1].content
+    # Logística y garantía se registran con el pedido, cuando ADMIN confirma el pago.
+    assert repository.logistics is None
+    assert repository.warranties == []
 
 
 def test_sale_category_search_uses_name_selection_without_exposing_sku():
@@ -383,6 +400,7 @@ def test_sale_category_search_uses_name_selection_without_exposing_sku():
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=FakeSaleModel(search_term="RAM"),
     )
     config = {"configurable": {"thread_id": "ram-choice-flow"}}
@@ -418,7 +436,7 @@ def test_multi_item_sale_keeps_pending_queue_and_selects_ram_then_ssd_brand():
         ],
     )
     graph = build_multiagent_graph(
-        settings=make_settings(), repository=repository, model=model
+        settings=make_settings(), repository=repository, model=model, direct_sales_quotes=repository
     )
     config = {"configurable": {"thread_id": "multi-item-brand-selection"}}
     ram_options = graph.invoke(
@@ -454,7 +472,8 @@ def test_multi_item_sale_keeps_pending_queue_and_selects_ram_then_ssd_brand():
 def test_capabilities_question_returns_supported_actions_not_store_details():
     graph = build_multiagent_graph(
         settings=make_settings(),
-        repository=FakeCommercialRepository(),
+        repository=(informational_repository := FakeCommercialRepository()),
+        direct_sales_quotes=informational_repository,
         model=FakeSaleModel(route="informational"),
     )
 
@@ -479,6 +498,7 @@ def test_processor_catalog_question_uses_live_inventory_instead_of_faq_response(
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=FakeSaleModel(route="informational"),
     )
 
@@ -510,6 +530,7 @@ def test_ram_availability_question_uses_catalog_even_when_model_returns_faq():
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=FakeSaleModel(route="informational"),
     )
 
@@ -553,6 +574,7 @@ def test_pc_build_ram_change_replaces_component_and_recalculates_quote():
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=model,
     )
     config = {"configurable": {"thread_id": "pc-build-ram-change"}}
@@ -601,11 +623,14 @@ def test_pc_build_ram_change_replaces_component_and_recalculates_quote():
         {"messages": [HumanMessage(content="Sí, acepto esta versión")]},
         config=config,
     )
-    assert accepted["outcome"] == "quoted"
-    assert any(
-        part["code"] == "RAM-D4-16GB-3200-KIN"
-        for part in repository.saved_order["parts"]
-    )
+    assert accepted["outcome"] == "direct_sale_accepted"
+    # Se acepta la cotización que reemplazó a la anterior, y esa versión lleva la RAM elegida.
+    assert repository.accepted_sales_quotes[-1]["quote_id"] == accepted["quote_id"] == 900 + len(repository.sales_quotes)
+    ram_ids = {
+        int(part.get("inventory_id") or part.get("id"))
+        for part in revised["quote"]["parts"] if part["code"] == "RAM-D4-16GB-3200-KIN"
+    }
+    assert ram_ids and any(line["spare_part_id"] in ram_ids for line in repository.sales_quotes[-1]["lines"])
 
 
 def test_pc_build_rejects_profile_above_budget_then_reuses_ticket_for_revision():
@@ -614,6 +639,7 @@ def test_pc_build_rejects_profile_above_budget_then_reuses_ticket_for_revision()
     graph = build_multiagent_graph(
         settings=make_settings(),
         repository=repository,
+        direct_sales_quotes=repository,
         model=model,
     )
     config = {"configurable": {"thread_id": "pc-build-budget"}}

@@ -42,7 +42,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Búsqueda en conocimiento (RAG) | `app/rag/`, adaptadores por patrón | Léxica compartida por defecto en los tres patrones; embeddings vectoriales optativos con `RAG_RETRIEVAL_MODE=hybrid` | `test_retriever.py`, `test_knowledge_base.py` |
 
 | Chat autenticado por voz `POST /api/chat/audio` | `app/application/audio_chat.py`, `app/adapters/speech/`, `app/adapters/api/chat.py` | Backend implementado; desactivado por defecto | `test_audio_chat_api.py`, `test_audio_chat_patterns.py` |
-| Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
+| Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/esquema-vacio-produccion.sql` | Implementado; tablas incluidas en el esquema de instalación | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
 | Catálogo contable y búsqueda de cuentas (solo ADMIN) | `app/adapters/api/accounting_catalog.py`, `app/adapters/persistence/accounting_catalog.py`, migraciones `012`–`013` | Implementado; lista por plan con `q` parcial en código/denominación, filtros ACTIVE/imputable y paginación; PCGE cargado en `multiagentedb` de pruebas | Validación de lectura directa contra el repositorio: plan 1, 1,192 cuentas, 844 activas/imputables; consultas parciales `10`, `efectivo`, `caja` devuelven coincidencias |
 
 ## Pendientes conocidos
@@ -59,7 +59,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 
 ### Asientos contables internos (Spec Kit)
 
-La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. La migración aditiva está en `sql/migrations/003_accounting_entries.sql`; se aplicó y verificó en la BD de prueba `multiagentedb` indicada explícitamente para la ejecución.
+La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. Las tablas, restricciones y triggers contables están en `sql/esquema-vacio-produccion.sql`, y el plan PCGE se carga con `sql/seeds/datos-iniciales.sql`.
 
 ### Borradores incompletos del chat ADMIN
 

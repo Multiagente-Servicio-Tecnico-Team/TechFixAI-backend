@@ -1,4 +1,4 @@
--- Datos iniciales de TechFix.AI: cuenta ADMIN, inventario de repuestos y plan contable PCGE.
+-- Datos iniciales de TechFix.AI: cuenta ADMIN, inventario de repuestos, categorías contables y plan PCGE.
 -- Requiere una base creada con sql/esquema-vacio-produccion.sql. Ver sql/README.md.
 --
 -- La contraseña del ADMIN no se guarda en este archivo. Antes de ejecutarlo, en la MISMA sesión,
@@ -558,7 +558,19 @@ SELECT p.id, 'OPENING_BALANCE', p.code, p.name, p.current_stock, 0, p.current_st
  ORDER BY p.id;
 
 -- ---------------------------------------------------------------------------------------------
--- 3. Plan contable PCGE Perú Modificado 2019 (1192 cuentas)
+-- 3. Categorías internas de asientos contables (spec 003): todo asiento exige una.
+-- ---------------------------------------------------------------------------------------------
+INSERT INTO public.accounting_categories (code, name, description) VALUES
+    ('SALE', 'Venta', 'Venta de productos o equipos.'),
+    ('SERVICE', 'Servicio técnico', 'Diagnóstico, mantenimiento o reparación.'),
+    ('PURCHASE', 'Compra', 'Compra de productos o repuestos.'),
+    ('OPERATING_EXPENSE', 'Gasto operativo', 'Gasto operativo del taller.'),
+    ('ADJUSTMENT', 'Ajuste', 'Ajuste contable interno.'),
+    ('OTHER', 'Otro', 'Operación interna no clasificada en otra categoría.')
+ON CONFLICT (code) DO NOTHING;
+
+-- ---------------------------------------------------------------------------------------------
+-- 4. Plan contable PCGE Perú Modificado 2019 (1192 cuentas)
 -- ---------------------------------------------------------------------------------------------
 -- Carga manual del plan PCGE Modificado 2019 y sus 1,192 cuentas.
 -- Basado en sql/migrations/013_seed_pcge_modificado_2019.sql y en
@@ -1810,7 +1822,7 @@ END $$;
 -- Verificación: detiene la carga si falta algo.
 -- ---------------------------------------------------------------------------------------------
 DO $$
-DECLARE v_admins INTEGER; v_parts INTEGER; v_openings INTEGER; v_accounts INTEGER;
+DECLARE v_admins INTEGER; v_parts INTEGER; v_openings INTEGER; v_accounts INTEGER; v_categories INTEGER;
 BEGIN
   SELECT count(*) INTO v_admins FROM public.users WHERE role = 'ADMIN' AND active;
   SELECT count(*) INTO v_parts FROM public.spare_parts;
@@ -1818,11 +1830,14 @@ BEGIN
   SELECT count(*) INTO v_accounts FROM public.accounting_accounts a
     JOIN public.accounting_plans p ON p.id = a.plan_id
    WHERE p.code = 'PCGE_PE' AND p.edition = 'Modificado 2019' AND p.is_default;
+  SELECT count(*) INTO v_categories FROM public.accounting_categories
+   WHERE active AND code IN ('SALE', 'SERVICE', 'PURCHASE', 'OPERATING_EXPENSE', 'ADJUSTMENT', 'OTHER');
   IF v_admins < 1 THEN RAISE EXCEPTION 'No hay una cuenta ADMIN activa.'; END IF;
+  IF v_categories <> 6 THEN RAISE EXCEPTION 'Faltan categorías contables: hay % de 6.', v_categories; END IF;
   IF v_parts < 433 THEN RAISE EXCEPTION 'Se esperaban al menos 433 repuestos y hay %.', v_parts; END IF;
   IF v_openings < v_parts THEN RAISE EXCEPTION 'Hay repuestos sin saldo inicial.'; END IF;
   IF v_accounts <> 1192 THEN RAISE EXCEPTION 'El PCGE predeterminado debe tener 1192 cuentas y tiene %.', v_accounts; END IF;
-  RAISE NOTICE 'Datos iniciales listos: % ADMIN, % repuestos, % cuentas PCGE.', v_admins, v_parts, v_accounts;
+  RAISE NOTICE 'Datos iniciales listos: % ADMIN, % repuestos, % categorías contables, % cuentas PCGE.', v_admins, v_parts, v_categories, v_accounts;
 END $$;
 
 COMMIT;

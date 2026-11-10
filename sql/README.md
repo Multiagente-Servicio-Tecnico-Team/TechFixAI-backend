@@ -5,7 +5,7 @@ La base se instala con dos scripts, en este orden, sobre una base PostgreSQL **n
 | Paso | Archivo | Qué hace |
 | --- | --- | --- |
 | 1 | `esquema-vacio-produccion.sql` | Crea el esquema completo: 41 tablas, tipos, índices, triggers y restricciones. No carga filas. |
-| 2 | `seeds/datos-iniciales.sql` | Crea la cuenta ADMIN por defecto, carga 433 repuestos con su saldo inicial y el plan contable PCGE Perú Modificado 2019 (1192 cuentas). |
+| 2 | `seeds/datos-iniciales.sql` | Crea la cuenta ADMIN por defecto, carga 433 repuestos con su saldo inicial, las 6 categorías de asientos contables y el plan contable PCGE Perú Modificado 2019 (1192 cuentas). |
 
 Los dos corren en una transacción: si algo falla, la base queda como estaba. Ya no hay migraciones incrementales; el esquema vigente es el del paso 1.
 
@@ -41,7 +41,7 @@ Sin el hash, el script se detiene con un mensaje y no guarda nada. Se puede repe
 
 ## Verificar
 
-Al terminar, el script muestra `Datos iniciales listos: 1 ADMIN, 433 repuestos, 1192 cuentas PCGE.` y aborta si falta algo. También puedes comprobarlo con:
+Al terminar, el script muestra `Datos iniciales listos: 1 ADMIN, 433 repuestos, 6 categorías contables, 1192 cuentas PCGE.` y aborta si falta algo. También puedes comprobarlo con:
 
 ```sql
 SELECT (SELECT count(*) FROM users WHERE role = 'ADMIN') AS admins,

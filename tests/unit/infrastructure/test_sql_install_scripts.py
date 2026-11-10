@@ -49,6 +49,10 @@ def test_seed_loads_inventory_with_opening_balances_and_pcge_in_one_transaction(
     assert len(set(codes)) == len(codes), "códigos de repuesto repetidos"
     # El backend solo acepta estos SKU al editar (PUT /api/inventory/parts/{code}).
     assert [code for code in codes if not CODE_PATTERN.fullmatch(code)] == []
-    assert seed.count("ON CONFLICT (code) DO NOTHING") == 2
+    # Repuestos (dos bloques) y categorías contables no pisan filas existentes.
+    assert seed.count("ON CONFLICT (code) DO NOTHING") == 3
     assert "'OPENING_BALANCE'" in seed and "'SYSTEM'" in seed
     assert "IF (SELECT count(*) FROM _pcge_seed)<>1192" in seed
+    # Todo asiento exige categoría: sin estas filas no se puede registrar ninguno.
+    for code in ("SALE", "SERVICE", "PURCHASE", "OPERATING_EXPENSE", "ADJUSTMENT", "OTHER"):
+        assert f"('{code}', " in seed

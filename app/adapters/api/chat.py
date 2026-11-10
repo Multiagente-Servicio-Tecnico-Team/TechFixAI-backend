@@ -79,6 +79,7 @@ def create_chat_router(
         try:
             turn = send_message.execute(
                 customer_id=customer.commercial_customer_id or customer.id,
+                actor_user_id=customer.id,
                 pattern=body.pattern,
                 message=body.message,
                 action=body.action,
@@ -127,6 +128,7 @@ def create_chat_router(
             content = audio.file.read(audio_max_bytes + 1)
             result = audio_message.execute(
                 customer_id=customer.commercial_customer_id or customer.id,
+                actor_user_id=customer.id,
                 audio=content,
                 content_type=content_type,
                 duration_ms=duration_ms,

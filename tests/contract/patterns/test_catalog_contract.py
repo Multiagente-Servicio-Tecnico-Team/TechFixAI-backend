@@ -59,30 +59,13 @@ class CatalogRepository:
 
 
 def run_pattern_catalog(pattern_id, repository, monkeypatch, quantity=2):
-    if pattern_id == "hierarchical":
-        agent = make_warehouse_agent(repository)
-        result = agent({
-            "request_type": "SALE",
-            "required_parts": [{"search_term": "SSD NVMe 512GB", "quantity": quantity}],
-            "messages": [],
-        })
-        return result
-    if pattern_id == "orchestrator":
-        from app.agents.orquestador.tools import inventory
-
-        monkeypatch.setattr(inventory, "catalog_service", CatalogService(repository))
-        return inventory.consultar_inventario.invoke({
-            "nombre_repuesto": "SSD NVMe 512GB", "cantidad": quantity,
-        })
-    from app.agents.decentralized.tools import warehouse_tools
-
-    monkeypatch.setattr(
-        warehouse_tools, "lookup_inventory",
-        lambda requested_name, quantity: repository.lookup_inventory(requested_name, quantity),
-    )
-    return warehouse_tools.consultar_inventario.func(
-        nombre_repuesto="SSD NVMe 512GB", cantidad=quantity,
-    )
+    # Los tres patrones usan el mismo agente de almacén compartido (make_worker_nodes).
+    agent = make_warehouse_agent(repository)
+    return agent({
+        "request_type": "SALE",
+        "required_parts": [{"search_term": "SSD NVMe 512GB", "quantity": quantity}],
+        "messages": [],
+    })
 
 
 @pytest.mark.parametrize("pattern_id", ["hierarchical", "orchestrator", "decentralized"])
@@ -90,14 +73,9 @@ def test_exact_catalog_match_uses_repository_price_and_live_stock(pattern_id, mo
     repository = CatalogRepository()
     result = run_pattern_catalog(pattern_id, repository, monkeypatch)
 
-    if pattern_id == "hierarchical":
-        item = result["matched_parts"][0]
-        assert item["unit_price"] == Decimal("44.90")
-        assert item["current_stock"] == 5
-    else:
-        assert result["unit_price"] == "44.90"
-        assert result["stock"] == 5
-        assert result["available"] is True
+    item = result["matched_parts"][0]
+    assert item["unit_price"] == Decimal("44.90")
+    assert item["current_stock"] == 5
 
 
 @pytest.mark.parametrize("pattern_id", ["hierarchical", "orchestrator", "decentralized"])
@@ -111,14 +89,9 @@ def test_ambiguous_catalog_does_not_choose_or_report_available_item(pattern_id, 
     repository = CatalogRepository(items=candidates, match_status="ambiguous")
     result = run_pattern_catalog(pattern_id, repository, monkeypatch)
 
-    if pattern_id == "hierarchical":
-        assert result["outcome"] == "awaiting_inventory_selection"
-        assert len(result["inventory_options"]) == 2
-        assert result["matched_parts"] == []
-    else:
-        assert result["available"] is False
-        assert result["found"] is False
-        assert result["match_status"] == "ambiguous"
+    assert result["outcome"] == "awaiting_inventory_selection"
+    assert len(result["inventory_options"]) == 2
+    assert result["matched_parts"] == []
 
 
 @pytest.mark.parametrize("pattern_id", ["hierarchical", "orchestrator", "decentralized"])
@@ -129,10 +102,5 @@ def test_insufficient_stock_is_not_reported_as_available(pattern_id, monkeypatch
     repository = CatalogRepository(items=[item])
     result = run_pattern_catalog(pattern_id, repository, monkeypatch, quantity=2)
 
-    if pattern_id == "hierarchical":
-        assert result["outcome"] == "procurement_unavailable"
-        assert result.get("matched_parts", []) == []
-    else:
-        assert result["available"] is False
-        assert result["stock"] == 1
-        assert result["unit_price"] == "44.90"
+    assert result["outcome"] == "inventory_unavailable"
+    assert result.get("matched_parts", []) == []

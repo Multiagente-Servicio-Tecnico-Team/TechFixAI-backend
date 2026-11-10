@@ -15,7 +15,6 @@ def after_supervisor(state: ServiceState) -> str:
         "warranty_status": "operations_team_supervisor",
         "warranty_claim": "operations_team_supervisor",
         "refund_request": "refund_agent",
-        "supplier_procurement": "purchasing_agent",
         "logistics": "operations_team_supervisor",
         "inventory_selection": "warehouse_agent",
         "diagnosis_only": "warehouse_agent",
@@ -25,6 +24,7 @@ def after_supervisor(state: ServiceState) -> str:
         "declined": END,
         "clarification": END,
         "customer_not_found": END,
+        "out_of_scope": "out_of_scope_agent",
     }.get(state.get("route", ""), END)
 
 
@@ -55,8 +55,6 @@ def after_knowledge_retrieval(state: ServiceState) -> str:
 def after_inventory(state: ServiceState) -> str:
     if state.get("outcome") == "inventory_confirmed":
         return "sales_agent"
-    if state.get("outcome") == "procurement_unavailable":
-        return "purchasing_agent"
     return END
 
 

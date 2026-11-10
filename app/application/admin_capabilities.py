@@ -117,13 +117,31 @@ class EntryReverse(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+class ReportExport(BaseModel):
+    """Exportación de un reporte contable existente (no modifica datos)."""
+    model_config = ConfigDict(extra="forbid")
+    report: Literal["journal", "ledger", "trial_balance"]
+    from_date: date
+    to_date: date
+    format: Literal["csv", "xlsx"] = "xlsx"
+    status: Literal["CONFIRMED", "REVERSED"] | None = None
+    plan_id: int | None = Field(default=None, ge=1)
+    account_code: str | None = Field(default=None, min_length=1, max_length=40)
+
+
+REPORT_PATHS = {
+    "journal": "/api/admin/accounting/reports/journal",
+    "ledger": "/api/admin/accounting/reports/ledger",
+    "trial_balance": "/api/admin/accounting/reports/trial-balance",
+}
+
 READ_ACTIONS = {
     "customers.list", "customers.get", "tickets.list", "tickets.get",
     "inventory.list", "suppliers.list", "suppliers.get", "purchases.list",
     "purchases.get", "purchase_orders.list", "purchase_orders.get",
     "sales_quotes.list", "sales_quotes.get", "sales_orders.list", "sales_orders.get",
     "payments.list", "accounting.entries.list", "accounting.entries.get",
-    "accounting.categories.list",
+    "accounting.categories.list", "accounting.reports.export",
 }
 
 WRITE_ACTIONS = {
@@ -156,6 +174,44 @@ def json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     return str(value)
+
+
+def _normalize_entry_lines(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Normaliza las líneas de un asiento propuesto por lenguaje natural.
+
+    - Con `account_code`, se descartan `account_id`/`account_name` sugeridos por el
+      modelo: el catálogo resuelve la cuenta por código y un id inventado podría
+      apuntar a otra cuenta.
+    - Los importes se expresan con dos decimales ("150" -> "150.00"). Un valor no
+      numérico se deja igual para que la validación lo rechace.
+    """
+    from decimal import InvalidOperation
+
+    lines = arguments.get("lines")
+    if not isinstance(lines, list):
+        return arguments
+    normalized = []
+    for line in lines:
+        if not isinstance(line, dict):
+            normalized.append(line)
+            continue
+        line = dict(line)
+        if line.get("account_code"):
+            line["account_code"] = str(line["account_code"]).strip()
+            line.pop("account_id", None)
+            line.pop("account_name", None)
+        for side in ("debit", "credit"):
+            value = line.get(side)
+            if value is None or isinstance(value, bool):
+                continue
+            try:
+                amount = Decimal(str(value).strip())
+            except InvalidOperation:
+                continue
+            if amount.is_finite() and amount >= 0:
+                line[side] = format(amount.quantize(Decimal("0.01")), "f")
+        normalized.append(line)
+    return {**arguments, "lines": normalized}
 
 
 class AdminCapabilityService:
@@ -221,6 +277,8 @@ class AdminCapabilityService:
         }
         if action not in READ_ACTIONS:
             raise ValueError("Esa consulta no está disponible.")
+        if action == "accounting.reports.export":
+            return self._report_export(arguments)
         if action.endswith(".get"):
             args: PageQuery | None = None
             RecordId.model_validate(arguments)
@@ -296,6 +354,47 @@ class AdminCapabilityService:
         return {"items": safe}
 
     @staticmethod
+    def _report_export(arguments: dict[str, Any]) -> dict[str, Any]:
+        """Devuelve el enlace de descarga del endpoint de reportes ya existente.
+
+        El archivo lo genera `GET /api/admin/accounting/reports/...` con la misma
+        sesión ADMIN; el chat no construye ni guarda el archivo.
+        """
+        from urllib.parse import urlencode
+
+        body = ReportExport.model_validate(arguments)
+        if body.from_date > body.to_date:
+            raise ValueError("La fecha inicial no puede ser posterior a la final.")
+        if body.report != "ledger" and body.account_code is not None:
+            raise ValueError("El filtro de cuenta solo aplica al libro mayor.")
+        query = {"from_date": body.from_date.isoformat(), "to_date": body.to_date.isoformat(),
+                 "format": body.format}
+        for key in ("status", "plan_id", "account_code"):
+            value = getattr(body, key)
+            if value is not None:
+                query[key] = value
+        return {"report": body.report, "format": body.format,
+                "from_date": body.from_date.isoformat(), "to_date": body.to_date.isoformat(),
+                "download_url": f"{REPORT_PATHS[body.report]}?{urlencode(query)}"}
+
+    @staticmethod
+    def values_schema(action: str) -> Type[BaseModel] | None:
+        """Esquema del objeto `values` de las escrituras de actualización."""
+        from app.adapters.api.admin_tickets import TicketPatch
+        from app.adapters.api.customers import CustomerPatch
+        from app.adapters.api.inventory import InventoryPartWrite
+        from app.adapters.api.purchase_orders import PurchaseOrderPatch
+        from app.adapters.api.purchases import PurchasePatch, SupplierPatch
+        return {
+            "customers.update": CustomerPatch,
+            "tickets.update": TicketPatch,
+            "inventory.update": InventoryPartWrite,
+            "suppliers.update": SupplierPatch,
+            "purchases.update": PurchasePatch,
+            "purchase_orders.update": PurchaseOrderPatch,
+        }.get(action)
+
+    @staticmethod
     def _schema(action: str) -> Type[BaseModel]:
         from app.adapters.api.accounting import CreateEntryIn
         from app.adapters.api.admin_tickets import TicketCreate, TicketPatch
@@ -341,6 +440,8 @@ class AdminCapabilityService:
     def prepare(self, action: str, arguments: dict[str, Any], *, actor_id: int) -> tuple[dict[str, Any], dict[str, Any]]:
         if action not in WRITE_ACTIONS:
             raise ValueError("Esa escritura no está disponible.")
+        if action == "accounting.entries.create":
+            arguments = _normalize_entry_lines(arguments)
         schema = self._schema(action)
         values = schema.model_validate(arguments).model_dump(mode="python", exclude_unset=True)
         if action == "customers.update":

@@ -35,6 +35,7 @@ class SendChatMessage:
         message: str | None = None,
         action: str | None = None,
         conversation_id: str | None = None,
+        actor_user_id: int | None = None,
     ) -> ChatTurn:
         # El límite cuenta cada envío del cliente, aunque después falle.
         key = str(customer_id)
@@ -48,7 +49,13 @@ class SendChatMessage:
             raise NoPendingQuote()
 
         with conversation.lock:
-            reply = chat_pattern.reply(conversation.id, customer_id, message_for_action(action, message))
+            actor_context = {"actor_user_id": actor_user_id} if actor_user_id is not None else {}
+            reply = chat_pattern.reply(
+                conversation.id,
+                customer_id,
+                message_for_action(action, message),
+                **actor_context,
+            )
             if chat_pattern.supports_quotes:
                 conversation.pending_quote = reply.pending_quote
         return ChatTurn(conversation_id=conversation.id, pattern=pattern, reply=reply)

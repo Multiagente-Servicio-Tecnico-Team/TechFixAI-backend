@@ -11,8 +11,8 @@ def test_all_three_distinct_pattern_graphs_remain_registered():
     }
     modules = {
         "hierarchical": "app.agents.jerarquico.graph.builder",
-        "orchestrator": "app.agents.orquestador.graph.supervisor",
-        "decentralized": "app.agents.decentralized.graph",
+        "orchestrator": "app.agents.orquestador.graph.hub",
+        "decentralized": "app.agents.decentralized.network",
     }
     for pattern in PATTERN_CLASSES:
         assert import_module(modules[pattern.id])
@@ -23,5 +23,4 @@ def test_pattern_knowledge_entrypoints_reach_shared_retriever_and_manifest():
     assert RetrievedPassage.__dataclass_fields__
     assert knowledge_sources()
     assert import_module("app.agents.jerarquico.knowledge_retrieval")
-    assert import_module("app.agents.orquestador.knowledge.retriever")
     assert import_module("app.rag.tools")

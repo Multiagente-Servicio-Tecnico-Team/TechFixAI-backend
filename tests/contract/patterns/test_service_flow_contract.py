@@ -9,7 +9,6 @@ from app.application.quotes import interpret_quote_decision
 from app.application.quotes import accept_quoted_draft
 from app.agents.jerarquico.schemas import IntakeDecision
 from app.agents.jerarquico.supervisor import make_customer_care_supervisor
-from app.agents.orquestador.graph.state import IntakeResult
 from langchain_core.messages import AIMessage, HumanMessage
 from app.application.warranties import (
     lookup_customer_warranty,
@@ -57,12 +56,6 @@ class ClarificationModel:
     def invoke(self, _messages):
         if self.schema is IntakeDecision:
             return IntakeDecision(route="clarification", clarification_question="¿Qué modelo de equipo tienes?")
-        if self.schema is IntakeResult:
-            return IntakeResult(
-                category="Soporte técnico", product="", symptoms="",
-                needs_clarification=True,
-                clarification_question="¿Qué modelo de equipo tienes?",
-            )
         raise AssertionError("Unexpected schema")
 
 
@@ -181,7 +174,7 @@ def test_payment_remains_pending_after_quote_acceptance(pattern_id):
 
 
 @pytest.mark.parametrize("pattern_id", ["hierarchical", "orchestrator", "decentralized"])
-def test_clarification_and_support_intake_are_non_persisting(pattern_id, monkeypatch):
+def test_clarification_and_support_intake_are_non_persisting(pattern_id, monkeypatch, pattern_settings):
     repository = ServiceRepository()
     messages = [HumanMessage(content="No recuerdo el modelo del equipo")]
     if pattern_id == "hierarchical":
@@ -190,16 +183,24 @@ def test_clarification_and_support_intake_are_non_persisting(pattern_id, monkeyp
         )
         assert result["route"] == "clarification"
     elif pattern_id == "orchestrator":
-        import app.agents.orquestador.agentes.atencion as atencion
-        monkeypatch.setattr(atencion, "create_chat_model", lambda: ClarificationModel())
-        result = atencion.atencion_node({"messages": messages, "user_id": 41})
-        assert result["awaiting_clarification"] is True
+        from app.agents.orquestador import build_graph
+
+        result = build_graph(
+            settings=pattern_settings, repository=repository, model=ClarificationModel()
+        ).invoke(
+            {"messages": messages, "customer_id": 41},
+            config={"configurable": {"thread_id": "clarification-o"}},
+        )
+        assert result["route"] == "clarification"
     else:
-        import app.agents.decentralized.support as soporte
-        class SupportModel:
-            def invoke(self, _messages):
-                return AIMessage(content="¿Qué modelo de equipo tienes?")
-        monkeypatch.setattr(soporte, "llm", SupportModel())
-        result = soporte.support_node({"messages": messages, "turn_start_index": 0})
-        assert not result["messages"][0].tool_calls
+        from app.agents.decentralized.network import build_graph as build_network
+
+        result = build_network(
+            settings=pattern_settings, repository=repository, model=ClarificationModel()
+        ).invoke(
+            {"messages": messages, "customer_id": 41},
+            config={"configurable": {"thread_id": "clarification-d"}},
+        )
+        assert result["route"] == "clarification"
+        assert result["handoffs"] == []
     assert repository.writes == []

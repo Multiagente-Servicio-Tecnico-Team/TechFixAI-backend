@@ -56,3 +56,9 @@ La base de prueba permanente confirmada por el usuario se identifica como `multi
 - `016_supplier_audit_events.sql` agrega auditoría append-only a nivel de aplicación para altas y cambios de proveedores, con el ADMIN autenticado como actor.
 - No modifica filas de `suppliers`; cada evento guarda los campos modificados y su fecha. La FK impide borrar el actor o proveedor mientras haya auditoría asociada.
 - Aplicada y verificada en `multiagentedb`; las escrituras administrativas de proveedores requieren que la migración equivalente esté aplicada en cada entorno destino.
+
+## Migración 017: auditoría de aceptación de cotizaciones de servicio
+
+- Agrega `QUOTE_ACCEPTED` a los eventos admitidos por `ticket_audit_events`, necesario para que el flujo del chat guarde la cotización, el pago pendiente y el cambio de estado del ticket en una sola transacción.
+- Aplicada y verificada en `multiagentedb`; la versión 017 quedó registrada en `schema_migrations`. Otros entornos requieren aplicar esta migración antes de aceptar cotizaciones de servicio desde el chat.
+- El esquema vacío de producción incluye la misma restricción. La migración es transaccional y puede repetirse sin cambiar datos.

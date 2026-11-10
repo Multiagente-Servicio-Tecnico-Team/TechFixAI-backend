@@ -78,6 +78,8 @@
 - [x] T045 [US1] Keep the existing service ticket visible in all three pattern adapters while a `REPAIR` quote awaits customer confirmation; add contract coverage for pending and accepted ticket references
 - [x] T046 [US1] Persist Descentralizado hardware/software assessments on the authenticated customer's existing service ticket and retain the other specialist's diagnosis in `app/agents/decentralized/graph.py` and `app/database/repository.py`
 - [x] T047 [US1] Expose persisted hardware/software diagnosis in `GET /api/customer/tickets` using session-scoped ownership and update the customer contract
+- [x] T048 [US1] Add a dedicated FAQ peer agent to the Descentralizado graph, connect validated Soporte handoffs, reuse the shared FAQ retriever/answerer, and return later turns to Soporte; cover the graph flow in focused tests
+- [x] T049 [US4] Align the Orquestador's specialized customer-agent roles with the Hierarchical and Descentralizado patterns while preserving one supervisor; split hardware/software, logistics/warranty, sales and billing responsibilities and record the role mapping in the parity contract
 
 ## Dependencies
 

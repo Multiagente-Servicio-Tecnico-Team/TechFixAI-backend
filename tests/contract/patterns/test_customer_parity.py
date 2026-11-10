@@ -28,29 +28,12 @@ def _quote(total="55.00"):
 
 def _pattern_results(pattern_id, *, status):
     accepted = status == "confirmed"
-    if pattern_id == "hierarchical":
-        return {
-            "messages": [AIMessage(content="Cotización PC_BUILD")],
-            "outcome": "direct_sale_accepted" if accepted else "awaiting_confirmation",
-            "quote": _quote(), "quote_id": 71 if accepted else 70,
-            "ticket_id": None, "ticket_code": "", "ticket_status": None,
-        }
-    if pattern_id == "orchestrator":
-        return {
-            "messages": [AIMessage(content="Cotización PC_BUILD")],
-            "response": "Cotización PC_BUILD", "sales_quote_id": 71 if accepted else 70,
-            "sales_quote_status": "ACCEPTED" if accepted else "PENDING",
-            "sales_quote_kind": "PC_BUILD", "build_total": Decimal("55.00"),
-            "build_labor_cost": Decimal("20.00"),
-            "matched_parts": _quote()["parts"],
-            "awaiting_sales_quote_confirmation": not accepted,
-            "ticket_id": None, "ticket_code": None, "ticket_status": None,
-        }
+    # Los tres patrones comparten agentes y estado de negocio.
     return {
         "messages": [AIMessage(content="Cotización PC_BUILD")],
-        "quote": {**_quote(), "status": status}, "quote_id": 71 if accepted else 70,
-        "quote_status": "ACCEPTED" if accepted else "PENDING",
-        "ticket_id": None, "ticket_code": None, "ticket_status": None,
+        "outcome": "direct_sale_accepted" if accepted else "awaiting_confirmation",
+        "quote": _quote(), "quote_id": 71 if accepted else 70,
+        "ticket_id": None, "ticket_code": "", "ticket_status": None,
     }
 
 
@@ -81,34 +64,13 @@ def test_pc_build_quote_has_same_ticketless_customer_contract_across_patterns(st
 @pytest.mark.parametrize("pattern_id", ["hierarchical", "orchestrator", "decentralized"])
 @pytest.mark.parametrize("accepted", [False, True])
 def test_service_quote_contract_keeps_ticket_and_payment_state(pattern_id, accepted):
-    if pattern_id == "hierarchical":
-        result = {
-            "messages": [AIMessage(content="Cotización de servicio")],
-            "outcome": "quoted" if accepted else "awaiting_confirmation",
-            "quote": {**_quote(), "quote_type": "REPAIR"},
-            "quote_id": 81 if accepted else None,
-            "ticket_code": "TCK-81", "ticket_status": "PAYMENT_PENDING" if accepted else "IN_DIAGNOSIS",
-        }
-    elif pattern_id == "orchestrator":
-        result = {
-            "messages": [AIMessage(content="Cotización de servicio")],
-            "response": "Cotización de servicio",
-            "quote_id": 81 if accepted else None,
-            "awaiting_ticket_confirmation": not accepted,
-            "total": Decimal("55.00"), "labor_cost": Decimal("20.00"),
-            "available_parts": _quote()["parts"], "labor_task_type": "maintenance",
-            "ticket_code": "TCK-81",
-            "ticket_status": "PAYMENT_PENDING" if accepted else "IN_DIAGNOSIS",
-        }
-    else:
-        result = {
-            "messages": [AIMessage(content="Cotización de servicio")],
-            "quote": {**_quote(), "quote_type": "REPAIR",
-                      "status": "confirmed" if accepted else "proposed"},
-            "quote_status": "ACCEPTED" if accepted else "PENDING",
-            "quote_id": 81 if accepted else None,
-            "ticket_code": "TCK-81", "ticket_status": "PAYMENT_PENDING" if accepted else "NEW",
-        }
+    result = {
+        "messages": [AIMessage(content="Cotización de servicio")],
+        "outcome": "quoted" if accepted else "awaiting_confirmation",
+        "quote": {**_quote(), "quote_type": "REPAIR"},
+        "quote_id": 81 if accepted else None,
+        "ticket_code": "TCK-81", "ticket_status": "PAYMENT_PENDING" if accepted else "IN_DIAGNOSIS",
+    }
 
     reply = _normalized_reply(pattern_id, result)
 

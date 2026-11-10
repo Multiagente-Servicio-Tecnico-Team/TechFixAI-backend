@@ -942,9 +942,9 @@ class ServiceRepository:
     ) -> int:
         if request_type not in {"REPAIR", "SUPPORT", "PC_BUILD", "WARRANTY_CLAIM"}:
             raise ValueError("Tipo de ticket no admitido por el esquema.")
-        query = text("""INSERT INTO tickets (code, commercial_customer_id, created_by_user_id,
+        query = text("""INSERT INTO tickets (code, customer_id, commercial_customer_id, created_by_user_id,
             contact_name, contact_phone, contact_email, title, failure_description, request_type, status, origin)
-            SELECT :code, c.id, c.user_id, c.display_name, c.phone, c.email, :title,
+            SELECT :code, c.user_id, c.id, c.user_id, c.display_name, c.phone, c.email, :title,
                 :failure_description, CAST(:request_type AS request_type_enum),
                 CAST('NEW' AS ticket_status_enum), 'ONLINE'
             FROM customers c WHERE c.id=:customer_id AND c.active IS TRUE AND c.user_id IS NOT NULL
@@ -1182,7 +1182,7 @@ class ServiceRepository:
             """), {"quote_id": quote_id, "actor": int(owner["user_id"])})
             session.execute(text("""
                 INSERT INTO public.ticket_audit_events (ticket_id, actor_user_id, event_type, changed_fields)
-                VALUES (:ticket_id, :actor, 'QUOTE_ACCEPTED', jsonb_build_object('quote_id',:quote_id,'payment_id',:payment_id))
+                VALUES (:ticket_id, :actor, 'QUOTE_ACCEPTED', jsonb_build_object('quote_id',CAST(:quote_id AS BIGINT),'payment_id',CAST(:payment_id AS BIGINT)))
             """), {"ticket_id": ticket_id, "actor": int(owner["user_id"]),
                    "quote_id": int(quote_id), "payment_id": int(payment["id"])})
         return {
@@ -1340,7 +1340,7 @@ class ServiceRepository:
             }).mappings().one()
             session.execute(text("""
                 INSERT INTO public.ticket_audit_events (ticket_id, actor_user_id, event_type, changed_fields)
-                VALUES (:ticket_id, :actor, 'CREATED', jsonb_build_object('origin','ONLINE','request_type',:request_type))
+                VALUES (:ticket_id, :actor, 'CREATED', jsonb_build_object('origin','ONLINE','request_type',CAST(:request_type AS TEXT)))
             """), {"ticket_id": ticket_id, "actor": actor_user_id, "request_type": request_type})
             session.execute(text("""
                 INSERT INTO public.quote_audit_events (quote_id, actor_user_id, event_type, changed_fields)
@@ -1461,8 +1461,9 @@ class ServiceRepository:
                     SELECT l.id, l.mode::text AS mode, l.status::text AS status,
                            l.courier_company, l.shipping_address
                     FROM logistics_records l
-                    WHERE ((:ticket_id IS NOT NULL AND l.ticket_id = :ticket_id)
-                        OR (:sales_order_id IS NOT NULL AND l.sales_order_id = :sales_order_id))
+                    WHERE ((CAST(:ticket_id AS BIGINT) IS NOT NULL AND l.ticket_id = CAST(:ticket_id AS BIGINT))
+                        OR (CAST(:sales_order_id AS BIGINT) IS NOT NULL
+                            AND l.sales_order_id = CAST(:sales_order_id AS BIGINT)))
                       AND l.commercial_customer_id = :customer_id
                     LIMIT 1
                     """
@@ -1512,7 +1513,7 @@ class ServiceRepository:
                     )
                     VALUES (:ticket_id,:sales_order_id,:customer_id,:actor_id,CAST(:mode AS logistics_mode_enum),
                            CAST('PENDING_RECEIPT' AS logistics_status_enum),
-                           :courier_company,:shipping_address
+                           :courier_company,:shipping_address)
                     RETURNING id
                     """
                 ),
@@ -1589,8 +1590,9 @@ class ServiceRepository:
                     """
                     SELECT id, warranty_code
                     FROM warranties
-                    WHERE ((:ticket_id IS NOT NULL AND ticket_id = :ticket_id)
-                        OR (:sales_order_id IS NOT NULL AND sales_order_id = :sales_order_id))
+                    WHERE ((CAST(:ticket_id AS BIGINT) IS NOT NULL AND ticket_id = CAST(:ticket_id AS BIGINT))
+                        OR (CAST(:sales_order_id AS BIGINT) IS NOT NULL
+                            AND sales_order_id = CAST(:sales_order_id AS BIGINT)))
                       AND quote_id = :quote_id AND commercial_customer_id = :customer_id
                     LIMIT 1
                     """
@@ -1767,6 +1769,12 @@ class ServiceRepository:
         ignored_tokens = set(_CATALOG_STOPWORDS)
         if family:
             ignored_tokens.update(_CATALOG_FAMILY_WORDS[family])
+
+        # For storage, laptop describes intended use/compatibility; it is not
+        # a catalog attribute unless the product record explicitly has it.
+        # RAM keeps its stricter laptop/desktop category handling below.
+        if family == "storage":
+            ignored_tokens.update({"laptop", "notebook", "portatil"})
 
         # Form factor is a real filter for memory, not merely another text term.
         if family == "ram":

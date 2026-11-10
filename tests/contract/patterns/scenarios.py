@@ -13,6 +13,6 @@ SCENARIOS = (
     Scenario("catalog.exact", "Consulta disponibilidad de SSD NVMe 512GB", ()),
     Scenario("quote.accept", "Acepto la cotización mostrada", ("quote", "payment_pending")),
     Scenario("refund.pending", "Solicito un reembolso de un pago completado", ("refund_requested",)),
-    Scenario("supplier.unavailable", "Compra al proveedor un repuesto agotado", ()),
+    Scenario("catalog.no_stock", "Busca un producto que no tiene stock en el catálogo", ()),
     Scenario("knowledge.demo_faq", "¿Cuál es la dirección de la tienda?", ()),
 )

@@ -533,9 +533,12 @@ class MultiagentGraphTests(unittest.TestCase):
             [document["id"] for document in result["rag_documents"]],
             ["manual_servicio:002"],
         )
+        # El diagnóstico se guarda con lo que recomienda el manual (aquí, un servicio).
         self.assertEqual(
             repository.saved_diagnosis["diagnosis"],
-            "Posible incompatibilidad de software.",
+            "Posible incompatibilidad de software.\n\n"
+            "Repuestos o servicios recomendados (pendientes de verificar en almacén):\n"
+            "- Servicio_Recuperacion_Sistema × 1",
         )
 
     def test_stock_change_requires_a_new_confirmation(self):

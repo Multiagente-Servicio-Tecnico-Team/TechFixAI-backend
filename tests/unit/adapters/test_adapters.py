@@ -70,33 +70,49 @@ def test_hierarchical_maps_proposed_quote_and_saved_ticket():
     assert (saved.ticket.code, saved.ticket.status) == ("TCK-1", "PAYMENT_PENDING")
 
 
-def test_orchestrator_prefers_response_and_multiplies_parts():
-    reply = OrchestratorPattern().to_reply(
+@pytest.mark.parametrize(
+    "result",
+    [
         {
-            "response": "Resumen del caso",
-            "messages": [],
-            "awaiting_ticket_confirmation": True,
-            "labor_task_type": "diagnosis",
-            "labor_cost": 50,
-            "available_parts": [{"name": "RAM", "quantity": "2", "unit_price": Decimal("52")}],
-            "total": Decimal("154"),
-        }
-    )
-    assert reply.reply == "Resumen del caso"
-    assert reply.pending_quote
-    assert [(l.label, l.amount) for l in reply.quote.lines] == [("Diagnóstico técnico", Decimal("50.00")), ("RAM × 2", Decimal("104.00"))]
+            "messages": [AIMessage(content="¿Confirmas?")],
+            "outcome": "awaiting_confirmation",
+            "ticket_code": "TCK-1",
+            "quote": {
+                "labor_cost": Decimal("50"),
+                "labor_task_type": "diagnosis",
+                "total_amount": Decimal("154"),
+                "parts": [{"name": "RAM", "quantity": 2, "subtotal": Decimal("104")}],
+            },
+        },
+        {"messages": [AIMessage(content="Solo atiendo temas de TechFix.")], "outcome": "out_of_scope"},
+    ],
+)
+def test_orchestrator_shares_the_hierarchical_reply_contract(result):
+    # Mismos agentes y estado de negocio: solo cambia la coordinación del grafo.
+    assert issubclass(OrchestratorPattern, HierarchicalPattern)
+    assert OrchestratorPattern().to_reply(result) == HierarchicalPattern().to_reply(result)
+    assert DecentralizedPattern().to_reply(result) == HierarchicalPattern().to_reply(result)
+    reply = OrchestratorPattern().to_reply(result)
+    if result["outcome"] == "awaiting_confirmation":
+        assert reply.pending_quote
+        assert [(l.label, l.amount) for l in reply.quote.lines] == [
+            ("Diagnóstico técnico", Decimal("50.00")),
+            ("RAM × 2", Decimal("104.00")),
+        ]
+    else:
+        assert reply.quote is None and reply.ticket is None
 
 
-def test_decentralized_resets_turn_control_and_never_offers_quotes():
+def test_decentralized_sends_shared_initial_state_and_reply_contract():
     graph = FakeGraph(result={"messages": [AIMessage(content="Te ayudo")]}, history=["m1", "m2"])
     pattern = adapter(DecentralizedPattern, graph)
     reply = pattern.reply("conv-2", 3, "Hola")
 
     state = graph.calls[0][0]
-    assert pattern.supports_quotes and reply.quote is None
-    assert state["turn_start_index"] == 2 and state["handoff_count"] == 0 and state["next_agent"] is None
+    assert issubclass(DecentralizedPattern, HierarchicalPattern)
     assert state["customer_id"] == 3
-    assert state["conversation_id"] == "conv-2"
+    assert set(state) == {"messages", "customer_id"}
+    assert reply.reply == "Te ayudo" and reply.quote is None and reply.ticket is None
 
 
 @pytest.mark.parametrize(

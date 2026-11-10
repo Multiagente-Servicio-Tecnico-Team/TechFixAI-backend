@@ -16,6 +16,7 @@ from app.agents.jerarquico.schemas import (
     QuoteConfirmation,
 )
 from app.agents.jerarquico.trace import traced_tool
+from app.agents.domain_guard import check_domain
 from app.database.repository import ServiceRepository
 
 
@@ -236,9 +237,33 @@ def _select_inventory_option(message: str, options: list[dict[str, Any]]) -> dic
     return None
 
 
+_LOGISTICS_ANSWER = re.compile(
+    r"\b(?:tienda|retir\w*|recog\w*|presencial|courier|env[ií]\w*|delivery|domicilio|"
+    r"direcci[oó]n|olva|shalom|dhl|serpost|urbano|av|avenida|calle|jir[oó]n|distrito)\b"
+)
+
+
+def _latest_human_text(state: ServiceState) -> str:
+    return next(
+        (
+            message.content.strip()
+            for message in reversed(state["messages"])
+            if isinstance(message, HumanMessage)
+            and isinstance(message.content, str)
+            and message.content.strip()
+        ),
+        "",
+    )
+
+
 def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
     def customer_care_supervisor(state: ServiceState) -> dict[str, Any]:
-        if state.get("awaiting_logistics"):
+        # Una preferencia de entrega pendiente solo atiende respuestas de entrega;
+        # una solicitud nueva (p. ej. otro soporte) sigue el flujo normal y la
+        # logística queda pendiente para un turno posterior.
+        if state.get("awaiting_logistics") and _LOGISTICS_ANSWER.search(
+            _latest_human_text(state).casefold()
+        ):
             return {"route": "logistics"}
 
         latest_customer_message = next(
@@ -256,7 +281,20 @@ def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
             r"\b(?:comprar|compra|conseguir|pedir)\b.{0,50}\bproveedor(?:es)?\b|\bproveedor(?:es)?\b.{0,50}\b(?:comprar|compra|conseguir|pedir)\b",
             normalized_latest,
         ):
-            return {"route": "supplier_procurement"}
+            return {
+                "route": "clarification",
+                "outcome": "supplier_procurement_unavailable",
+                "messages": [
+                    AIMessage(
+                        content=(
+                            "Las compras a proveedores se gestionan desde el módulo "
+                            "administrativo, no desde el chat de cliente. Puedo buscar "
+                            "alternativas que sí aparezcan con stock en el catálogo. "
+                            "No se creó una compra ni se reservó inventario."
+                        )
+                    )
+                ],
+            }
         if state.get("awaiting_refund_details") or re.search(
             r"\b(?:reembolso|reembolsar|devoluci[oó]n de dinero|devolver el dinero)\b",
             normalized_latest,
@@ -566,7 +604,12 @@ def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
                 ],
             }
 
-        if state.get("awaiting_quote_confirmation"):
+        pending_confirmation = state.get("awaiting_quote_confirmation") or (
+            state.get("outcome") == "awaiting_confirmation"
+            and state.get("quote_id") is not None
+            and state.get("quote") is not None
+        )
+        if pending_confirmation:
             confirmation_target = "la cotización mostrada"
             current_build = "\n".join(
                 f"- {part['name']} x {part['quantity']}"
@@ -785,6 +828,12 @@ def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
                 ],
             }
 
+        domain = traced_tool(
+            state, "domain_guard", lambda: check_domain(llm, state["messages"])
+        )
+        if not domain.in_domain:
+            return {"route": "out_of_scope", "outcome": "out_of_scope"}
+
         intake_schema = json.dumps(
             IntakeDecision.model_json_schema(),
             ensure_ascii=False,
@@ -996,6 +1045,11 @@ def make_customer_care_supervisor(llm: Any, repository: ServiceRepository):
             }
         ticket_id = state.get("ticket_id")
         ticket_code = state.get("ticket_code", "")
+        # Solo se reutiliza un ticket que sigue en admisión/diagnóstico. Un caso
+        # ya cotizado, pagado, cancelado o en garantía no recibe otra solicitud:
+        # la nueva consulta abre su propio ticket.
+        if ticket_id is not None and state.get("ticket_status") not in {None, "NEW", "IN_DIAGNOSIS"}:
+            ticket_id = None
         if ticket_id is None and request_type not in {"SALE", "PC_BUILD"}:
             ticket_code = f"TCK-{uuid4().hex[:12].upper()}"
             ticket_id = traced_tool(

@@ -144,7 +144,10 @@ class ChatPattern(Protocol):
     # False si el patrón no propone presupuestos (los botones aceptar/rechazar no aplican).
     supports_quotes: bool
 
-    def reply(self, conversation_id: str, customer_id: int, message: str) -> PatternReply:
+    def reply(
+        self, conversation_id: str, customer_id: int, message: str,
+        *, actor_user_id: int | None = None,
+    ) -> PatternReply:
         """Procesa un turno. La memoria de la conversación es responsabilidad del patrón."""
         ...
 

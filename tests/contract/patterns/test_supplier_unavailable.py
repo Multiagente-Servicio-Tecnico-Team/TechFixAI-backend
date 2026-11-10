@@ -1,40 +1,36 @@
 import pytest
-
-from app.agents.jerarquico.agents.procurement import purchasing_agent
-from app.agents.orquestador.agentes.compras import procurement_node as orchestrator_procurement
-from app.agents.decentralized.purchasing import purchasing_node as decentralized_procurement
-from app.agents.jerarquico.supervisor import make_customer_care_supervisor
 from langchain_core.messages import HumanMessage
 
-
-@pytest.mark.parametrize(
-    "agent",
-    [purchasing_agent, orchestrator_procurement, decentralized_procurement],
-    ids=["hierarchical", "orchestrator", "decentralized"],
-)
-def test_supplier_purchase_is_unavailable_without_price_order_or_reservation(agent):
-    result = agent({"messages": []})
-
-    assert result["outcome"] == "procurement_unavailable"
-    response = result["messages"][-1].content.casefold()
-    assert "no puedo confirmar" in response
-    assert "precio" in response and "plazo" in response
-    assert "reservó inventario" in response
-    assert "no se creó una orden" in response or "no se reservó inventario" in response
-    assert not any(
-        key in result
-        for key in ("purchase_order", "purchase_order_id", "supplier", "lead_time")
-    )
+from app.agents.jerarquico.supervisor import make_customer_care_supervisor
 
 
-def test_hierarchical_supervisor_routes_supplier_intent_without_model_or_write():
-    class NoCallModel:
-        def with_structured_output(self, *_args, **_kwargs):
-            raise AssertionError("La petición de compra a proveedor tiene ruta determinista")
+class NoCallModel:
+    def with_structured_output(self, *_args, **_kwargs):
+        raise AssertionError("Una solicitud directa a proveedores no requiere clasificador LLM")
 
+
+@pytest.mark.parametrize("pattern_id", ["hierarchical", "orchestrator", "decentralized"])
+def test_customer_patterns_do_not_register_supplier_purchase_agent(pattern_id, pattern_settings):
+    if pattern_id == "hierarchical":
+        from app.agents.jerarquico.graph.builder import build_multiagent_graph as build
+    elif pattern_id == "orchestrator":
+        from app.agents.orquestador import build_graph as build
+    else:
+        from app.agents.decentralized.network import build_graph as build
+
+    graph = build(settings=pattern_settings, repository=object(), model=NoCallModel())
+    assert "purchasing_agent" not in graph.get_graph().nodes
+
+
+def test_explicit_supplier_request_explains_customer_chat_scope_without_order():
     result = make_customer_care_supervisor(NoCallModel(), object())({
         "customer_id": 41,
         "messages": [HumanMessage(content="¿Pueden comprar al proveedor un repuesto agotado?")],
     })
 
-    assert result["route"] == "supplier_procurement"
+    assert result["route"] == "clarification"
+    assert result["outcome"] == "supplier_procurement_unavailable"
+    response = result["messages"][-1].content.casefold()
+    assert "módulo administrativo" in response
+    assert "alternativas" in response and "catálogo" in response
+    assert "no se creó una compra" in response

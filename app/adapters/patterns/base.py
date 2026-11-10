@@ -90,10 +90,15 @@ class GraphPattern:
             },
         }
 
-    def reply(self, conversation_id: str, customer_id: int, message: str) -> PatternReply:
+    def reply(
+        self, conversation_id: str, customer_id: int, message: str,
+        *, actor_user_id: int | None = None,
+    ) -> PatternReply:
         try:
             graph = self.graph()
             state = self.initial_state(customer_id, HumanMessage(content=message))
+            if actor_user_id is not None:
+                state["actor_user_id"] = actor_user_id
             policy = SystemMessage(
                 id=f"techfix-role-policy-{self.id}",
                 content=build_system_prompt(role="CUSTOMER", pattern_id=self.id),
@@ -139,6 +144,12 @@ def _safe_sqlstate(exc: BaseException) -> str:
     """Solo el código SQLSTATE de PostgreSQL (cinco caracteres), nunca el mensaje."""
     origin = getattr(exc, "orig", None)
     sqlstate = getattr(origin, "sqlstate", None) or getattr(origin, "pgcode", None)
+    # pg8000 stores PostgreSQL diagnostics in args[0], unlike psycopg drivers.
+    # Read only SQLSTATE; messages/details may contain user data.
+    if not sqlstate:
+        args = getattr(origin, "args", ())
+        if args and isinstance(args[0], dict):
+            sqlstate = args[0].get("C")
     if isinstance(sqlstate, str) and re.fullmatch(r"[0-9A-Z]{5}", sqlstate):
         return sqlstate
     return "unavailable"

@@ -1437,7 +1437,7 @@ CREATE TABLE public.ticket_audit_events (
     event_type character varying(20) NOT NULL,
     changed_fields jsonb,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT ticket_audit_events_event_type_check CHECK (((event_type)::text = ANY ((ARRAY['CREATED'::character varying, 'UPDATED'::character varying, 'STATUS_CHANGED'::character varying, 'CANCELLED'::character varying, 'QUOTE_CREATED'::character varying])::text[])))
+    CONSTRAINT ticket_audit_events_event_type_check CHECK (((event_type)::text = ANY ((ARRAY['CREATED'::character varying, 'UPDATED'::character varying, 'STATUS_CHANGED'::character varying, 'CANCELLED'::character varying, 'QUOTE_CREATED'::character varying, 'QUOTE_ACCEPTED'::character varying])::text[])))
 );
 
 

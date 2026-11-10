@@ -18,6 +18,26 @@ Para cada caso se instancian los adaptadores `hierarchical`, `orchestrator` y `d
 | Modelo | Inspección runtime | Mismo provider/model/temperature efectiva, no solo igual metadata |
 | Robustez | Reintento/doble confirmación o recurso cambiado | Efecto a lo sumo una vez; conflicto sin mutación parcial |
 
+## Roles especializados de cliente
+
+Los tres grafos usan los mismos roles de negocio y políticas; varían la coordinación. La gestión de compras a proveedores es solo ADMIN y no forma parte de los patrones CUSTOMER.
+
+| Rol | Jerárquico | Orquestador | Descentralizado |
+|---|---|---|---|
+| FAQ | `faq_agent` | `faq_agent` | `faq_agent` |
+| Soporte técnico de hardware | `technical_support_agent` | `technical_support_agent` | `technical_support_agent` |
+| Soporte de software | `software_support_agent` | `software_support_agent` | `software_support_agent` |
+| Almacén | `warehouse_agent` | `warehouse_agent` | `warehouse_agent` |
+| Ventas | `sales_agent` | `sales_agent` | `sales_agent` |
+| Facturación | `billing_agent` | `billing_agent` | `billing_agent` |
+| Logística | `logistics_agent` | `logistics_agent` | `logistics_agent` |
+| Garantía | `warranty_agent` | `warranty_agent` | `warranty_agent` |
+| Reembolsos | `refund_agent` | `refund_agent` | `refund_agent` |
+
+Los resultados sin stock terminan en el nodo de inventario con `inventory_unavailable`; no se derivan a un agente de compras ni crean orden, compra o reserva. Una solicitud explícita de compra a proveedor informa que esa gestión corresponde al módulo ADMIN.
+
+La topología sigue siendo propia de cada patrón: supervisores por equipo en Jerárquico, un supervisor en Orquestador y handoffs validados entre pares en Descentralizado.
+
 ## Normalización
 
 - Comparar tipo de resultado, importes como decimal/cadena monetaria, referencias de entidades y estado final.
@@ -29,6 +49,8 @@ Para cada caso se instancian los adaptadores `hierarchical`, `orchestrator` y `d
 - Los tres patrones guardan las cotizaciones `DIRECT_SALE` y `PC_BUILD` sin ticket de servicio. Al aceptar, revalidan stock, reservan unidades y dejan el pago pendiente.
 - Los tres patrones crean tickets para reparación/soporte antes de terminar el diagnóstico, persisten la evaluación técnica con titularidad validada y exponen el código durante la propuesta. El Orquestador conserva el ticket desde la recepción y, cuando el cliente acepta, agrega la cotización `REPAIR` a ese mismo ticket y registra un pago `PENDING`. El flujo no reserva ni descuenta inventario. Jerárquico y Descentralizado mantienen sus topologías y pasos propios, con la misma relación y estados persistidos.
 - Los adaptadores mantienen sus topologías, pero comparten política de rol, perfil efectivo del modelo y corpus documental canónico.
+- En el grafo Descentralizado, FAQ es un agente par: Soporte transfiere las preguntas informativas con un handoff validado; FAQ usa el mismo recuperador/respuesta que los otros patrones y termina el turno. La entrada del siguiente turno vuelve a Soporte para clasificar una nueva intención.
+- Orquestador registra los nueve roles CUSTOMER de esta matriz como nodos compartidos; no incluye compras a proveedores. FAQ reutiliza el RAG común; `REPAIR` deriva a `technical_support_agent` y `SUPPORT` a `software_support_agent`; `warranty_agent` y `logistics_agent` son nodos separados. Un supervisor mantiene el enrutamiento. `sales_agent` coordina los subflujos de servicio, venta directa y PC_BUILD; `billing_agent` persiste las cotizaciones aceptadas.
 - El servicio ADMIN y su registro allowlisted de capacidades son comunes a los tres valores de patrón. `pattern` conserva contexto y trazabilidad; las operaciones ADMIN no se delegan al grafo CUSTOMER.
 - Las migraciones 015 (`PC_BUILD` sin ticket) y 016 (`supplier_audit_events`) están registradas en el ledger de la base local de prueba junto con las versiones 006–014. Esto no demuestra que otro entorno tenga el mismo esquema: cada entorno debe ejecutar y verificar sus migraciones versionadas.
 - La suite de contratos usa proveedores, repositorios y perfiles falsos; no requiere Groq, LangSmith ni PostgreSQL remoto. El resultado más reciente está registrado en `quickstart.md`.

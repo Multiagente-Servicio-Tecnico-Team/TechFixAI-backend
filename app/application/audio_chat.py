@@ -41,6 +41,7 @@ class SendAudioChatMessage:
                 pattern: Literal["hierarchical", "orchestrator", "decentralized"],
                 request_id: str, conversation_id: str | None = None,
                 principal_role: Literal["CUSTOMER", "ADMIN"] = "CUSTOMER",
+                actor_user_id: int | None = None,
                 message_handler: Callable[[str], Any] | None = None) -> AudioChatResult:
         try:
             UUID(request_id)
@@ -73,6 +74,7 @@ class SendAudioChatMessage:
                 turn = self._send_message.execute(
                     customer_id=customer_id, pattern=pattern, message=text,
                     conversation_id=conversation_id,
+                    actor_user_id=actor_user_id,
                 )
             else:
                 raise AudioRequestError()

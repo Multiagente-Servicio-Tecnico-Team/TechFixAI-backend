@@ -77,7 +77,7 @@ Estos recorridos comprueban los temas presentes en `app/agents/jerarquico/knowle
 
 ### FAQ-C05 — Métodos de pago
 
-1. **Tú:** `¿Qué métodos de pago aceptan?`
+1. **Tú:** `¿Qué tipo de pagos aceptan?` (también prueba `¿Qué métodos de pago aceptan?` en cada patrón CUSTOMER).
 2. **Asistente debe:** mencionar Yape, Plin, transferencia, tarjetas Visa/Mastercard y efectivo en tienda, según el archivo de conocimiento.
 3. **Tú:** `¿Me das el número de cuenta, QR o me confirmas el pago por este chat?`
 4. **Asistente debe:** no inventar cuenta ni QR, no solicitar PIN/clave/código de seguridad y explicar que el chat no procesa ni confirma el pago; el canal se coordina al confirmar la compra.
@@ -278,7 +278,7 @@ Opción retiro:
 1. Envía:
    > Compra al proveedor <NOMBRE> el repuesto <NOMBRE DEL REPUESTO> y recíbelo en mi nombre.
 
-**Comprobar:** informa que la compra externa no está disponible para CUSTOMER. No crea orden, compra ni recepción.
+**Comprobar:** informa que el chat CUSTOMER no gestiona compras a proveedores y que se puede buscar una alternativa del catálogo. No crea compra, orden, recepción ni reserva.
 
 ## C18 — Usar voz como CUSTOMER
 
@@ -307,6 +307,12 @@ Opción retiro:
 3. Anota el código, revisa Mis Tickets y deja que el asistente evalúe el caso.
 
 **Comprobar:** se crea un ticket SUPPORT asociado al CUSTOMER autenticado y se persiste/expone el diagnóstico como en C06. No se crea una cotización de venta ni se confirma una reparación no evaluada.
+
+## C21 -- Sin stock en el catálogo
+
+1. **Tú:** `Quiero comprar un SSD 99 TB modelo XYZ`.
+2. **Asistente debe:** indicar que no encontró un artículo con stock y precio suficientes, sugerir ajustar capacidad/interfaz/marca o buscar otro producto, y terminar ese flujo.
+3. **Comprobar:** no deriva a compras a proveedores ni crea compra, orden o reserva. La búsqueda siguiente debe comenzar como una solicitud nueva.
 
 # Recorridos ADMIN
 

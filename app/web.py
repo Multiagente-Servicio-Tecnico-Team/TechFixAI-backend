@@ -88,7 +88,7 @@ else:
                 result = _agent_graph().invoke(
                     {
                         "messages": [HumanMessage(content=prompt)],
-                        "user_id": st.session_state.user_id,
+                        "customer_id": st.session_state.user_id,
                     },
                     {
                         "configurable": {"thread_id": st.session_state.thread_id},
@@ -99,9 +99,10 @@ else:
         except Exception as error:
             st.error(f"No se pudo completar la consulta ({type(error).__name__}).")
         else:
-            response = result.get("response", "No se recibió respuesta del agente.")
+            last = result.get("messages", [])[-1:] or [None]
+            response = getattr(last[0], "content", "") or "No se recibió respuesta del agente."
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             with st.chat_message("assistant"):
                 st.markdown(response)
-            if result.get("quote_id") or result.get("ticket_cancelled"):
+            if result.get("outcome") in {"quoted", "declined", "direct_sale_accepted"}:
                 st.session_state.thread_id = new_thread_id()

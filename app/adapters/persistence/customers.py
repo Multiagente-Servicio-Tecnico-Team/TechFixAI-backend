@@ -138,7 +138,7 @@ class CustomerRepositoryAdapter:
                     updated_at=CURRENT_TIMESTAMP WHERE id=:id"""), {"user_id": user_id, "id": customer_id})
                 session.execute(text("""INSERT INTO public.customer_audit_events
                     (customer_id, actor_user_id, event_type, changed_fields)
-                    VALUES (:customer, :actor, 'ACCOUNT_LINKED', jsonb_build_object('user_id', :user))"""),
+                    VALUES (:customer, :actor, 'ACCOUNT_LINKED', jsonb_build_object('user_id', CAST(:user AS BIGINT)))"""),
                     {"customer": customer_id, "actor": actor_id, "user": user_id})
                 row = session.execute(text("""SELECT id, display_name, phone, email, origin, user_id,
                     active, created_by_user_id, created_at, updated_at FROM public.customers WHERE id=:id"""),

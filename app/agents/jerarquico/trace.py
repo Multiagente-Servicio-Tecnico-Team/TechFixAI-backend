@@ -12,15 +12,17 @@ from uuid import uuid4
 
 AGENT_NAMES = {
     "customer_care_supervisor",
+    "orchestrator_supervisor",
+    "reception_agent",
     "commercial_team_supervisor",
     "technical_team_supervisor",
     "operations_team_supervisor",
     "faq_agent",
+    "out_of_scope_agent",
     "technical_support_agent",
     "software_support_agent",
     "knowledge_retrieval",
     "warehouse_agent",
-    "purchasing_agent",
     "sales_agent",
     "billing_agent",
     "logistics_agent",
@@ -41,9 +43,11 @@ TOOL_NAMES = {
     "intake_ticket_write",
     "ticket_diagnosis_write",
     "customer_lookup",
+    "domain_guard",
     "ticket_cancel",
     "refund_payment_lookup",
     "refund_request_write",
+    "direct_sale_quote_acceptance",
 }
 _trace_lock = Lock()
 

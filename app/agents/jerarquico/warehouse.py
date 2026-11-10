@@ -500,32 +500,24 @@ def _lookup_commercial_items(
             and Decimal(str(item["unit_price"])) > 0
         ]
         if not usable:
-            if is_selection and not exact:
-                refinement = _refinement_response(
-                    search_term=search_term,
-                    quantity=quantity,
-                    candidates=[],
-                    confirmed_parts=confirmed_parts,
-                    pending_requests=requests[index + 1 :],
-                )
-                refinement["messages"] = [
-                    AIMessage(
-                        content=(
-                            f"No encontré artículos con stock y precio que coincidan con «{search_term}». "
-                            "Prueba con otra marca, capacidad, formato o característica."
-                        )
-                    )
-                ]
-                return refinement
             return {
-                "outcome": "procurement_unavailable",
+                "route": "clarification",
+                "awaiting_catalog_refinement": False,
+                "awaiting_inventory_selection": False,
+                "catalog_refinement_request": {},
+                "inventory_options": [],
+                "required_parts": [],
+                "pending_commercial_requests": [],
+                "matched_parts": [],
+                "inventory_selection_replaces_category": "",
+                "outcome": "inventory_unavailable",
                 "awaiting_quote_confirmation": False,
                 "messages": [
                     AIMessage(
                         content=(
-                            f"No encontré opciones cotizables con stock suficiente "
-                            f"para “{search_term}”. No puedo confirmar precio ni "
-                            "plazo de abastecimiento."
+                            f"No encontr\u00e9 art\u00edculos con stock suficiente y precio registrado para \u00ab{search_term}\u00bb. "
+                            "Puedes ajustar la capacidad, interfaz o marca, o buscar otro art\u00edculo "
+                            "del cat\u00e1logo. No se cre\u00f3 una cotizaci\u00f3n, compra, orden ni reserva."
                         )
                     )
                 ],

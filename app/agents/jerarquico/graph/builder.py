@@ -8,9 +8,9 @@ from app.agents.jerarquico.knowledge_retrieval import (
 )
 from app.agents.jerarquico.agents.billing import make_billing_agent
 from app.agents.jerarquico.agents.faq import MarkdownFaqRetriever, make_faq_agent
+from app.agents.jerarquico.agents.out_of_scope import make_out_of_scope_agent
 from app.agents.jerarquico.agents.logistics import make_logistics_agent
 from app.agents.refund_requests import make_refund_agent
-from app.agents.jerarquico.agents.procurement import purchasing_agent
 from app.agents.jerarquico.agents.teams import make_team_supervisor
 from app.agents.jerarquico.agents.warranty import (
     make_order_completion_agent,
@@ -38,6 +38,60 @@ from app.agents.jerarquico.graph.state import ServiceState
 from app.settings import Settings, load_settings
 
 
+WORKER_NAMES = (
+    "faq_agent",
+    "out_of_scope_agent",
+    "warranty_agent",
+    "refund_agent",
+    "order_completion_agent",
+    "logistics_agent",
+    "billing_agent",
+    "knowledge_retrieval",
+    "technical_support_agent",
+    "software_support_agent",
+    "warehouse_agent",
+    "sales_agent",
+    "quote_suggestion_response",
+    "persist_diagnosis",
+)
+
+
+def make_worker_nodes(
+    *,
+    settings: Settings,
+    repository: ServiceRepository,
+    llm: Any,
+    retriever: MarkdownKnowledgeRetriever,
+) -> dict[str, Any]:
+    """Agentes de trabajo CUSTOMER compartidos por los tres patrones.
+
+    Los patrones solo difieren en cómo coordinan estos nodos; las reglas de
+    negocio, RAG, herramientas y persistencia son las mismas.
+    """
+    faq_retriever = MarkdownFaqRetriever()
+    nodes = {
+        "faq_agent": make_faq_agent(llm, faq_retriever),
+        "out_of_scope_agent": make_out_of_scope_agent(llm),
+        "warranty_agent": make_warranty_agent(repository),
+        "refund_agent": make_refund_agent(repository, trace_tool=traced_tool),
+        "order_completion_agent": make_order_completion_agent(repository),
+        "logistics_agent": make_logistics_agent(llm, repository),
+        "billing_agent": make_billing_agent(repository),
+        "knowledge_retrieval": make_knowledge_retrieval_agent(retriever),
+        "technical_support_agent": make_technical_support_agent(llm, mode="hardware"),
+        "software_support_agent": make_technical_support_agent(llm, mode="software"),
+        "warehouse_agent": make_warehouse_agent(
+            repository,
+            pc_build_labor_cost=settings.labor_price_for("pc_build"),
+        ),
+        "sales_agent": make_sales_agent(settings),
+        "quote_suggestion_response": quote_suggestion_response,
+        "persist_diagnosis": make_persist_diagnosis(repository),
+    }
+    assert tuple(nodes) == WORKER_NAMES
+    return {name: traced_node(name, node) for name, node in nodes.items()}
+
+
 def build_multiagent_graph(
     *,
     settings: Settings | None = None,
@@ -49,7 +103,6 @@ def build_multiagent_graph(
     settings.require_chat_configuration()
     repository = repository or ServiceRepository()
     retriever = retriever or MarkdownKnowledgeRetriever()
-    faq_retriever = MarkdownFaqRetriever()
     llm = model or create_model(settings)
 
     graph = StateGraph(ServiceState)
@@ -61,104 +114,15 @@ def build_multiagent_graph(
             root=True,
         ),
     )
-    graph.add_node(
-        "commercial_team_supervisor",
-        traced_node(
-            "commercial_team_supervisor",
-            make_team_supervisor("commercial"),
-        ),
-    )
-    graph.add_node(
-        "technical_team_supervisor",
-        traced_node(
-            "technical_team_supervisor",
-            make_team_supervisor("technical"),
-        ),
-    )
-    graph.add_node(
-        "operations_team_supervisor",
-        traced_node(
-            "operations_team_supervisor",
-            make_team_supervisor("operations"),
-        ),
-    )
-    graph.add_node(
-        "faq_agent",
-        traced_node("faq_agent", make_faq_agent(llm, faq_retriever)),
-    )
-    graph.add_node(
-        "warranty_agent",
-        traced_node("warranty_agent", make_warranty_agent(repository)),
-    )
-    graph.add_node(
-        "refund_agent",
-        traced_node("refund_agent", make_refund_agent(repository, trace_tool=traced_tool)),
-    )
-    graph.add_node(
-        "order_completion_agent",
-        traced_node(
-            "order_completion_agent",
-            make_order_completion_agent(repository),
-        ),
-    )
-    graph.add_node(
-        "logistics_agent",
-        traced_node("logistics_agent", make_logistics_agent(llm, repository)),
-    )
-    graph.add_node(
-        "billing_agent",
-        traced_node("billing_agent", make_billing_agent(repository)),
-    )
-    graph.add_node(
-        "purchasing_agent",
-        traced_node("purchasing_agent", purchasing_agent),
-    )
-    graph.add_node(
-        "knowledge_retrieval",
-        traced_node(
-            "knowledge_retrieval",
-            make_knowledge_retrieval_agent(retriever),
-        ),
-    )
-    graph.add_node(
-        "technical_support_agent",
-        traced_node(
-            "technical_support_agent",
-            make_technical_support_agent(llm, mode="hardware"),
-        ),
-    )
-    graph.add_node(
-        "software_support_agent",
-        traced_node(
-            "software_support_agent",
-            make_technical_support_agent(llm, mode="software"),
-        ),
-    )
-    graph.add_node(
-        "warehouse_agent",
-        traced_node(
-            "warehouse_agent",
-            make_warehouse_agent(
-                repository,
-                pc_build_labor_cost=settings.labor_price_for("pc_build"),
-            ),
-        ),
-    )
-    graph.add_node(
-        "sales_agent",
-        traced_node("sales_agent", make_sales_agent(settings)),
-    )
-    graph.add_node(
-        "quote_suggestion_response",
-        traced_node("quote_suggestion_response", quote_suggestion_response),
-    )
-    graph.add_node(
-        "persist_diagnosis",
-        traced_node(
-            "persist_diagnosis",
-            make_persist_diagnosis(repository),
-        ),
-    )
+    for team in ("commercial", "technical", "operations"):
+        graph.add_node(
+            f"{team}_team_supervisor",
+            traced_node(f"{team}_team_supervisor", make_team_supervisor(team)),
+        )
+    for name, node in make_worker_nodes(
+        settings=settings, repository=repository, llm=llm, retriever=retriever
+    ).items():
+        graph.add_node(name, node)
 
     graph.add_edge(START, "customer_care_supervisor")
     graph.add_conditional_edges(
@@ -169,8 +133,8 @@ def build_multiagent_graph(
             "commercial_team_supervisor": "commercial_team_supervisor",
             "operations_team_supervisor": "operations_team_supervisor",
             "refund_agent": "refund_agent",
-            "purchasing_agent": "purchasing_agent",
             "faq_agent": "faq_agent",
+            "out_of_scope_agent": "out_of_scope_agent",
             "knowledge_retrieval": "knowledge_retrieval",
             "warehouse_agent": "warehouse_agent",
             END: END,
@@ -194,6 +158,7 @@ def build_multiagent_graph(
         },
     )
     graph.add_edge("faq_agent", END)
+    graph.add_edge("out_of_scope_agent", END)
     graph.add_edge("warranty_agent", END)
     graph.add_edge("refund_agent", END)
     graph.add_conditional_edges(
@@ -206,7 +171,6 @@ def build_multiagent_graph(
     )
     graph.add_edge("order_completion_agent", END)
     graph.add_edge("billing_agent", END)
-    graph.add_edge("purchasing_agent", END)
     graph.add_conditional_edges(
         "knowledge_retrieval",
         after_knowledge_retrieval,
@@ -223,7 +187,6 @@ def build_multiagent_graph(
         after_inventory,
         {
             "sales_agent": "sales_agent",
-            "purchasing_agent": "purchasing_agent",
             END: END,
         },
     )

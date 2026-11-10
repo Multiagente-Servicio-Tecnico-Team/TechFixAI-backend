@@ -57,6 +57,7 @@ El contrato backend de audio y su validacion local viven en
 | 28 | Trazabilidad de movimientos de inventario | `specs/008-trazabilidad-movimientos-inventario/` | `docs/24-api-inventario.md` |
 | 29 | Chat multirol, capacidades compartidas y paridad de patrones | `specs/011-chat-multirole-patrones/` | `specs/011-chat-multirole-patrones/contracts/` |
 | 30 | Guía manual de pruebas de chat multirol desde el frontend | `specs/011-chat-multirole-patrones/` | `docs/30-guia-pruebas-manuales-chat-multirole-frontend.md` |
+| 31 | Operar como ADMIN por voz: capacidades, confirmación y exportación | `specs/011-chat-multirole-patrones/` | `docs/31-guia-pruebas-admin-por-voz.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.

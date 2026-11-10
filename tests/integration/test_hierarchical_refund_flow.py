@@ -86,6 +86,6 @@ def test_hierarchical_supplier_request_returns_unavailable_without_write():
         config={"configurable": {"thread_id": "hierarchical-procurement"}},
     )
 
-    assert result["outcome"] == "procurement_unavailable"
-    assert "no se creó una orden" in result["messages"][-1].content.casefold()
+    assert result["outcome"] == "supplier_procurement_unavailable"
+    assert "módulo administrativo" in result["messages"][-1].content.casefold()
     assert repository.calls == []

@@ -45,21 +45,50 @@ def quote_changed(
 
 
 def interpret_quote_decision(message: str) -> str | None:
-    """Accept/reject only an explicit, standalone customer decision."""
+    """Classify an explicit quote decision without asking the LLM for synonyms."""
+    if not isinstance(message, str) or not message.strip():
+        return None
     normalized = unicodedata.normalize("NFKD", message.casefold())
     normalized = "".join(char for char in normalized if not unicodedata.combining(char))
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
-    accept = {
-        "si", "si confirmo", "confirmo", "confirmar", "si autorizo",
-        "de acuerdo", "acepto", "acepto la cotizacion", "si acepto", "correcto",
-    }
-    reject = {
-        "no", "no gracias", "no rechazo", "cancelo", "cancelar", "rechazo", "rechazar",
-        "rechazo la cotizacion", "no acepto",
-    }
-    if normalized in accept:
+    if not normalized:
+        return None
+
+    # A refusal or uncertainty always wins over an affirmative word later in
+    # the same sentence (for example, “no acepto todavía” or “no sé si acepto”).
+    refusal_patterns = (
+        r"\bno\s+(?:quiero\s+(?:aceptar|confirmar|autorizar)|acepto|la acepto|confirmo|autorizo|apruebo|procede|procedas)\b",
+        r"\b(?:mejor no|prefiero no|no gracias|no estoy de acuerdo|aun no|todavia no)\b",
+        r"\b(?:cancela|cancelar|cancelo|rechazo|rechazar|paso)\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in refusal_patterns):
+        return "REJECT"
+
+    if any(phrase in normalized for phrase in (
+        "no se si", "no estoy seguro", "no estoy segura", "tal vez", "quizas",
+        "quiza", "si o no", "lo voy a pensar", "lo pensare", "tengo una duda", "espera",
+    )):
+        return None
+
+    positive_no_phrases = (
+        "no hay problema",
+        "no tengo problema",
+        "no tengo inconveniente",
+        "no veo problema",
+    )
+    if any(phrase in normalized for phrase in positive_no_phrases):
         return "ACCEPT"
-    if normalized in reject:
+
+    affirmative_patterns = (
+        r"\bsi\b",
+        r"\b(?:acepto|aceptamos|aceptar|aceptada|confirmo|confirmamos|confirmar|confirmado|confirmada|autorizo|autorizamos|apruebo|aprueba|aprobado|aprobada)\b",
+        r"\b(?:de acuerdo|estoy de acuerdo|me parece bien|me parece correcto|estoy conforme|por mi esta bien|esta bien|por supuesto)\b",
+        r"\b(?:claro|perfecto|correcto|adelante|procede|procedan|hazlo|hagamoslo|dale|vale|ok|okay|okey|listo|va|de una)\b",
+        r"\b(?:continua|continuemos|sigamos|sigue|proceder|procedamos|puedes proceder|puedes continuar|adelante con la compra)\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in affirmative_patterns):
+        return "ACCEPT"
+    if normalized == "no" or normalized.startswith("no "):
         return "REJECT"
     return None
 

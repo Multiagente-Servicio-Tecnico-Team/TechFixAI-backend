@@ -30,9 +30,10 @@ def test_decentralized_direct_sale_reply_keeps_quote_id_and_has_no_ticket():
 
     result = {
         "quote_id": 77,
-        "quote_status": "proposed",
+        "outcome": "awaiting_confirmation",
         "quote": {
             "quote_type": "DIRECT_SALE",
+            "labor_cost": Decimal("0.00"),
             "total_amount": Decimal("250.00"),
             "parts": [{"name": "SSD 1 TB", "quantity": 1, "subtotal": Decimal("250.00")}],
         },

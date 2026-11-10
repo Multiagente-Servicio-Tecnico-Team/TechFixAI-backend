@@ -51,6 +51,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 
 ### Patrones multiagente coherentes (Spec Kit)
 - Estado de la feature 011: los tres patrones crean tickets para reparación/soporte, guardan la evaluación técnica en el ticket propio y exponen su código mientras la cotización espera confirmación. Al aceptar, guardan la cotización `REPAIR` en ese mismo ticket; el pago queda pendiente y el servicio no reserva stock. El Orquestador crea el ticket al completar la recepción, antes del diagnóstico, y conserva ese mismo ticket en la propuesta y aceptación. Ventas directas y PC_BUILD se cotizan sin ticket; aceptar revalida y reserva stock, dejando el pago pendiente. Los tres comparten políticas de rol, capacidades ADMIN, perfil efectivo de modelo y corpus RAG. Contratos, pruebas unitarias y de integración relacionadas anteriormente aprobadas: 167; contratos aislados: 124. En `multiagentedb`, las migraciones 015 y 016 figuran `RECORDED` en el ledger, verificado el 2026-11-09. Esta iteración no se probó manualmente con Groq/LangSmith ni desde el frontend; la matriz manual está en `docs/30-guia-pruebas-manuales-chat-multirole-frontend.md`.
+- Chat ADMIN (2026-11-10): la API devuelve `reply` breve y `presentation` con tipo `table`, `record`, `list` o `download`; las propuestas incluyen `summary`, `values` y `presentation`. El frontend presenta tablas, campos etiquetados, listas o enlaces y no serializa `result` como texto. Contrato: `specs/011-chat-multirole-patrones/contracts/admin-chat.openapi.yaml`; guía: `docs/32-chat-admin-respuestas-estructuradas.md`. No se ejecutaron pruebas.
 
 - Descentralizado persiste la evaluación de Hardware o Software en el ticket asociado al cliente autenticado. Si ambos especialistas actualizan el caso, se conserva el contenido de los dos campos; el `diagnosis_type` refleja el último especialista que guardó su evaluación y no se marca `HYBRID` solo por haber visitado ambos agentes. No requiere migración.
 
@@ -59,6 +60,12 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 ### Asientos contables internos (Spec Kit)
 
 La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. La migración aditiva está en `sql/migrations/003_accounting_entries.sql`; se aplicó y verificó en la BD de prueba `multiagentedb` indicada explícitamente para la ejecución.
+
+### Borradores incompletos del chat ADMIN
+
+Las escrituras ADMIN reconocibles pueden comenzar con datos parciales. El backend pregunta por los campos requeridos que faltan, conserva el borrador en memoria por conversación/actor/patrón hasta cinco minutos y revalida al recibir la respuesta. Solo presenta la propuesta cuando el esquema está completo; la confirmación explícita sigue siendo necesaria para escribir. Cancelar, cambiar de operación, vencer o reiniciar el proceso descarta el borrador sin cambios de negocio. Texto y voz comparten el flujo; no requiere migración.
+
+Las aclaraciones ADMIN también identifican errores de formato, valores enum no admitidos y referencias inexistentes antes de presentar una propuesta. El backend explica el formato/opciones aceptados, mantiene los campos válidos y vuelve a validar tras la corrección. También comprueba referencias a clientes, proveedores, repuestos, líneas, categorías y cuentas contables vigentes. Correos se validan por sintaxis; teléfonos de clientes/tickets requieren 9 dígitos peruanos y los de proveedores aceptan 7–15 dígitos internacionales. No se escribe nada mientras exista un error.
 
 ### Catálogo de cuentas contables (Spec 009)
 

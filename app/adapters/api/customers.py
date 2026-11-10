@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.accounts.session import SessionCustomer
 from app.adapters.persistence.customers import CustomerRepositoryAdapter
 from app.application.customer_profiles import CustomerConflict, CustomerNotFound, CustomerProfileService
+from app.domain.contact_validation import normalize_email, normalize_peru_mobile
 
 
 class CustomerWrite(BaseModel):
@@ -25,12 +26,15 @@ class CustomerWrite(BaseModel):
             raise ValueError("El campo no puede estar vacío.")
         return value
 
-    @field_validator("email")
+    @field_validator("email", mode="before")
     @classmethod
     def validate_email(cls, value: str | None) -> str | None:
-        if value is not None and ("@" not in value or "." not in value.rsplit("@", 1)[-1]):
-            raise ValueError("El correo no es válido.")
-        return value.strip().casefold() if value is not None else None
+        return normalize_email(value)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        return normalize_peru_mobile(value) if value is not None else value
 
 
 class CustomerPatch(BaseModel):
@@ -39,12 +43,15 @@ class CustomerPatch(BaseModel):
     phone: str | None = Field(default=None, min_length=7, max_length=30)
     email: str | None = Field(default=None, max_length=255)
 
-    @field_validator("email")
+    @field_validator("email", mode="before")
     @classmethod
     def validate_email(cls, value: str | None) -> str | None:
-        if value is not None and value and ("@" not in value or "." not in value.rsplit("@", 1)[-1]):
-            raise ValueError("El correo no es válido.")
-        return value.strip().casefold() if value else value
+        return normalize_email(value)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str | None:
+        return normalize_peru_mobile(value) if value is not None else value
 
 
 class LinkAccount(BaseModel):

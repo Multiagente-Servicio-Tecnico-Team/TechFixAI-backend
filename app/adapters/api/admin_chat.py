@@ -35,6 +35,8 @@ class AdminProposalOut(BaseModel):
     summary: str
     resource_type: str
     expires_at: str
+    values: dict[str, Any] | None = None
+    presentation: dict[str, Any] | None = None
 
 
 class AdminChatOut(BaseModel):
@@ -43,6 +45,7 @@ class AdminChatOut(BaseModel):
     reply: str
     proposal: AdminProposalOut | None = None
     result: dict[str, Any] | None = None
+    presentation: dict[str, Any] | None = None
 
 
 class AdminAudioChatOut(AdminChatOut):
@@ -61,7 +64,7 @@ def create_admin_chat_router(*, chat_service: AdminChatService,
         return AdminChatOut(
             conversation_id=UUID(turn.conversation_id), pattern=turn.pattern, reply=turn.reply,
             proposal=AdminProposalOut(**turn.proposal) if turn.proposal else None,
-            result=turn.result,
+            result=turn.result, presentation=turn.presentation,
         )
 
     def map_error(exc: Exception):
@@ -136,7 +139,7 @@ def create_admin_chat_router(*, chat_service: AdminChatService,
             return AdminAudioChatOut(
                 conversation_id=UUID(turn.conversation_id), pattern=turn.pattern, reply=turn.reply,
                 proposal=AdminProposalOut(**turn.proposal) if turn.proposal else None,
-                result=turn.result, transcript=result.transcript,
+                result=turn.result, presentation=turn.presentation, transcript=result.transcript,
             )
         except Exception as exc:
             return map_error(exc)

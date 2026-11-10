@@ -129,6 +129,15 @@ class ReportExport(BaseModel):
     account_code: str | None = Field(default=None, min_length=1, max_length=40)
 
 
+class AdminFieldValidationError(ValueError):
+    """A correctable field/reference error that can be returned through a chat draft."""
+
+    def __init__(self, field: str, detail: str):
+        super().__init__(detail)
+        self.field = field
+        self.detail = detail
+
+
 REPORT_PATHS = {
     "journal": "/api/admin/accounting/reports/journal",
     "ledger": "/api/admin/accounting/reports/ledger",
@@ -218,7 +227,7 @@ class AdminCapabilityService:
     def __init__(self, *, customer_repository_factory=None, ticket_repository_factory=None,
                  inventory_repository_factory=None, purchase_repository_factory=None,
                  purchase_order_repository_factory=None, sales_repository_factory=None,
-                 accounting_repository_factory=None):
+                 accounting_repository_factory=None, accounting_catalog_repository_factory=None):
         self.customer_repository_factory = customer_repository_factory
         self.ticket_repository_factory = ticket_repository_factory
         self.inventory_repository_factory = inventory_repository_factory
@@ -226,6 +235,7 @@ class AdminCapabilityService:
         self.purchase_order_repository_factory = purchase_order_repository_factory
         self.sales_repository_factory = sales_repository_factory
         self.accounting_repository_factory = accounting_repository_factory
+        self.accounting_catalog_repository_factory = accounting_catalog_repository_factory
 
     def _service(self, domain: str):
         if domain == "customers":
@@ -255,6 +265,12 @@ class AdminCapabilityService:
             from app.adapters.persistence.accounting import AccountingRepositoryAdapter
             from app.application.accounting import AccountingService
             return AccountingService((self.accounting_repository_factory or AccountingRepositoryAdapter)())
+        if domain == "accounting_catalog":
+            from app.adapters.persistence.accounting_catalog import AccountingCatalogRepository
+            from app.application.accounting_catalog import AccountingCatalogService
+            return AccountingCatalogService(
+                (self.accounting_catalog_repository_factory or AccountingCatalogRepository)()
+            )
         if domain == "accounting.categories":
             from app.adapters.persistence.accounting import AccountingRepositoryAdapter
             repo_factory = self.accounting_repository_factory or AccountingRepositoryAdapter
@@ -437,6 +453,155 @@ class AdminCapabilityService:
         }
         return schemas[action]
 
+    def _validate_references(self, action: str, values: dict[str, Any]) -> None:
+        """Reject stale/nonexistent references before a proposal is shown."""
+        def repo(domain: str):
+            service = self._service(domain)
+            return getattr(service, "repository", service)
+
+        def existing(domain: str, method: str, identifier: int, field: str, label: str,
+                     *, require_active: bool = True):
+            record = getattr(repo(domain), method)(identifier)
+            if record is None:
+                raise AdminFieldValidationError(field, f"no se encontró {label}; revisa el identificador")
+            if require_active and isinstance(record, dict) and record.get("active") is False:
+                raise AdminFieldValidationError(field, f"{label.capitalize()} está inactivo")
+            return record
+
+        customer_id = values.get("customer_id")
+        if customer_id is not None and action in {"tickets.create", "sales_quotes.create"}:
+            existing("customers", "get_customer", customer_id, "customer_id", "el cliente")
+
+        supplier_id = values.get("supplier_id")
+        if action == "purchase_orders.update":
+            supplier_id = values.get("values", {}).get("supplier_id", supplier_id)
+        if supplier_id is not None and action in {
+            "purchases.create", "purchase_orders.create", "purchase_orders.update",
+        }:
+            existing("suppliers", "get_supplier", supplier_id, "supplier_id", "el proveedor")
+
+        part_lines = []
+        if action == "sales_quotes.create":
+            part_lines = values.get("lines", [])
+        elif action in {"purchases.create", "purchase_orders.create"}:
+            part_lines = values.get("items", [])
+        elif action == "purchase_orders.update":
+            part_lines = values.get("values", {}).get("items") or []
+        requested_parts = {
+            line.get("spare_part_id") for line in part_lines
+            if isinstance(line, dict) and line.get("spare_part_id") is not None
+        }
+        if requested_parts:
+            active_parts = {part.id for part in self._service("inventory").list_parts()}
+            for part_id in sorted(requested_parts):
+                if part_id not in active_parts:
+                    raise AdminFieldValidationError(
+                        "spare_part_id", f"el repuesto {part_id} no existe o está inactivo; consulta el inventario y elige uno activo"
+                    )
+
+        if action == "inventory.update":
+            code = values.get("code")
+            active_parts = self._service("inventory").list_parts()
+            if not any(part.code == code for part in active_parts):
+                raise AdminFieldValidationError(
+                    "code", "no existe un repuesto activo con ese código; consulta el inventario y corrígelo"
+                )
+        elif action == "inventory.adjust_stock":
+            part_id = values.get("part_id")
+            active_parts = self._service("inventory").list_parts()
+            if not any(part.id == part_id for part in active_parts):
+                raise AdminFieldValidationError(
+                    "part_id", "el repuesto no existe o está inactivo; consulta el inventario y corrige el ID"
+                )
+
+        if action == "purchases.create" and values.get("purchase_order_id") is not None:
+            order = existing("purchase_orders", "get_order", values["purchase_order_id"],
+                             "purchase_order_id", "la orden de compra")
+            if order.get("supplier_id") != values.get("supplier_id"):
+                raise AdminFieldValidationError(
+                    "purchase_order_id", "la orden pertenece a otro proveedor; elige una orden del proveedor indicado"
+                )
+
+        item_list: list[dict[str, Any]] = []
+        if action == "purchases.receive" and values.get("purchase_id") is not None:
+            purchase = existing("purchases", "get_purchase", values["purchase_id"],
+                                "purchase_id", "la compra")
+            item_list = purchase.get("items", [])
+            valid_ids = {int(item["id"]) for item in item_list if isinstance(item, dict) and item.get("id") is not None}
+            for line in values.get("items", []):
+                if line.get("purchase_item_id") not in valid_ids:
+                    raise AdminFieldValidationError(
+                        "purchase_item_id", "esa línea no pertenece a la compra indicada; revisa el ID de la línea"
+                    )
+
+        order_id = values.get("order_id")
+        if action == "purchase_orders.receive" and order_id is not None:
+            order = existing("purchase_orders", "get_order", order_id, "order_id", "la orden de compra")
+            valid_ids = {int(item["id"]) for item in order.get("items", []) if item.get("id") is not None}
+            for line in values.get("items", []):
+                if line.get("purchase_order_item_id") not in valid_ids:
+                    raise AdminFieldValidationError(
+                        "purchase_order_item_id", "esa línea no pertenece a la orden indicada; revisa el ID de la línea"
+                    )
+
+        id_references = {
+            "customers.update": ("customers", "get_customer", "customer_id", "el cliente"),
+            "tickets.update": ("tickets", "get_ticket", "ticket_id", "el ticket"),
+            "suppliers.update": ("suppliers", "get_supplier", "supplier_id", "el proveedor"),
+            "purchases.update": ("purchases", "get_purchase", "purchase_id", "la compra"),
+            "purchases.cancel": ("purchases", "get_purchase", "id", "la compra"),
+            "purchase_orders.update": ("purchase_orders", "get_order", "order_id", "la orden de compra"),
+            "purchase_orders.issue": ("purchase_orders", "get_order", "id", "la orden de compra"),
+            "purchase_orders.cancel": ("purchase_orders", "get_order", "order_id", "la orden de compra"),
+            "sales_quotes.accept": ("sales_quotes", "get_sales_quote", "quote_id", "la cotización"),
+            "sales_quotes.cancel": ("sales_quotes", "get_sales_quote", "quote_id", "la cotización"),
+            "sales_quotes.confirm_payment": ("sales_quotes", "get_sales_quote", "quote_id", "la cotización"),
+            "accounting.entries.reverse": ("accounting", "get_entry", "entry_id", "el asiento contable"),
+        }
+        reference = id_references.get(action)
+        if reference:
+            domain, method, key, label = reference
+            existing(domain, method, values[key], key, label,
+                     require_active=action not in {"customers.update", "suppliers.update"})
+
+        if action == "accounting.entries.create":
+            categories = repo("accounting").list_categories()
+            if values.get("category_id") not in {int(item["id"]) for item in categories}:
+                raise AdminFieldValidationError(
+                    "category_id", "la categoría contable no existe o está inactiva; consulta las categorías disponibles"
+                )
+            catalog = self._service("accounting_catalog")
+            plans = catalog.list_plans()
+            plan_id = values.get("plan_id")
+            if plan_id is None:
+                default_plan = next((plan for plan in plans
+                                     if plan.get("is_default") and plan.get("status") == "ACTIVE"), None)
+                if default_plan is None:
+                    raise AdminFieldValidationError(
+                        "plan_id", "no hay un plan contable predeterminado activo; configura uno antes de crear el asiento"
+                    )
+                plan_id = int(default_plan["id"])
+            else:
+                selected_plan = next((plan for plan in plans if int(plan["id"]) == int(plan_id)), None)
+                if selected_plan is None or selected_plan.get("status") != "ACTIVE":
+                    raise AdminFieldValidationError(
+                        "plan_id", "el plan contable no existe o está inactivo; selecciona un plan activo"
+                    )
+            operation_date = values["operation_date"]
+            for index, line in enumerate(values.get("lines", []), start=1):
+                account = catalog.get_postable_account(
+                    plan_id=plan_id,
+                    operation_date=operation_date,
+                    account_id=line.get("account_id"),
+                    account_code=line.get("account_code"),
+                )
+                if account is None:
+                    account_ref = "account_code" if line.get("account_code") else "account_id"
+                    raise AdminFieldValidationError(
+                        account_ref,
+                        f"la línea {index} debe usar una cuenta activa, imputable y vigente del plan contable seleccionado",
+                    )
+
     def prepare(self, action: str, arguments: dict[str, Any], *, actor_id: int) -> tuple[dict[str, Any], dict[str, Any]]:
         if action not in WRITE_ACTIONS:
             raise ValueError("Esa escritura no está disponible.")
@@ -484,6 +649,7 @@ class AdminCapabilityService:
             body = PurchaseOrderReceiptWrite.model_validate({"notes": values.get("notes"), "items": values["items"]})
             values["notes"] = body.notes
             values["items"] = [line.model_dump() for line in body.items]
+        self._validate_references(action, values)
         precondition: dict[str, Any] = {}
         if action == "inventory.adjust_stock":
             parts = self._service("inventory").list_parts()

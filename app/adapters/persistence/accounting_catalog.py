@@ -137,6 +137,27 @@ class AccountingCatalogRepository:
         except SQLAlchemyError as exc:
             raise self._storage_error(exc) from exc
 
+    def get_postable_account(self, *, plan_id, operation_date, account_id=None, account_code=None):
+        """Resolve an account usable on an entry date before presenting its proposal."""
+        if (account_id is None) == (account_code is None):
+            return None
+        reference = "a.id=:account_id" if account_id is not None else "a.code=:account_code"
+        params = {"plan_id": plan_id, "operation_date": operation_date,
+                  "account_id": account_id, "account_code": account_code}
+        try:
+            with self._session_factory() as session:
+                row = session.execute(text(f"""SELECT a.id,a.plan_id,a.code,a.name,a.status,a.is_postable,
+                        a.effective_from,a.effective_to
+                    FROM accounting_accounts a JOIN accounting_plans p ON p.id=a.plan_id
+                    WHERE {reference} AND a.plan_id=:plan_id AND p.status='ACTIVE'
+                      AND a.status='ACTIVE' AND a.is_postable IS TRUE
+                      AND (a.effective_from IS NULL OR a.effective_from<=:operation_date)
+                      AND (a.effective_to IS NULL OR a.effective_to>=:operation_date)
+                    LIMIT 1"""), params).mappings().first()
+            return dict(row) if row else None
+        except SQLAlchemyError as exc:
+            raise self._storage_error(exc) from exc
+
     def create_account(self, values, actor_id):
         try:
             with self._session_factory() as session, session.begin():

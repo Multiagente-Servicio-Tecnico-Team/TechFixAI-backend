@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: TechFix.AI Admin Chat
   version: 1.0.0
-  description: Chat autenticado de ADMIN. La sesión determina identidad y rol. Las propuestas viven en memoria del proceso.
+  description: Chat autenticado de ADMIN. La sesión determina identidad y rol. Los borradores de aclaración y las propuestas viven en memoria del proceso.
 paths:
   /api/admin/chat/patterns:
     get:
@@ -32,7 +32,7 @@ paths:
                 proposal_id: { type: [string, 'null'], format: uuid }
       responses:
         '200':
-          description: Respuesta, resultado de lectura o propuesta pendiente
+          description: Respuesta, resultado de lectura, aclaración de datos faltantes o inválidos, o propuesta pendiente. Las aclaraciones indican formatos/opciones aceptados o referencias que deben corregirse, conservan un borrador efímero y no ejecutan escrituras.
           content:
             application/json:
               schema:
@@ -65,7 +65,7 @@ paths:
                 action: { type: string, enum: [confirm, cancel] }
                 proposal_id: { type: string, format: uuid }
       responses:
-        '200': { description: Transcripción y turno ADMIN; una frase hablada inequívoca puede confirmar la propuesta pendiente de la misma conversación }
+        '200': { description: Transcripción y turno ADMIN; incluye aclaraciones de datos faltantes o inválidos con sus opciones/formato, o una propuesta. El audio sigue el mismo borrador de conversación que el texto; una frase inequívoca puede confirmar una propuesta completa }
         '401': { description: Sesión requerida }
         '403': { description: Rol ADMIN requerido }
         '409': { description: Colisión de idempotencia/conversación }
@@ -98,9 +98,59 @@ components:
               properties:
                 proposal_id: { type: string, format: uuid }
                 status: { type: string, enum: [PENDING_CONFIRMATION, EXECUTING, EXECUTED, CANCELLED, EXPIRED, CONFLICT] }
-                summary: { type: string }
+                summary: { type: string, description: Texto breve; no contiene datos serializados como JSON. }
+                values:
+                  type: [object, 'null']
+                  description: Datos de la propuesta en forma estructurada para su presentación.
+                  additionalProperties: true
+                presentation:
+                  oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/AdminChatPresentation'
                 resource_type: { type: string }
                 expires_at: { type: string, format: date-time }
         result:
           type: [object, 'null']
-          description: Referencia y resumen del resultado confirmado; no incluir secretos ni datos no autorizados.
+          description: Resultado estructurado de la operación; no incluir secretos ni datos no autorizados.
+        presentation:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AdminChatPresentation'
+    AdminChatPresentation:
+      type: object
+      required: [kind, title]
+      properties:
+        kind: { type: string, enum: [table, record, list, download] }
+        title: { type: string }
+        summary: { type: [string, 'null'] }
+        empty_message: { type: [string, 'null'] }
+        columns:
+          type: array
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminChatPresentation'
+        items:
+          type: array
+          items: { type: string }
+        download_url: { type: [string, 'null'] }
+        download_label: { type: [string, 'null'] }

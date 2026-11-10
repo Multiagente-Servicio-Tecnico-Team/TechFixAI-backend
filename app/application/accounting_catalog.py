@@ -34,6 +34,14 @@ class AccountingCatalogService:
             raise AccountingValidationError("El plan contable no es válido.")
         return self.repository.list_accounts(plan_id=plan_id, **filters)
 
+    def get_postable_account(self, *, plan_id, operation_date, account_id=None, account_code=None):
+        if plan_id < 1 or (account_id is None) == (account_code is None):
+            raise AccountingValidationError("Indica un plan y exactamente una referencia de cuenta.")
+        return self.repository.get_postable_account(
+            plan_id=plan_id, operation_date=operation_date,
+            account_id=account_id, account_code=account_code,
+        )
+
     def create_account(self, actor_id, plan_id, values):
         account = AccountingAccount(None, plan_id, values["code"], values["name"],
                                     values.get("parent_account_id"), values.get("normal_balance"),

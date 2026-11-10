@@ -12,11 +12,13 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.accounts.session import SessionCustomer
 from app.adapters.persistence.admin_tickets import AdminTicketRepositoryAdapter
 from app.application.admin_tickets import AdminTicketService
+from app.domain.contact_validation import normalize_email, normalize_peru_mobile
 from app.domain.ticket_management import ADVANCE_METHODS, money
 
 RequestType = Literal["REPAIR", "SALE", "PC_BUILD", "SUPPORT", "WARRANTY_CLAIM"]
 ServiceRequestType = Literal["REPAIR", "PC_BUILD", "SUPPORT", "WARRANTY_CLAIM"]
 DiagnosisType = Literal["HARDWARE", "SOFTWARE", "HYBRID", "NONE"]
+AdvancePaymentMethod = Literal["YAPE_PLIN", "CASH", "CARD"]
 TicketStatus = Literal[
     "NEW", "IN_DIAGNOSIS", "QUOTED", "PAYMENT_PENDING", "PAID", "IN_REPAIR",
     "READY_FOR_DELIVERY", "DELIVERED", "CANCELLED", "WARRANTY_IN_REVIEW",
@@ -34,7 +36,7 @@ class TicketCreate(BaseModel):
     failure_description: str = Field(min_length=5, max_length=10000)
     request_type: ServiceRequestType = "REPAIR"
     advance_amount: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
-    advance_payment_method: str | None = None
+    advance_payment_method: AdvancePaymentMethod | None = None
     technician_id: int | None = Field(default=None, gt=0)
     diagnosis_type: DiagnosisType = "NONE"
     hardware_diagnosis: str | None = Field(default=None, max_length=10000)
@@ -42,12 +44,15 @@ class TicketCreate(BaseModel):
     estimated_labor_hours: Decimal = Field(default=Decimal("0.0"), ge=0, le=999.9)
     is_remote_service: bool = False
 
-    @field_validator("contact_email")
+    @field_validator("contact_phone", mode="before")
+    @classmethod
+    def validate_contact_phone(cls, value):
+        return normalize_peru_mobile(value) if value is not None else value
+
+    @field_validator("contact_email", mode="before")
     @classmethod
     def validate_contact_email(cls, value):
-        if value is not None and ("@" not in value or "." not in value.rsplit("@", 1)[-1]):
-            raise ValueError("El correo de contacto no es válido.")
-        return value
+        return normalize_email(value)
 
 
 class TicketPatch(BaseModel):
@@ -56,7 +61,7 @@ class TicketPatch(BaseModel):
     technician_id: int | None = Field(default=None, gt=0)
     title: str | None = Field(default=None, min_length=2, max_length=200)
     failure_description: str | None = Field(default=None, min_length=1, max_length=10000)
-    request_type: RequestType | None = None
+    request_type: ServiceRequestType | None = None
     diagnosis_type: DiagnosisType | None = None
     status: TicketStatus | None = None
     hardware_diagnosis: str | None = Field(default=None, max_length=10000)
@@ -67,7 +72,17 @@ class TicketPatch(BaseModel):
     contact_phone: str | None = Field(default=None, min_length=9, max_length=20)
     contact_email: str | None = Field(default=None, max_length=255)
     advance_amount: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
-    advance_payment_method: str | None = None
+    advance_payment_method: AdvancePaymentMethod | None = None
+
+    @field_validator("contact_phone", mode="before")
+    @classmethod
+    def validate_contact_phone(cls, value):
+        return normalize_peru_mobile(value) if value is not None else value
+
+    @field_validator("contact_email", mode="before")
+    @classmethod
+    def validate_contact_email(cls, value):
+        return normalize_email(value)
 
 
 class QuotePart(BaseModel):

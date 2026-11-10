@@ -9,13 +9,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.accounts.session import SessionCustomer
 from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
 from app.application.errors import PurchaseError
 from app.application.purchases import SupplierPurchaseService
+from app.domain.contact_validation import normalize_email, normalize_supplier_phone
 from app.domain.purchases import PurchaseValidationFailure
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,16 @@ class SupplierWrite(BaseModel):
     address: str | None = None
     delivery_lead_days: int | None = Field(default=None, ge=0)
 
+    @field_validator("contact_email", mode="before")
+    @classmethod
+    def validate_contact_email(cls, value):
+        return normalize_email(value)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value):
+        return normalize_supplier_phone(value)
+
 
 class SupplierPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -43,6 +54,16 @@ class SupplierPatch(BaseModel):
     address: str | None = None
     delivery_lead_days: int | None = Field(default=None, ge=0)
     active: bool | None = None
+
+    @field_validator("contact_email", mode="before")
+    @classmethod
+    def validate_contact_email(cls, value):
+        return normalize_email(value)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value):
+        return normalize_supplier_phone(value)
 
 
 class PurchaseLineWrite(BaseModel):

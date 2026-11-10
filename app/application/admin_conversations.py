@@ -1,4 +1,4 @@
-"""Conversaciones y propuestas ADMIN efímeras, aisladas por actor y patrón."""
+"""Conversaciones, borradores y propuestas ADMIN efímeros, aislados por actor y patrón."""
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from threading import Lock, RLock
@@ -20,6 +20,15 @@ class PendingProposal:
 
 
 @dataclass
+class PendingAdminDraft:
+    capability: str
+    arguments: dict
+    fields_to_complete: list[str]
+    expires_at: datetime
+    needs_correction: bool = False
+
+
+@dataclass
 class AdminConversation:
     id: str
     actor_id: int
@@ -27,6 +36,7 @@ class AdminConversation:
     pattern: str
     history: list[tuple[str, str]] = field(default_factory=list)
     pending: PendingProposal | None = None
+    draft: PendingAdminDraft | None = None
     lock: RLock = field(default_factory=RLock, repr=False, compare=False)
 
 
@@ -35,6 +45,7 @@ class AdminConversationRegistry:
 
     def __init__(self, *, proposal_ttl_seconds: int = 300, max_history_turns: int = 8):
         self._ttl = proposal_ttl_seconds
+        self.draft_ttl_seconds = proposal_ttl_seconds
         self._max_history = max_history_turns
         self._items: dict[str, AdminConversation] = {}
         self._lock = RLock()

@@ -42,7 +42,7 @@ END $$;
 -- TABLA: spare_parts (Componentes, Repuestos, Periféricos e Insumos)
 -- =============================================================================
 
-INSERT INTO public.spare_parts (code, name, category, description, unit_price, current_stock, minimum_threshold, active) 
+INSERT INTO public.spare_parts (code, name, category, description, unit_price, current_stock, minimum_threshold, active)
 VALUES
 
 -- -----------------------------------------------------------------------------

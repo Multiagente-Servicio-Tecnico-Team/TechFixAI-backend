@@ -35,8 +35,8 @@ from app.adapters.persistence.accounting import AccountingRepositoryAdapter
 from app.adapters.persistence.purchases import SupplierPurchaseRepositoryAdapter
 from app.adapters.persistence.purchase_orders import PurchaseOrderRepositoryAdapter
 from app.application.chat import SendChatMessage
-from app.application.admin_capabilities import AdminCapabilityService
-from app.application.admin_chat import AdminChatService
+from app.infrastructure.admin_capabilities import AdminCapabilityService
+from app.infrastructure.admin_chat import AdminChatService
 from app.application.admin_conversations import AdminConversationRegistry
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.audio_requests import AudioRequestRegistry
@@ -63,8 +63,11 @@ def build_chat_app(
     purchase_repository_factory: Callable[[], Any] | None = None,
     purchase_order_repository_factory: Callable[[], Any] | None = None,
     sales_repository_factory: Callable[[], Any] | None = None,
+    customer_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TechFix.AI · Patrones LangGraph", version="1.1.0")
+    # Perfil comercial del cliente de la sesión; inyectable para que las pruebas no usen la BD de .env.
+    make_customer_repository = customer_repository_factory or CustomerRepositoryAdapter
     runtime_settings = settings_factory()
     account_settings = session_guard.settings if session_guard is not None else AccountSettings.from_env()
     app.add_middleware(
@@ -123,7 +126,7 @@ def build_chat_app(
         if guard_holder["guard"] is None:
             guard_holder["guard"] = SessionGuard.from_env()
         user = guard_holder["guard"].require_customer(request)
-        profile = CustomerProfileService(CustomerRepositoryAdapter()).resolve_session_customer(user)
+        profile = CustomerProfileService(make_customer_repository()).resolve_session_customer(user)
         return replace(user, commercial_customer_id=int(profile["id"]))
 
     def require_admin(request: Request) -> SessionCustomer:

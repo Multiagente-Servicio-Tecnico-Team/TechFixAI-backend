@@ -69,6 +69,13 @@ def interpret_quote_decision(message: str) -> str | None:
         "quiza", "si o no", "lo voy a pensar", "lo pensare", "tengo una duda", "espera",
     )):
         return None
+    # Aplazar o pedir revisar antes de decidir no es aceptar («puedo revisar antes de aceptar»).
+    deferral_patterns = (
+        r"\bantes de (?:aceptar|aceptarla|confirmar|confirmarla|autorizar|aprobar|pagar)\b",
+        r"\b(?:puedo|podria|quiero|quisiera|dejame|deja me|voy a|necesito|primero) (?:revisar|revisarla|ver|verla|pensar|pensarlo|consultar|consultarlo|comparar)\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in deferral_patterns):
+        return None
 
     positive_no_phrases = (
         "no hay problema",

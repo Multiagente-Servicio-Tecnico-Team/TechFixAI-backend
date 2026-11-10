@@ -9,18 +9,23 @@ from app.application.quotes import accept_quoted_draft
 from app.database.repository import ServiceRepository
 
 
-def make_billing_agent(repository: ServiceRepository):
+def make_billing_agent(repository: ServiceRepository, direct_sales_quotes: Any | None = None):
+    def sales_quotes():
+        # Se crea al usarse para no abrir la BD al construir el grafo; inyectable en pruebas.
+        if direct_sales_quotes is not None:
+            return direct_sales_quotes
+        from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+        return SalesQuoteRepositoryAdapter()
+
     def billing_agent(state: ServiceState) -> dict[str, Any]:
         quote = state["quote"]
         if state.get("request_type") in {"SALE", "PC_BUILD"}:
-            from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
-
             quote_id = int(state["quote_id"])
             try:
                 accepted = traced_tool(
                     state,
                     "direct_sale_quote_acceptance",
-                    lambda: SalesQuoteRepositoryAdapter().accept_direct_sales_quote(
+                    lambda: sales_quotes().accept_direct_sales_quote(
                         quote_id=quote_id,
                         customer_id=int(state["customer_id"]),
                         actor_user_id=state.get("actor_user_id"),

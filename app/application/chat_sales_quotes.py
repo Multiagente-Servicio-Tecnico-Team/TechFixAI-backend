@@ -12,7 +12,7 @@ def save_chat_sales_quote(
     parts: list[dict[str, Any]],
     labor_cost: Decimal | str,
     observations: str,
-    repository=None,
+    repository,
 ) -> dict[str, Any]:
     """Persist a pending direct-sale/PC_BUILD quote from verified catalog rows."""
     if type(customer_id) is not int or customer_id < 1:
@@ -32,10 +32,7 @@ def save_chat_sales_quote(
         sources[part_id] = part
         lines.append({"spare_part_id": part_id, "quantity": quantity})
 
-    if repository is None:
-        from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
-
-        repository = SalesQuoteRepositoryAdapter()
+    # El repositorio llega desde el adaptador que llama: la capa de aplicación no conoce la persistencia.
     saved = repository.create_direct_sales_quote(
         customer_id=customer_id,
         actor_user_id=None,

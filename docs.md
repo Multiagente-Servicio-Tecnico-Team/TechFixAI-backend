@@ -78,3 +78,9 @@ libre en ambas carpetas y regístrala en esta tabla.
 
 - Frontend (pantallas, estilos, pruebas Vitest): [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend), con sus propios `AGENTS.md`, `features.md`, `docs.md` y `memory.md`.
 - Producción: frontend en https://techfixai.vercel.app y API en Render (`/backend/*` se reenvía a la API).
+
+- Evaluación de componentes RAG con Ragas: especificación en spec/34-evaluacion-rag-ragas.md y ejecución/evidencia en docs/34-evaluacion-rag-ragas.md.
+
+- Propuesta local de recuperación, no aplicada a app/rag: spec/35-propuesta-local-recuperacion-rag.md y docs/35-propuesta-local-recuperacion-rag.md.
+
+- Línea base del RAG existente, sin aplicar propuestas: spec/36-linea-base-rag-existente.md y docs/36-linea-base-rag-existente.md.

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "techfix-rag-evaluation"
+version = "0.1.0"
+description = "Evaluación de componentes RAG de TechFixAI"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "ragas==0.4.3",
+    "pyarrow==19.0.1",
+    "datasets==4.0.0",
+    "langchain-community==0.3.31",
+    "openai>=2,<3",
+    "langchain-groq==1.1.3",
+    "groq==0.37.1",
+    "python-dotenv>=1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2"]
+
+[tool.setuptools]
+py-modules = []

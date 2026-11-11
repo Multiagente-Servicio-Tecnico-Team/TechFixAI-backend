@@ -112,3 +112,12 @@ se repite es la misma responsabilidad implementada varias veces; antes de crear 
 
 Módulos fuera del flujo de la aplicación: `app/web.py` (interfaz Streamlit de prueba) y `app/rag/ingest.py` (script de
 ingesta, se ejecuta con `python -m`); `app/agents/sales.py` y `app/tracing.py` se usan en pruebas y en el patrón de referencia.
+
+## Evaluación de componentes RAG con Ragas
+
+`rag_eval/evaluate_project.py` reutiliza el diagnóstico técnico jerárquico y la FAQ compartida, con 30 consultas sintéticas, referencias verificadas contra fuentes locales y métricas Faithfulness, ContextPrecision y ContextRecall. Juez JSON Schema estricto, caché y reanudación, evidencia JSON/CSV/Markdown en `.local/ragas/`. No modifica la API, el ranking ni los patrones. No equivale a evaluar el chat completo ni comparar topologías; mismo modelo genera y juzga y falta revisión humana independiente. Guía y evidencia: `docs/34-evaluacion-rag-ragas.md`; piloto inicial preservado en `evaluate_techfix.py`.
+Validación del perfil Ragas 120B: 30 procesados, 25 puntuables, 3 sin contexto y 2 controles; cero errores operativos pendientes. Medias Faithfulness 0,864, Context Precision 0,960 y Context Recall 0,952 (25 casos por métrica). Backend conserva 20B; no atribuir estos resultados a ese modelo. Nueve pruebas nuevas aisladas aprobadas. Detalle y límites en docs/34-evaluacion-rag-ragas.md.
+
+Propuesta experimental no aplicada: rag_eval/retrieval_candidate.py y compare_retrieval.py comparan preparación de consultas y selección FAQ sin modificar app/rag. En el piloto local recupera contexto y fuente esperada en 28/28 contestables; conserva 2/2 controles sin contexto. No cambia el chat ni sus puntuaciones Ragas. Evidencia y límites en docs/35-propuesta-local-recuperacion-rag.md.
+
+Línea base actual priorizada: evaluar sin mejorar el RAG; transporte nativo del modelo 20B configurado, juez 120B, sin cambios en app/. Recuperación actual 25/28 con contexto, CP 0,960 y CR 0,952 (25 casos); fidelidad 0,990 sobre nueve respuestas técnicas, parcial por cuota diaria de 20B. No comparar como mejora con el perfil 120B. Detalle y reanudación: docs/36-linea-base-rag-existente.md.

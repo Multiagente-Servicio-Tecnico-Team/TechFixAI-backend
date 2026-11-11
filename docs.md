@@ -21,10 +21,14 @@ Dónde está explicado cada tema. Antes de documentar algo nuevo, revisa si ya e
 | `docs/multiagent-architecture.md` | Diseño del sistema multiagente y del patrón Jerárquico |
 | `spec/01-arquitectura-descentralizada.md` | Arquitectura de la Red descentralizada |
 | `postman/techfix-auth.postman_collection.json` | Colección de la API de cuentas (Postman o Newman) |
-| `sql/creacion_tablas_ingles_sin_inserciones.sql` | Esquema de la base de datos (incompleto: ver `features.md`) |
+| `contexto/tablas postgres v2.sql` | Script destructivo para reconstruir los objetos del esquema `public` en una BD reinicializable; no contiene datos |
+| `sql/creacion_tablas_ingles_sin_inserciones.sql` | Script de bootstrap legado; incompleto y no es fuente de verdad para la base actual |
 | `sql/migrate_spanish_schema_to_english.sql` | Migración del esquema en español al esquema en inglés |
 
 ## Especificaciones (`spec/`) y evidencias (`docs/`), numeradas por tarea
+
+El contrato backend de audio y su validacion local viven en
+[`specs/002-transcripcion-audio/`](specs/002-transcripcion-audio/); el OpenAPI es la referencia para el frontend.
 
 | N.º | Tema | Especificación | Evidencia |
 | --- | --- | --- | --- |
@@ -45,11 +49,38 @@ Dónde está explicado cada tema. Antes de documentar algo nuevo, revisa si ya e
 | 14 | Datos comerciales y FAQ de demostración | `spec/14-datos-comerciales-faq-demo.md` | `docs/17-datos-comerciales-faq-demo.md` |
 | 15 | «Mis Tickets» del cliente | `spec/15-mis-tickets-cliente.md` | `docs/18-mis-tickets-cliente.md` |
 | 16 | Precios y deduplicación del catálogo | `spec/16-precios-y-dedupe-catalogo-seed.md` | `docs/19-precios-y-dedupe-catalogo-seed.md` |
+| 21 | Registro interno de asientos contables | `specs/003-asientos-contables/` | `docs/21-asientos-contables.md` |
+| 24 | API CRUD del inventario para el taller | `specs/005-api-inventario/` | `docs/24-api-inventario.md` |
+| 25 | Limpieza verificada de auxiliares de migración y tabla sin consumidor | `sql/esquema-vacio-produccion.sql` (las migraciones se retiraron el 2026-11-10) | `docs/25-limpieza-tablas-obsoletas.md` |
+| 26 | Desactivación temporal de guardas contables en la base local de pruebas | `sql/operations/accounting-test-triggers-disable.sql`, `accounting-test-triggers-restore.sql` | `docs/26-borrado-temporal-asientos-prueba.md` |
+| 27 | Propuesta de mejoras del backend inspiradas en Dolibarr | — | `docs/27-propuesta-mejoras-backend-basadas-dolibarr.md` |
+| 28 | Trazabilidad de movimientos de inventario | `specs/008-trazabilidad-movimientos-inventario/` | `docs/24-api-inventario.md` |
+| 29 | Chat multirol, capacidades compartidas y paridad de patrones | `specs/011-chat-multirole-patrones/` | `specs/011-chat-multirole-patrones/contracts/` |
+| 30 | Guía manual de pruebas de chat multirol desde el frontend | `specs/011-chat-multirole-patrones/` | `docs/30-guia-pruebas-manuales-chat-multirole-frontend.md` |
+| 31 | Operar como ADMIN por voz: capacidades, confirmación y exportación | `specs/011-chat-multirole-patrones/` | `docs/31-guia-pruebas-admin-por-voz.md` |
+| 32 | Respuestas estructuradas del chat ADMIN | `specs/011-chat-multirole-patrones/contracts/admin-chat.openapi.yaml` | `docs/32-chat-admin-respuestas-estructuradas.md` |
+| 33 | Borradores conversacionales para completar operaciones ADMIN | `specs/011-chat-multirole-patrones/` | `docs/33-borradores-chat-admin.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.
 
 ## Fuera de este repositorio
 
+- `../dolibarr/TECHFIXAI-ERP-REFERENCE.md`: mapa de referencia del código local de Dolibarr 25, con módulos ERP, informes, planes contables y generación PDF/ODT; es una orientación, no una auditoría de una instancia configurada.
+
+### Trabajo de esta rama (`feature/spec-kit`)
+
+- `specs/001-patrones-multiagente-coherentes/`: especificación, plan, investigación, contratos, quickstart y tareas de paridad académica entre los tres patrones.
+- `specs/002-transcripcion-audio/`: especificación, contrato OpenAPI y tareas de transcripción de audio para el backend.
+- `specs/003-asientos-contables/`: especificación, plan, contrato, tareas e implementación backend del registro interno de asientos; migración aplicada y validada en la BD PostgreSQL de prueba.
+- `specs/009-catalogo-cuentas-consultas-contables/`: contrato OpenAPI, especificación y quickstart del catálogo, periodos y reportes contables; `GET /api/admin/accounting/plans/{plan_id}/accounts` busca por código/denominación y admite filtros y paginación.
+- `docs/20-esquema-ampliado-y-trazabilidad.md`: comparación estructural de solo lectura con `contexto/tablas postgres v2.sql` y registro de validación.
+
 - Frontend (pantallas, estilos, pruebas Vitest): [TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend), con sus propios `AGENTS.md`, `features.md`, `docs.md` y `memory.md`.
 - Producción: frontend en https://techfixai.vercel.app y API en Render (`/backend/*` se reenvía a la API).
+
+- Evaluación de componentes RAG con Ragas: especificación en spec/34-evaluacion-rag-ragas.md y ejecución/evidencia en docs/34-evaluacion-rag-ragas.md.
+
+- Propuesta local de recuperación, no aplicada a app/rag: spec/35-propuesta-local-recuperacion-rag.md y docs/35-propuesta-local-recuperacion-rag.md.
+
+- Línea base del RAG existente, sin aplicar propuestas: spec/36-linea-base-rag-existente.md y docs/36-linea-base-rag-existente.md.

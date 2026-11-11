@@ -47,6 +47,11 @@ def to_ticket(row: dict[str, Any]) -> CustomerTicket:
         status=row["status"],
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
+        customer_id=row.get("customer_id"),
+        id=row.get("id"),
+        diagnosis_type=row.get("diagnosis_type") or "NONE",
+        hardware_diagnosis=row.get("hardware_diagnosis"),
+        software_diagnosis=row.get("software_diagnosis"),
         quote=(
             TicketQuote(
                 status=quote["status"],
@@ -66,5 +71,18 @@ def to_ticket(row: dict[str, Any]) -> CustomerTicket:
             )
             if quote
             else None
+        ),
+        quotes=tuple(
+            TicketQuote(
+                status=item["status"], labor_cost=item["labor_cost"],
+                parts_cost=item["parts_cost"], total_amount=item["total_amount"],
+                created_at=item["created_at"],
+                lines=tuple(
+                    TicketQuoteLine(
+                        name=line["name"], quantity=line["quantity"],
+                        unit_price=line["unit_price"], subtotal=line["subtotal"],
+                    ) for line in item.get("lines", ())
+                ),
+            ) for item in row.get("quotes", ())
         ),
     )

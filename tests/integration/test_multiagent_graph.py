@@ -415,7 +415,7 @@ class MultiagentGraphTests(unittest.TestCase):
         self.assertEqual(quote["parts"], [])
 
     def test_quote_rejects_zero_price_parts(self):
-        with self.assertRaisesRegex(ValueError, "precio positivos"):
+        with self.assertRaisesRegex(ValueError, "precio positivo"):
             calculate_quote(
                 labor_cost=Decimal("40.00"),
                 labor_task_type="maintenance",
@@ -483,6 +483,22 @@ class MultiagentGraphTests(unittest.TestCase):
         self.assertIn("TCK-", result["messages"][-1].content)
         self.assertIn("S/ 60.50", result["messages"][-1].content)
 
+    def test_explicit_quote_decision_overrides_model_classification(self):
+        repository = FakeRepository()
+        graph = build_multiagent_graph(
+            settings=make_settings(),
+            repository=repository,
+            model=make_model(
+                confirmation=QuoteConfirmation(decision="unclear"),
+            ),
+        )
+
+        invoke(graph)
+        result = invoke(graph, "Sí", initial=False)
+
+        self.assertEqual(result["outcome"], "quoted")
+        self.assertEqual(repository.saved_quote["total_amount"], Decimal("60.50"))
+
     def test_software_support_persists_software_diagnosis_on_intake_ticket(self):
         repository = FakeRepository()
         graph = build_multiagent_graph(
@@ -517,9 +533,12 @@ class MultiagentGraphTests(unittest.TestCase):
             [document["id"] for document in result["rag_documents"]],
             ["manual_servicio:002"],
         )
+        # El diagnóstico se guarda con lo que recomienda el manual (aquí, un servicio).
         self.assertEqual(
             repository.saved_diagnosis["diagnosis"],
-            "Posible incompatibilidad de software.",
+            "Posible incompatibilidad de software.\n\n"
+            "Repuestos o servicios recomendados (pendientes de verificar en almacén):\n"
+            "- Servicio_Recuperacion_Sistema × 1",
         )
 
     def test_stock_change_requires_a_new_confirmation(self):

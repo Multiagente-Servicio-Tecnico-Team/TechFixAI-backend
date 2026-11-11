@@ -1,14 +1,6 @@
-"""Punto único de entrada de la API unificada (`app.main:app`).
-
-La lógica vive en las capas de Clean Architecture:
-- `app/domain`: entidades y reglas (presupuesto, ticket, conversación).
-- `app/application`: casos de uso y puertos.
-- `app/adapters`: FastAPI, patrones LangGraph, PostgreSQL y LangSmith.
-- `app/infrastructure`: raíz de composición.
-Monta autenticación bajo `/auth/*` y chat bajo `/api/*`, compartiendo la
-configuración y fábrica SQLAlchemy de cuentas con la validación de sesión.
-"""
+"""Unified ASGI entry point for account, customer and administrator APIs."""
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -18,32 +10,52 @@ from sqlalchemy.orm import sessionmaker
 from app.accounts.api import create_app as create_accounts_app
 from app.accounts.config import Settings as AccountSettings
 from app.accounts.session import SessionGuard
+from app.adapters.api.customers import create_customer_router
 from app.adapters.llm.tracing import get_trace_context, redact_trace_error
 from app.adapters.patterns.base import GraphFactory, TraceContextFactory
 from app.adapters.patterns.registry import PATTERN_NAMES
 from app.infrastructure.chat_app import build_chat_app
 from app.settings import Settings, load_settings
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 __all__ = ["PATTERN_NAMES", "app", "create_app", "get_trace_context", "redact_trace_error"]
 
 
 def create_app(
-    *,
     settings: AccountSettings | None = None,
     session_factory: sessionmaker | None = None,
-    mailer=None,
+    mailer: Any | None = None,
+    *,
     chat_app: FastAPI | None = None,
     session_guard: SessionGuard | None = None,
     graph_factories: Mapping[str, GraphFactory] | None = None,
     settings_factory: Callable[[], Settings] = load_settings,
     trace_context_factory: TraceContextFactory | None = None,
     ticket_repository_factory: Callable[[], Any] | None = None,
+    accounting_repository_factory: Callable[[], Any] | None = None,
+    inventory_repository_factory: Callable[[], Any] | None = None,
+    purchase_repository_factory: Callable[[], Any] | None = None,
+    purchase_order_repository_factory: Callable[[], Any] | None = None,
+    sales_repository_factory: Callable[[], Any] | None = None,
+    customer_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
-    load_dotenv()
-    account_settings = settings or (session_guard.settings if session_guard else AccountSettings.from_env())
+    """Compose the account app and chat/admin API exactly once.
+
+    Positional `settings` and `session_factory` remain supported by the existing
+    account API integration. Chat routes and all administrative routes are
+    composed by `build_chat_app`; this module only mounts authentication and
+    the customer directory route.
+    """
+    load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
+    account_settings = settings or (
+        session_guard.settings if session_guard is not None else AccountSettings.from_env()
+    )
     accounts_app = create_accounts_app(
         settings=account_settings,
-        session_factory=session_factory or (session_guard.session_factory if session_guard else None),
+        session_factory=(
+            session_factory
+            or (session_guard.session_factory if session_guard is not None else None)
+        ),
         mailer=mailer,
     )
     shared_guard = session_guard or SessionGuard(
@@ -56,8 +68,17 @@ def create_app(
         settings_factory=settings_factory,
         trace_context_factory=trace_context_factory,
         ticket_repository_factory=ticket_repository_factory,
+        accounting_repository_factory=accounting_repository_factory,
+        inventory_repository_factory=inventory_repository_factory,
+        purchase_repository_factory=purchase_repository_factory,
+        purchase_order_repository_factory=purchase_order_repository_factory,
+        sales_repository_factory=sales_repository_factory,
+        customer_repository_factory=customer_repository_factory,
     )
     application.mount("/auth", accounts_app)
+    application.include_router(
+        create_customer_router(require_admin=shared_guard.require_admin)
+    )
     return application
 
 

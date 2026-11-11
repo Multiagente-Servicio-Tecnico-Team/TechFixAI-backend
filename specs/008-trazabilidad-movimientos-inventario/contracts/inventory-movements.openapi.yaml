@@ -1,0 +1,194 @@
+﻿openapi: 3.1.0
+info:
+  title: TechFix.AI Inventory Movements API
+  version: 1.0.0
+  description: Extensión backend. El CRUD de catálogo está definido en specs/005-api-inventario/contracts/inventory.openapi.yaml.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/inventory/parts/{part_id}/opening-balance:
+    parameters: [{ $ref: '#/components/parameters/PartId' }]
+    post:
+      operationId: createInventoryOpeningBalance
+      summary: Registrar saldo inicial
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [counted_stock, reason]
+              properties:
+                counted_stock: { type: integer, minimum: 0, maximum: 999999 }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '201':
+          description: Saldo inicial y movimiento creados.
+          content: { application/json: { schema: { $ref: '#/components/schemas/MutationResult' } } }
+        '200':
+          description: Conteo inicial cero sin movimiento o repetición idempotente de la misma solicitud.
+          headers: { Idempotent-Replayed: { schema: { type: string, enum: ['true'] } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/MutationResult' } } }
+        '401': { $ref: '#/components/responses/SessionRequired' }
+        '403': { $ref: '#/components/responses/StaffOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/inventory/parts/{part_id}/adjustments:
+    parameters: [{ $ref: '#/components/parameters/PartId' }]
+    post:
+      operationId: createInventoryStockAdjustment
+      summary: Ajustar stock al conteo físico
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [counted_stock, reason]
+              properties:
+                counted_stock: { type: integer, minimum: 0, maximum: 999999 }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '201':
+          description: Ajuste con variación registrada.
+          content: { application/json: { schema: { $ref: '#/components/schemas/StockAdjustmentResult' } } }
+        '200':
+          description: Conteo sin variación o repetición idempotente.
+          headers: { Idempotent-Replayed: { schema: { type: string, enum: ['true'] } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/StockAdjustmentResult' } } }
+        '401': { $ref: '#/components/responses/SessionRequired' }
+        '403': { $ref: '#/components/responses/StaffOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/inventory/parts/{part_id}/movements:
+    parameters: [{ $ref: '#/components/parameters/PartId' }]
+    get:
+      operationId: listInventoryMovements
+      summary: Consultar historial de stock
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: movement_type
+          in: query
+          schema: { type: string, enum: [OPENING_BALANCE, ADJUSTMENT_IN, ADJUSTMENT_OUT, PURCHASE_RECEIPT, SALE] }
+        - name: from_date
+          in: query
+          schema: { type: string, format: date }
+        - name: to_date
+          in: query
+          schema: { type: string, format: date }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Orden fecha/ID descendente y estable.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/InventoryMovement' } }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '401': { $ref: '#/components/responses/SessionRequired' }
+        '403': { $ref: '#/components/responses/StaffOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: techfix_session }
+  parameters:
+    PartId:
+      name: part_id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1, format: int64 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    InventoryMovement:
+      type: object
+      required: [id, part_id, code_snapshot, name_snapshot, movement_type, quantity_delta, stock_before, stock_after, actor_kind, created_at, is_before_cutover]
+      properties:
+        id: { type: integer, format: int64 }
+        part_id: { type: [integer, 'null'], format: int64 }
+        code_snapshot: { type: string }
+        name_snapshot: { type: string }
+        movement_type: { type: string, enum: [OPENING_BALANCE, ADJUSTMENT_IN, ADJUSTMENT_OUT, PURCHASE_RECEIPT, SALE] }
+        quantity_delta: { type: integer }
+        stock_before: { type: integer, minimum: 0 }
+        stock_after: { type: integer, minimum: 0 }
+        reason: { type: [string, 'null'] }
+        actor_kind: { type: string, enum: [USER, SYSTEM] }
+        actor_user_id: { type: [integer, 'null'], format: int64 }
+        actor_name: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        source_type: { type: [string, 'null'], enum: [PURCHASE_RECEIPT, SALE, OPENING_BALANCE, ADJUSTMENT, 'null'] }
+        source_id: { type: [integer, 'null'], format: int64 }
+        is_before_cutover: { type: boolean }
+    MutationResult:
+      type: object
+      required: [part, changed, movement]
+      properties:
+        part:
+          type: object
+          required: [id, code, current_stock]
+          properties:
+            id: { type: integer, format: int64 }
+            code: { type: string }
+            current_stock: { type: integer, minimum: 0 }
+        changed: { type: boolean }
+        movement:
+          oneOf:
+            - $ref: '#/components/schemas/InventoryMovement'
+            - type: 'null'
+    StockAdjustmentResult:
+      type: object
+      required: [part, changed, movement]
+      properties:
+        part:
+          type: object
+          required: [id, code, current_stock]
+          properties:
+            id: { type: integer, format: int64 }
+            code: { type: string }
+            current_stock: { type: integer, minimum: 0 }
+        changed: { type: boolean }
+        movement:
+          oneOf:
+            - $ref: '#/components/schemas/InventoryMovement'
+            - type: 'null'
+    Error:
+      type: object
+      required: [detail, code]
+      properties:
+        detail: { type: string }
+        code: { type: string }
+        field: { type: string }
+  responses:
+    SessionRequired: { description: Sesión requerida, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    StaffOnly: { description: Solo ADMIN o TECHNICIAN, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Artículo inexistente, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Conflict: { description: Reserva insuficiente o clave idempotente incompatible, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Invalid: { description: Conteo, motivo, filtros o clave inválidos, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unavailable: { description: Persistencia no disponible, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+

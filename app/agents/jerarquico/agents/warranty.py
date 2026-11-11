@@ -1,18 +1,15 @@
-import json
 from typing import Any
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
 
 from app.agents.jerarquico.graph.state import ServiceState
-from app.agents.jerarquico.tools.database import make_warranty_lookup_tool
 from app.agents.jerarquico.trace import traced_tool
+from app.application.warranties import lookup_customer_warranty, register_customer_warranty_claim
 from app.database.repository import ServiceRepository
 
 
 def make_warranty_agent(repository: ServiceRepository):
-    lookup_tool = make_warranty_lookup_tool(repository)
-
     def warranty_agent(state: ServiceState) -> dict[str, Any]:
         code = state.get("warranty_code", "").strip()
         if not code:
@@ -22,12 +19,15 @@ def make_warranty_agent(repository: ServiceRepository):
                     AIMessage(content="Indícame el código exacto de la póliza de garantía.")
                 ],
             }
-        warranty_json = traced_tool(
+        warranty = traced_tool(
             state,
             "warranty_lookup",
-            lambda: lookup_tool.invoke({"warranty_code": code}),
+            lambda: lookup_customer_warranty(
+                repository,
+                customer_id=state["customer_id"],
+                warranty_code=code,
+            ),
         )
-        warranty = json.loads(warranty_json)
         if not warranty:
             return {
                 "warranty_status": "NOT_FOUND",
@@ -99,24 +99,25 @@ def make_warranty_agent(repository: ServiceRepository):
                 ],
             }
 
-        claim_code = f"CLM-{uuid4().hex[:12].upper()}"
-        traced_tool(
+        claim = traced_tool(
             state,
             "warranty_claim_write",
-            lambda: repository.create_warranty_claim(
-                warranty_id=int(warranty["id"]),
+            lambda: register_customer_warranty_claim(
+                repository,
                 ticket_id=state["ticket_id"],
                 customer_id=state["customer_id"],
-                claim_code=claim_code,
+                warranty_code=code,
                 reason=state["failure_description"],
             ),
         )
+        claim_code = claim["claim_code"]
         return {
             "warranty_id": int(warranty["id"]),
             "warranty_status": status,
             "warranty_claim_code": claim_code,
             "ticket_status": "WARRANTY_IN_REVIEW",
             "awaiting_logistics": True,
+            "logistics_ticket_id": state["ticket_id"],
             "outcome": "warranty_claim_registered",
             "messages": [
                 AIMessage(

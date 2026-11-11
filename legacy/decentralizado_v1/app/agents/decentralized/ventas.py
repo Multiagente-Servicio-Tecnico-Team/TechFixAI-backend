@@ -1,0 +1,5 @@
+"""Legacy import path for the active Descentralizado sales node."""
+import importlib as _importlib
+import sys as _sys
+
+_sys.modules[__name__] = _importlib.import_module(".sales", __package__)

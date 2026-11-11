@@ -1,0 +1,362 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Accounting API
+  version: 1.0.0
+  description: >-
+    Internal accounting ledger. All endpoints require the existing signed session
+    cookie and the ADMIN role. This contract does not generate or file SUNAT PLE books.
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+paths:
+  /api/admin/accounting/categories:
+    get:
+      operationId: listAccountingCategories
+      summary: List active internal accounting categories
+      responses:
+        '200':
+          description: Active categories for new entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountingCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+  /api/admin/accounting/entries:
+    get:
+      operationId: listAccountingEntries
+      summary: List and filter accounting entries
+      parameters:
+        - in: query
+          name: from_date
+          schema: { type: string, format: date }
+        - in: query
+          name: to_date
+          schema: { type: string, format: date }
+        - in: query
+          name: category_id
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/EntryStatus' }
+        - in: query
+          name: entry_number
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Paginated entry summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AccountingEntrySummary' }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 100 }
+                  offset: { type: integer, minimum: 0 }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+    post:
+      operationId: createAccountingEntry
+      summary: Create an immediately confirmed, balanced entry
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          description: UUID unique per authenticated ADMIN and create operation.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountingEntry' }
+      responses:
+        '201':
+          description: Entry created and confirmed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingEntry' }
+        '200':
+          description: Idempotent replay; returns the previously created entry
+          headers:
+            Idempotent-Replayed:
+              schema: { type: boolean }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingEntry' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Idempotency key reused with a different payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+  /api/admin/accounting/entries/{entry_id}:
+    get:
+      operationId: getAccountingEntry
+      summary: Get one entry and its audit/reversal history
+      parameters:
+        - in: path
+          name: entry_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Complete entry detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingEntry' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+  /api/admin/accounting/entries/{entry_id}/reverse:
+    post:
+      operationId: reverseAccountingEntry
+      summary: Create an inverse entry and mark the original reversed
+      parameters:
+        - in: path
+          name: entry_id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReverseAccountingEntry' }
+      responses:
+        '201':
+          description: Reversal created; original is now REVERSED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReversalResult' }
+        '200':
+          description: Idempotent replay of the same reversal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReversalResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Entry already reversed or idempotency conflict
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/StorageUnavailable'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: techfix_session
+      description: Existing signed session cookie; exact cookie name follows account settings.
+  schemas:
+    EntryStatus:
+      type: string
+      enum: [CONFIRMED, REVERSED]
+    AccountingCategory:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, minimum: 1 }
+        code: { type: string, maxLength: 40 }
+        name: { type: string, maxLength: 100 }
+        description: { type: [string, 'null'], maxLength: 1000 }
+    EntryLineInput:
+      type: object
+      required: [debit, credit]
+      oneOf:
+        - required: [account_id]
+        - required: [account_code]
+      properties:
+        account_id: { type: integer, minimum: 1, description: Preferred reference to a catalog account. }
+        account_code: { type: string, minLength: 1, maxLength: 40 }
+        account_name: { type: string, maxLength: 200, description: Legacy input only; ignored and resolved from the catalog. }
+        description: { type: [string, 'null'], maxLength: 1000 }
+        debit:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$'
+          examples: ['100.00', '0.00']
+        credit:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$'
+          examples: ['0.00', '100.00']
+      description: Exactly one of debit/credit must be greater than zero.
+    CreateAccountingEntry:
+      type: object
+      required: [operation_date, concept, detail, category_id, lines]
+      properties:
+        plan_id: { type: integer, minimum: 1, description: Optional during transition; omission selects the active default plan. }
+        operation_date: { type: string, format: date }
+        concept: { type: string, minLength: 1, maxLength: 200 }
+        detail: { type: string, minLength: 1, maxLength: 4000 }
+        category_id: { type: integer, minimum: 1 }
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 100
+          items: { $ref: '#/components/schemas/EntryLineInput' }
+      description: >-
+        Lines must balance exactly: sum(debit) equals sum(credit), and both totals
+        are greater than zero. The responsible ADMIN is always taken from the session.
+        Entry detail is limited to 4000 characters and the entry to 100 lines.
+    ReverseAccountingEntry:
+      type: object
+      required: [operation_date, reason]
+      properties:
+        operation_date: { type: string, format: date }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    Responsible:
+      type: object
+      required: [user_id, display_name]
+      properties:
+        user_id: { type: integer, minimum: 1 }
+        display_name: { type: string }
+    AccountingEntryLine:
+      allOf:
+        - $ref: '#/components/schemas/EntryLineInput'
+        - type: object
+          required: [line_number]
+          properties:
+            line_number: { type: integer, minimum: 1 }
+    AuditEvent:
+      type: object
+      required: [event_type, actor, created_at]
+      properties:
+        event_type:
+          type: string
+          enum: [ENTRY_CREATED, ENTRY_REVERSED, REVERSAL_CREATED]
+        actor: { $ref: '#/components/schemas/Responsible' }
+        related_entry_id: { type: [integer, 'null'] }
+        reason: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+    AccountingEntrySummary:
+      type: object
+      required: [id, entry_number, operation_date, concept, category, currency, debit_total, credit_total, amount, status, responsible, created_at, updated_at]
+      properties:
+        id: { type: integer, minimum: 1 }
+        entry_number: { type: string, pattern: '^[1-9][0-9]*$' }
+        operation_date: { type: string, format: date }
+        concept: { type: string }
+        category: { $ref: '#/components/schemas/AccountingCategory' }
+        currency: { type: string, const: PEN }
+        debit_total: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        credit_total: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        amount: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        status: { $ref: '#/components/schemas/EntryStatus' }
+        responsible: { $ref: '#/components/schemas/Responsible' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        reversal_of_entry_id: { type: [integer, 'null'] }
+        reversal_entry_id: { type: [integer, 'null'], description: Present on the original after it has been reversed. }
+    AccountingEntry:
+      allOf:
+        - $ref: '#/components/schemas/AccountingEntrySummary'
+        - type: object
+          required: [detail, lines, audit_events]
+          properties:
+            detail: { type: string, maxLength: 4000 }
+            lines:
+              type: array
+              minItems: 2
+              items: { $ref: '#/components/schemas/AccountingEntryLine' }
+            reversed_at: { type: [string, 'null'], format: date-time }
+            audit_events:
+              type: array
+              items: { $ref: '#/components/schemas/AuditEvent' }
+    ReversalResult:
+      type: object
+      required: [original, reversal]
+      properties:
+        original: { $ref: '#/components/schemas/AccountingEntrySummary' }
+        reversal: { $ref: '#/components/schemas/AccountingEntry' }
+    Error:
+      type: object
+      required: [detail, code]
+      properties:
+        detail: { type: string }
+        code: { type: string }
+    UnauthorizedError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            fields:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  reason: { type: string }
+  responses:
+    Unauthorized:
+      description: Missing or invalid signed session
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UnauthorizedError' }
+    Forbidden:
+      description: Authenticated role is not ADMIN
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Entry does not exist
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Invalid request or unbalanced entry
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    StorageUnavailable:
+      description: Persistence is temporarily unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

@@ -1,5 +1,10 @@
 # Especificación 07 — API unificada de cuentas y chat
 
+**Estado retrospectivo: Implementada según la estructura actual; evidencia estática, sin ejecución en esta revisión.**
+**Evidencia revisada:** app/main.py; app/accounts/; app/adapters/api/; tests/integration/test_combined_api.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Exponer la autenticación y el chat multiagente bajo el mismo origen HTTP para

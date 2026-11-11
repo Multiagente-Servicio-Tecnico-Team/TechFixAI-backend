@@ -25,6 +25,7 @@ def env():
     accounts.post("/registro", json={"nombre": "Ana Torres", "email": "ana@demo.pe", "telefono": "+51987654321", "password": PASSWORD})
     with factory() as db:
         db.add(User(email="tecnico@taller.com", phone="+51911111111", password_hash=hash_password(PASSWORD, 4), name="Carlos", role=Role.TECHNICIAN))
+        db.add(User(email="admin@taller.com", phone="+51922222222", password_hash=hash_password(PASSWORD, 4), name="Ana", role=Role.ADMIN))
         db.commit()
 
     guard = SessionGuard(SETTINGS, factory)
@@ -38,6 +39,10 @@ def env():
     @other.get("/user")
     def user_route(user=Depends(guard.require_user)):
         return {"role": user.role}
+
+    @other.get("/admin")
+    def admin_route(user=Depends(guard.require_admin)):
+        return {"id": user.id, "role": user.role}
 
     return accounts, TestClient(other), factory
 
@@ -91,6 +96,34 @@ def test_technician_is_not_customer(env):
     res = other.get("/customer")
     assert res.status_code == 403 and res.json()["code"] == "customer_only"
     assert other.get("/user").json() == {"role": "TECHNICIAN"}
+
+
+def test_admin_guard_allows_admin_and_rejects_other_roles(env):
+    accounts, other, _ = env
+    other.cookies.set("techfix_session", login(accounts, "admin@taller.com"))
+    response = other.get("/admin")
+    assert response.status_code == 200
+    assert response.json() == {"id": 3, "role": "ADMIN"}
+
+    other.cookies.set("techfix_session", login(accounts, "ana@demo.pe"))
+    customer = other.get("/admin")
+    assert customer.status_code == 403
+    assert customer.json()["code"] == "admin_only"
+
+    other.cookies.set("techfix_session", login(accounts, "tecnico@taller.com"))
+    technician = other.get("/admin")
+    assert technician.status_code == 403
+    assert technician.json()["code"] == "admin_only"
+
+
+def test_admin_guard_rejects_missing_session_and_inactive_account(env):
+    accounts, other, factory = env
+    assert other.get("/admin").status_code == 401
+    other.cookies.set("techfix_session", login(accounts, "admin@taller.com"))
+    with factory() as db:
+        db.query(User).filter(User.email == "admin@taller.com").update({"active": False})
+        db.commit()
+    assert other.get("/admin").status_code == 401
 
 
 def test_from_env_requires_auth_secret(monkeypatch):

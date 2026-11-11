@@ -18,6 +18,12 @@ class Settings:
     labor_maintenance_price: Decimal
     labor_diagnosis_price: Decimal
     labor_pc_build_price: Decimal = Decimal("50.00")
+    audio_transcription_enabled: bool = False
+    audio_transcription_timeout_seconds: float = 30.0
+    audio_max_bytes: int = 25_000_000
+    audio_max_duration_ms: int = 120_000
+    audio_requests_per_minute: int = 5
+    rag_retrieval_mode: str = "lexical"
 
     def require_chat_configuration(self) -> None:
         missing = []
@@ -81,6 +87,39 @@ def _environment_flag(name: str, default: bool = False) -> bool:
     raise ValueError(f"{name} debe ser true o false.")
 
 
+def _positive_integer(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} debe ser un entero positivo.") from exc
+    if parsed <= 0:
+        raise ValueError(f"{name} debe ser un entero positivo.")
+    return parsed
+
+
+def _positive_float(name: str, default: float) -> float:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} debe ser un numero positivo.") from exc
+    if not 0 < parsed < float("inf"):
+        raise ValueError(f"{name} debe ser un numero positivo.")
+    return parsed
+
+
+def _rag_retrieval_mode() -> str:
+    value = os.getenv("RAG_RETRIEVAL_MODE", "lexical").strip().lower()
+    if value not in {"lexical", "hybrid"}:
+        raise ValueError("RAG_RETRIEVAL_MODE debe ser lexical o hybrid.")
+    return value
+
+
 def load_settings() -> Settings:
     load_dotenv()
     return Settings(
@@ -113,4 +152,10 @@ def load_settings() -> Settings:
             "LABOR_PC_BUILD_PRICE",
             "50.00",
         ),
+        audio_transcription_enabled=_environment_flag("AUDIO_TRANSCRIPTION_ENABLED", default=False),
+        audio_transcription_timeout_seconds=_positive_float("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", 30.0),
+        audio_max_bytes=_positive_integer("AUDIO_MAX_BYTES", 25_000_000),
+        audio_max_duration_ms=_positive_integer("AUDIO_MAX_DURATION_MS", 120_000),
+        audio_requests_per_minute=_positive_integer("AUDIO_REQUESTS_PER_MINUTE", 5),
+        rag_retrieval_mode=_rag_retrieval_mode(),
     )

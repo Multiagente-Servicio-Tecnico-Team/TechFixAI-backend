@@ -14,7 +14,7 @@ los precios vigentes del catálogo y `Decimal`; este documento no define precios
 
 - Procesador: `CPU-AMD-R5-5600G`
 - Placa Madre: `MB-ASUS-B550-PLUS`
-- RAM Desktop: `RAM-D4-16GB-3200-CRU`
+- RAM Desktop: `RAM-D-DDR4-3200-16-CRU`
 - Almacenamiento: `SSD-M2-NVME-1TB`
 - Refrigeración PC: `COOL-AIR-AG400-BK`
 - Fuente de Poder: `PSU-COOLERMASTER-650-Gold`
@@ -45,7 +45,7 @@ los precios vigentes del catálogo y `Decimal`; este documento no define precios
 - Placa Madre: `MB-ASUS-B550-PLUS`
 - RAM Desktop: `RAM-D-DDR4-3200-16-CRU`
 - Tarjeta de Video: `GPU-MSI-GTX1650-4G`
-- Almacenamiento: `SSD-M2-NVME-500GB`
+- Almacenamiento: `SSD-NVME-KINGSTON-NV2-500`
 - Refrigeración PC: `COOL-AIR-AG400-BK`
 - Fuente de Poder: `PSU-COOLERMASTER-650-Gold`
 - Gabinete: `CASE-MSI-FORGE-100R`

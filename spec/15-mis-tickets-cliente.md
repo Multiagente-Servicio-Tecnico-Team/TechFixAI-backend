@@ -1,5 +1,10 @@
 # Spec 15 - consulta de tickets del cliente
 
+**Estado retrospectivo: Parcial — revisar error conocido al cargar tickets con cotización contra la rama actual.**
+**Evidencia revisada:** docs/18-mis-tickets-cliente.md; app/database/repository.py; app/adapters/api/
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Mostrar en el portal de cliente los tickets persistidos que pertenecen a la

@@ -14,12 +14,14 @@ from typing import Any
 
 from groq import APIError as GroqAPIError
 from langchain_core.exceptions import OutputParserException
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.adapters.llm.tracing import get_trace_context
+from app.adapters.llm.model_factory import model_profile
 from app.application.errors import PatternFailure, StorageUnavailable
+from app.application.prompts import build_system_prompt
 from app.domain.chat import PatternReply
 from app.settings import Settings, load_settings
 
@@ -57,6 +59,10 @@ class GraphPattern:
     def prepare(self, graph: Any, state: dict[str, Any], config: dict[str, Any]) -> None:
         """Ajustes previos a la invocación (por defecto, ninguno)."""
 
+    def invocation_context(self, *, conversation_id: str, customer_id: int) -> dict[str, Any] | None:
+        """Trusted per-call values; never copied from chat text or graph state."""
+        return None
+
     def to_reply(self, result: dict[str, Any]) -> PatternReply:
         raise NotImplementedError
 
@@ -68,21 +74,44 @@ class GraphPattern:
             return self._graph
 
     def config(self, conversation_id: str) -> dict[str, Any]:
+        settings = self._settings_factory()
         return {
             "configurable": {"thread_id": conversation_id},
             "run_name": f"techfix-{self.id}",
-            "tags": ["service-chat", f"pattern:{self.id}"],
-            "metadata": {"pattern": self.id, "conversation_id": conversation_id},
+            "tags": ["service-chat", f"pattern:{self.id}", "scenario:interactive"],
+            "metadata": {
+                "pattern_id": self.id,
+                "scenario_id": "interactive",
+                "model_profile_id": (
+                    model_profile(settings).identifier
+                    if settings.groq_model
+                    else "unconfigured"
+                ),
+            },
         }
 
-    def reply(self, conversation_id: str, customer_id: int, message: str) -> PatternReply:
+    def reply(
+        self, conversation_id: str, customer_id: int, message: str,
+        *, actor_user_id: int | None = None,
+    ) -> PatternReply:
         try:
             graph = self.graph()
             state = self.initial_state(customer_id, HumanMessage(content=message))
+            if actor_user_id is not None:
+                state["actor_user_id"] = actor_user_id
+            policy = SystemMessage(
+                id=f"techfix-role-policy-{self.id}",
+                content=build_system_prompt(role="CUSTOMER", pattern_id=self.id),
+            )
+            state_messages = state.get("messages")
+            if not isinstance(state_messages, list):
+                raise ValueError("El estado del patrón no contiene una lista de mensajes.")
+            state["messages"] = [policy, *state_messages]
             config = self.config(conversation_id)
             self.prepare(graph, state, config)
             with self._trace_context_factory():
-                result = graph.invoke(state, config=config)
+                context = self.invocation_context(conversation_id=conversation_id, customer_id=customer_id)
+                result = graph.invoke(state, config=config, **({"context": context} if context is not None else {}))
             return self.to_reply(result)
         except (SQLAlchemyError, OSError) as exc:
             logger.error(
@@ -115,6 +144,12 @@ def _safe_sqlstate(exc: BaseException) -> str:
     """Solo el código SQLSTATE de PostgreSQL (cinco caracteres), nunca el mensaje."""
     origin = getattr(exc, "orig", None)
     sqlstate = getattr(origin, "sqlstate", None) or getattr(origin, "pgcode", None)
+    # pg8000 stores PostgreSQL diagnostics in args[0], unlike psycopg drivers.
+    # Read only SQLSTATE; messages/details may contain user data.
+    if not sqlstate:
+        args = getattr(origin, "args", ())
+        if args and isinstance(args[0], dict):
+            sqlstate = args[0].get("C")
     if isinstance(sqlstate, str) and re.fullmatch(r"[0-9A-Z]{5}", sqlstate):
         return sqlstate
     return "unavailable"

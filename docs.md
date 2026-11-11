@@ -51,7 +51,7 @@ El contrato backend de audio y su validacion local viven en
 | 16 | Precios y deduplicación del catálogo | `spec/16-precios-y-dedupe-catalogo-seed.md` | `docs/19-precios-y-dedupe-catalogo-seed.md` |
 | 21 | Registro interno de asientos contables | `specs/003-asientos-contables/` | `docs/21-asientos-contables.md` |
 | 24 | API CRUD del inventario para el taller | `specs/005-api-inventario/` | `docs/24-api-inventario.md` |
-| 25 | Limpieza verificada de auxiliares de migración y tabla sin consumidor | `sql/migrations/010_remove_obsolete_tables.sql` | `docs/25-limpieza-tablas-obsoletas.md` |
+| 25 | Limpieza verificada de auxiliares de migración y tabla sin consumidor | `sql/esquema-vacio-produccion.sql` (las migraciones se retiraron el 2026-11-10) | `docs/25-limpieza-tablas-obsoletas.md` |
 | 26 | Desactivación temporal de guardas contables en la base local de pruebas | `sql/operations/accounting-test-triggers-disable.sql`, `accounting-test-triggers-restore.sql` | `docs/26-borrado-temporal-asientos-prueba.md` |
 | 27 | Propuesta de mejoras del backend inspiradas en Dolibarr | — | `docs/27-propuesta-mejoras-backend-basadas-dolibarr.md` |
 | 28 | Trazabilidad de movimientos de inventario | `specs/008-trazabilidad-movimientos-inventario/` | `docs/24-api-inventario.md` |

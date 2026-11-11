@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.adapters.llm.model_factory import create_model
 from app.adapters.llm.tracing import get_trace_context
-from app.application.admin_capabilities import (
+from app.infrastructure.admin_capabilities import (
     AdminCapabilityService, AdminFieldValidationError, READ_ACTIONS, WRITE_ACTIONS, json_safe,
 )
 from app.application.admin_conversations import AdminConversationRegistry, PendingAdminDraft
@@ -57,7 +57,7 @@ def _describe_schema(schema: dict[str, Any], defs: dict[str, Any], depth: int = 
 @lru_cache(maxsize=1)
 def capability_argument_hints() -> str:
     """Campos de cada capacidad, derivados de los esquemas que validan la operación."""
-    from app.application.admin_capabilities import ReportExport
+    from app.infrastructure.admin_capabilities import ReportExport
 
     lines = []
     for action in sorted(WRITE_ACTIONS):

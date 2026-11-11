@@ -100,7 +100,7 @@ def retrieve_documents(
     semantic_corpus = _search_index(query, limit) if retrieval_mode == "hybrid" else []
     if documents is None:
         lexical_corpus = load_lexical_corpus()
-        corpus = semantic_corpus + lexical_corpus
+        corpus = semantic_corpus + list(lexical_corpus)
     else:
         corpus = semantic_corpus + list(documents)
     allowed = allowed_trust_levels

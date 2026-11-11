@@ -19,11 +19,18 @@ def test_postgres_summary_row_is_converted_to_safe_api_values():
         "created_at": datetime(2026, 11, 2, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 11, 2, tzinfo=timezone.utc), "reversed_at": None,
         "reversal_of_entry_id": None, "reversal_entry_id": None,
+        "accounting_plan_id": 3, "plan_code": "PCGE_PE", "plan_name": "PCGE Perú", "plan_edition": "Modificado 2019",
     }
     summary = AccountingRepositoryAdapter._summary_from_row(row)
     assert summary["entry_number"] == "123"
     assert summary["amount"] == "100.00"
     assert summary["responsible"]["display_name"] == "Ana Admin"
+    assert summary["plan_id"] == 3
+    assert summary["accounting_plan"] == {"id": 3, "code": "PCGE_PE", "name": "PCGE Perú", "edition": "Modificado 2019"}
+
+    # Los asientos anteriores al catálogo contable no tienen plan.
+    legacy = AccountingRepositoryAdapter._summary_from_row({**row, "accounting_plan_id": None, "plan_code": None, "plan_name": None, "plan_edition": None})
+    assert legacy["plan_id"] is None and legacy["accounting_plan"] is None
 
 
 def test_default_session_factory_uses_supported_sessionmaker_configuration(monkeypatch):

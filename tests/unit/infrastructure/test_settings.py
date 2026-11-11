@@ -98,15 +98,16 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.audio_max_duration_ms, 120_000)
         self.assertEqual(settings.audio_requests_per_minute, 5)
 
-    def test_audio_with_visible_langsmith_payload_is_rejected(self):
+    def test_audio_with_visible_langsmith_payload_is_allowed_for_evaluation(self):
+        # Spec 011 FR-020: mostrar el texto en LangSmith está permitido para evaluación.
         settings = self.load_from_environment({
             "AUDIO_TRANSCRIPTION_ENABLED": "true",
             "LANGSMITH_TRACING": "true",
             "LANGSMITH_API_KEY": "secret",
             "LANGSMITH_HIDE_INPUTS": "false",
         })
-        with self.assertRaisesRegex(RuntimeError, "LANGSMITH_HIDE_INPUTS"):
-            settings.validate_audio_privacy()
+        self.assertTrue(settings.audio_transcription_enabled)
+        self.assertFalse(settings.langsmith_hide_inputs)
 
     def test_rejects_invalid_audio_timeout_or_limits(self):
         for name, value in (("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", "0"), ("AUDIO_MAX_BYTES", "-1"), ("AUDIO_REQUESTS_PER_MINUTE", "many")):

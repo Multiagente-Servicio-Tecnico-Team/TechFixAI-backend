@@ -15,12 +15,13 @@ def settings(*, hide_inputs, hide_outputs):
     )
 
 
-def test_audio_requires_both_langsmith_payloads_to_be_hidden():
-    with pytest.raises(RuntimeError):
-        settings(hide_inputs=False, hide_outputs=True).validate_audio_privacy()
-    with pytest.raises(RuntimeError):
-        settings(hide_inputs=True, hide_outputs=False).validate_audio_privacy()
-    settings(hide_inputs=True, hide_outputs=True).validate_audio_privacy()
+@pytest.mark.parametrize("hide_inputs,hide_outputs", [(False, False), (False, True), (True, False), (True, True)])
+def test_audio_respects_configured_langsmith_visibility(hide_inputs, hide_outputs):
+    # Spec 011 FR-020: con audio activo, la visibilidad del texto la deciden LANGSMITH_HIDE_*;
+    # el audio crudo y las credenciales quedan fuera en todos los modos.
+    current = settings(hide_inputs=hide_inputs, hide_outputs=hide_outputs)
+    assert current.audio_transcription_enabled is True
+    assert (current.langsmith_hide_inputs, current.langsmith_hide_outputs) == (hide_inputs, hide_outputs)
 
 
 def test_trace_error_redaction_drops_provider_text():

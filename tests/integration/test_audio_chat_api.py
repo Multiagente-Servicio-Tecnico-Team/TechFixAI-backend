@@ -11,6 +11,7 @@ from app.adapters.patterns.registry import PATTERN_NAMES
 from app.application.ports import TranscriptionResult
 from app.domain.chat import PatternReply
 from app.infrastructure.chat_app import build_chat_app
+from tests.integration.customer_fakes import customer_profiles_factory
 from app.settings import Settings
 
 
@@ -37,7 +38,7 @@ def make_client(enabled=True, transcriber=None, max_bytes=25_000_000):
         def require_customer(self, request):
             if request.cookies.get("test-session") != "ok":
                 raise SessionError(401, "Inicia sesión para continuar.", "session_required")
-            return SessionCustomer(9, "Test", None, "test@example.test", "customer")
+            return SessionCustomer(9, "Test", None, "test@example.test", "CUSTOMER")
     settings = Settings(
         groq_api_key=None, groq_model=None, database_url=None, langsmith_api_key=None,
         langsmith_tracing=False, langsmith_project="test", langsmith_hide_inputs=True,
@@ -53,6 +54,7 @@ def make_client(enabled=True, transcriber=None, max_bytes=25_000_000):
         settings_factory=lambda: settings,
         trace_context_factory=nullcontext,
         audio_transcriber=transcriber,
+        customer_repository_factory=customer_profiles_factory(),
     )
     client = TestClient(app)
     client.cookies.set("test-session", "ok")
@@ -76,7 +78,8 @@ def test_audio_route_requires_session_and_transcribes_into_selected_pattern():
     assert response.status_code == 200, response.text
     assert response.json()["transcript"] == "consulta desde voz"
     assert response.json()["reply"] == "recibido: consulta desde voz"
-    assert graphs["decentralized"].calls[0][1:] == (9, "consulta desde voz")
+    # El patrón recibe el cliente comercial del perfil de la sesión (usuario 9 -> perfil 1009), no el id de la cuenta.
+    assert graphs["decentralized"].calls[0][1:] == (1009, "consulta desde voz")
     assert not graphs["hierarchical"].calls and not graphs["orchestrator"].calls
     assert len(transcriber.calls) == 1
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.accounts.session import SessionCustomer
-from app.application.admin_chat import AdminChatService
+from app.infrastructure.admin_chat import AdminChatService
 from app.application.capabilities import CapabilityError
 from app.application.errors import (
     ApplicationError, AudioIdempotencyConflict, AudioQuotaExceeded, AudioRequestError,

@@ -62,6 +62,7 @@ def make_worker_nodes(
     repository: ServiceRepository,
     llm: Any,
     retriever: MarkdownKnowledgeRetriever,
+    direct_sales_quotes: Any | None = None,
 ) -> dict[str, Any]:
     """Agentes de trabajo CUSTOMER compartidos por los tres patrones.
 
@@ -76,7 +77,7 @@ def make_worker_nodes(
         "refund_agent": make_refund_agent(repository, trace_tool=traced_tool),
         "order_completion_agent": make_order_completion_agent(repository),
         "logistics_agent": make_logistics_agent(llm, repository),
-        "billing_agent": make_billing_agent(repository),
+        "billing_agent": make_billing_agent(repository, direct_sales_quotes),
         "knowledge_retrieval": make_knowledge_retrieval_agent(retriever),
         "technical_support_agent": make_technical_support_agent(llm, mode="hardware"),
         "software_support_agent": make_technical_support_agent(llm, mode="software"),
@@ -84,7 +85,7 @@ def make_worker_nodes(
             repository,
             pc_build_labor_cost=settings.labor_price_for("pc_build"),
         ),
-        "sales_agent": make_sales_agent(settings),
+        "sales_agent": make_sales_agent(settings, direct_sales_quotes),
         "quote_suggestion_response": quote_suggestion_response,
         "persist_diagnosis": make_persist_diagnosis(repository),
     }
@@ -98,6 +99,7 @@ def build_multiagent_graph(
     repository: ServiceRepository | None = None,
     model: Any | None = None,
     retriever: MarkdownKnowledgeRetriever | None = None,
+    direct_sales_quotes: Any | None = None,
 ):
     settings = settings or load_settings()
     settings.require_chat_configuration()
@@ -120,7 +122,8 @@ def build_multiagent_graph(
             traced_node(f"{team}_team_supervisor", make_team_supervisor(team)),
         )
     for name, node in make_worker_nodes(
-        settings=settings, repository=repository, llm=llm, retriever=retriever
+        settings=settings, repository=repository, llm=llm, retriever=retriever,
+        direct_sales_quotes=direct_sales_quotes,
     ).items():
         graph.add_node(name, node)
 

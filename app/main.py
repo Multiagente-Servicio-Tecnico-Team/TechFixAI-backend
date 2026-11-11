@@ -37,6 +37,7 @@ def create_app(
     purchase_repository_factory: Callable[[], Any] | None = None,
     purchase_order_repository_factory: Callable[[], Any] | None = None,
     sales_repository_factory: Callable[[], Any] | None = None,
+    customer_repository_factory: Callable[[], Any] | None = None,
 ) -> FastAPI:
     """Compose the account app and chat/admin API exactly once.
 
@@ -72,6 +73,7 @@ def create_app(
         purchase_repository_factory=purchase_repository_factory,
         purchase_order_repository_factory=purchase_order_repository_factory,
         sales_repository_factory=sales_repository_factory,
+        customer_repository_factory=customer_repository_factory,
     )
     application.mount("/auth", accounts_app)
     application.include_router(

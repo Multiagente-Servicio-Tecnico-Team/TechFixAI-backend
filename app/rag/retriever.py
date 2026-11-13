@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import math
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
@@ -90,9 +91,17 @@ def retrieve_documents(
     allowed_areas: set[str] | None = None,
     allowed_sources: set[str] | None = None,
     limit: int = 3,
+    lexical_min_coverage: float = 0.34,
 ) -> list[RetrievedPassage]:
     if limit < 1:
         raise ValueError("El límite de recuperación debe ser mayor que cero.")
+    if (
+        isinstance(lexical_min_coverage, bool)
+        or not isinstance(lexical_min_coverage, (int, float))
+        or not math.isfinite(lexical_min_coverage)
+        or not 0 <= lexical_min_coverage <= 1
+    ):
+        raise ValueError("El umbral léxico debe ser un número finito entre cero y uno.")
     query_norm = _normalize(query)
     if not query_norm:
         return []
@@ -139,7 +148,7 @@ def retrieve_documents(
         coverage = overlap / max(len(query_tokens), 1)
         # Lexical-only matches need stronger query coverage to avoid turning a
         # single generic word (for example "atención") into an answer.
-        if coverage >= 0.34:
+        if coverage >= lexical_min_coverage:
             match_type = (
                 "hybrid"
                 if retrieval_mode == "hybrid" and semantic_score >= 0.35

@@ -2,7 +2,9 @@
 
 Evalúa componentes RAG existentes en este repositorio. No ejecuta el chat HTTP, tickets, pagos, inventario ni escrituras PostgreSQL.
 
-## Ejecución recomendada (desde la raíz)
+Para la evaluación actual con Ragas, BLEU y ROUGE usa `python -m rag_eval.baseline`. Los comandos completos y resultados están en [la guía 37](../docs/37-evaluacion-automatica-rag.md).
+
+## Evaluador histórico de las tareas 34 y 36 (desde la raíz)
 
 ```powershell
 .\.venv-ragas\Scripts\python.exe -m rag_eval.evaluate_project --dry-run
@@ -73,4 +75,10 @@ Para revisar el experimento local sin tocar app/rag ni usar Groq: ejecutar .\.ve
 ## Evaluar lo que usa el proyecto (sin aplicar la propuesta)
 
 Usar --generator-transport backend --judge-model openai/gpt-oss-120b con evaluate_project.py. Reutiliza create_model/ChatGroq y sus parámetros originales; no cambia app/. La corrida 20B es parcial por cuota diaria. Context Precision y Context Recall del RAG existente se verificaron con juicios idénticos en caché mediante evaluate_current_retrieval.py; no se mezclan respuestas de 120B. Comandos y resultados con denominadores en docs/36-linea-base-rag-existente.md.
+
+## Evaluación automática con generación y puntuación separadas
+
+El CLI `python -m rag_eval.baseline` amplía este evaluador sin cambiar los componentes del backend. Incluye `audit`, `prepare-embeddings`, `generate` (también reanuda) y `score --group text|ragas|all`. `score --group text` calcula BLEU/ROUGE localmente; `--cache-only` prohíbe llamadas nuevas al juez Ragas. Los resultados permanecen en `.local/ragas`.
+
+Guía de instalación, comandos PowerShell, procedencia y resultados: [docs/37-evaluacion-automatica-rag.md](../docs/37-evaluacion-automatica-rag.md). Dataset y evaluadores históricos conservados; las respuestas 120B no se mezclan con la línea base del generador 20B.
 

@@ -84,3 +84,5 @@ libre en ambas carpetas y regístrala en esta tabla.
 - Propuesta local de recuperación, no aplicada a app/rag: spec/35-propuesta-local-recuperacion-rag.md y docs/35-propuesta-local-recuperacion-rag.md.
 
 - Línea base del RAG existente, sin aplicar propuestas: spec/36-linea-base-rag-existente.md y docs/36-linea-base-rag-existente.md.
+
+- Evaluación automática con Ragas, BLEU y ROUGE; generación y puntuación separadas, reanudación, auditoría por ID y comandos: spec/37-evaluacion-automatica-rag.md y docs/37-evaluacion-automatica-rag.md.

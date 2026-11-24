@@ -154,6 +154,7 @@ def build_graph(
     repository: ServiceRepository | None = None,
     model: Any | None = None,
     retriever: MarkdownKnowledgeRetriever | None = None,
+    direct_sales_quotes: Any | None = None,
 ):
     settings = settings or load_settings()
     settings.require_chat_configuration()
@@ -171,7 +172,8 @@ def build_graph(
         destinations=tuple(sorted(ALLOWED_HANDOFFS[RECEPTION])),
     )
     for name, node in make_worker_nodes(
-        settings=settings, repository=repository, llm=llm, retriever=retriever
+        settings=settings, repository=repository, llm=llm, retriever=retriever,
+        direct_sales_quotes=direct_sales_quotes,
     ).items():
         graph.add_node(
             name,

@@ -56,14 +56,16 @@ def test_lexical_codes_match_exactly_and_irrelevant_queries_abstain():
     assert unrelated == []
 
 
-def test_markdown_source_manifest_marks_demo_faq_as_unverified():
+def test_markdown_sources_come_from_the_single_reviewed_corpus():
+    # Spec 011: los tres patrones comparten un solo corpus revisado (base jerárquica) con el mismo nivel de confianza.
     from app.rag.sources import knowledge_sources
 
     sources = knowledge_sources()
+    assert sources
+    assert {source.source_id.split(":", 1)[0] for source in sources} == {"hierarchical"}
+    assert {source.trust_level for source in sources} == {"verified_guide"}
     faq = next(source for source in sources if source.path.name == "faq_servicio.md")
-
-    assert faq.trust_level == "demo_only"
-    assert faq.customer_facts_allowed is False
+    assert faq.area == "faq"
 
 
 def test_vector_relevance_is_preserved_and_low_relevance_abstains(monkeypatch):

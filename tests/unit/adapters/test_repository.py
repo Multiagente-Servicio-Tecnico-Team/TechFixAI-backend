@@ -300,8 +300,9 @@ class RepositoryTests(unittest.TestCase):
 
         query, parameters = session.calls[0]
         self.assertIn("UPDATE tickets", query)
-        self.assertIn("hardware_diagnosis = :hardware_diagnosis", query)
-        self.assertIn("software_diagnosis = :software_diagnosis", query)
+        # Solo se escribe la columna del tipo de diagnóstico; la otra conserva su valor.
+        self.assertRegex(query, r"hardware_diagnosis = CASE\s+WHEN :diagnosis_type IN \('HARDWARE', 'HYBRID'\)\s+THEN :hardware_diagnosis ELSE hardware_diagnosis END")
+        self.assertRegex(query, r"software_diagnosis = CASE\s+WHEN :diagnosis_type IN \('SOFTWARE', 'HYBRID'\)\s+THEN :software_diagnosis ELSE software_diagnosis END")
         self.assertIn("CAST('IN_DIAGNOSIS' AS ticket_status_enum)", query)
         self.assertEqual(parameters["hardware_diagnosis"], "Posible falla de ventilación.")
         self.assertIsNone(parameters["software_diagnosis"])

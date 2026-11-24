@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 from decimal import Decimal
 import sqlite3
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,6 +29,8 @@ CHAT_SETTINGS = Settings(
     None, None, None, None, False, "tests", True, True, Decimal("35"), Decimal("50")
 )
 sqlite3.register_adapter(Decimal, lambda value: format(value, ".2f"))
+# Las claves de idempotencia de los movimientos son UUID; PostgreSQL las acepta, SQLite las guarda como texto.
+sqlite3.register_adapter(UUID, str)
 
 
 class FakeGraph:
@@ -79,6 +82,26 @@ def inventory_client():
         connection.exec_driver_sql("""CREATE TABLE purchase_order_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             spare_part_id INTEGER REFERENCES spare_parts(id) ON DELETE SET NULL
+        )""")
+        # Trazabilidad de stock: eliminar un repuesto con historia lo desactiva en vez de borrarlo.
+        connection.exec_driver_sql("""CREATE TABLE inventory_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            spare_part_id INTEGER REFERENCES spare_parts(id),
+            movement_type VARCHAR(30) NOT NULL,
+            code_snapshot VARCHAR(50) NOT NULL,
+            name_snapshot VARCHAR(150) NOT NULL,
+            quantity_delta INTEGER NOT NULL,
+            stock_before INTEGER NOT NULL,
+            stock_after INTEGER NOT NULL,
+            actor_user_id INTEGER,
+            actor_kind VARCHAR(10) NOT NULL DEFAULT 'USER',
+            reason VARCHAR(500),
+            idempotency_key VARCHAR(36),
+            request_hash CHAR(64),
+            purchase_receipt_item_id INTEGER,
+            purchase_order_receipt_item_id INTEGER,
+            sales_order_item_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""")
 
     guard = SessionGuard(AUTH, factory)
@@ -191,19 +214,32 @@ def test_update_preserves_code_and_delete_respects_quote_fk(inventory_client):
         json=create_part_payload("OTHER-CODE"),
     ).status_code == 422
 
+    # Con historia de stock y presupuestos, eliminar lo retira del catálogo activo y conserva ambos.
     with factory() as db:
         part_id = db.execute(text("SELECT id FROM spare_parts WHERE code='RAM-HIST'")).scalar_one()
+        assert db.execute(text("SELECT count(*) FROM inventory_movements WHERE spare_part_id=:id"), {"id": part_id}).scalar_one() > 0
         db.execute(text("INSERT INTO quote_details(spare_part_id) VALUES (:id)"), {"id": part_id})
         db.commit()
-    blocked = client.delete("/api/inventory/parts/RAM-HIST")
+    assert client.delete("/api/inventory/parts/RAM-HIST").status_code == 204
+    with factory() as db:
+        assert db.execute(text("SELECT active FROM spare_parts WHERE id=:id"), {"id": part_id}).scalar_one() in (False, 0)
+        assert db.execute(text("SELECT count(*) FROM quote_details WHERE spare_part_id=:id"), {"id": part_id}).scalar_one() == 1
+
+    # Sin historia, el borrado es definitivo: un presupuesto lo impide con 409 in_use.
+    with factory() as db:
+        bare_id = db.execute(text("""INSERT INTO spare_parts(code,name,category,unit_price,current_stock,minimum_threshold)
+            VALUES ('RAM-SIN-HIST','Memoria sin historia','Memorias RAM',10,0,1) RETURNING id""")).scalar_one()
+        db.execute(text("INSERT INTO quote_details(spare_part_id) VALUES (:id)"), {"id": bare_id})
+        db.commit()
+    blocked = client.delete("/api/inventory/parts/RAM-SIN-HIST")
     assert blocked.status_code == 409
     assert blocked.json()["code"] == "in_use"
 
     with factory() as db:
-        db.execute(text("DELETE FROM quote_details"))
+        db.execute(text("DELETE FROM quote_details WHERE spare_part_id=:id"), {"id": bare_id})
         db.commit()
-    assert client.delete("/api/inventory/parts/RAM-HIST").status_code == 204
-    assert client.delete("/api/inventory/parts/RAM-HIST").status_code == 404
+    assert client.delete("/api/inventory/parts/RAM-SIN-HIST").status_code == 204
+    assert client.delete("/api/inventory/parts/RAM-SIN-HIST").status_code == 404
 
 
 def test_inventory_put_cors_preflight_allows_frontend_origin(inventory_client):

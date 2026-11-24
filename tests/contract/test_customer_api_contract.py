@@ -38,7 +38,7 @@ def make_client(repository, *, allowed=True):
 def test_admin_can_create_manual_customer_without_creating_user():
     repository = FakeCustomers()
     response = make_client(repository).post("/api/admin/customers", json={
-        "display_name": "Cliente Presencial", "phone": "3001234567", "email": None
+        "display_name": "Cliente Presencial", "phone": "987654321", "email": None
     })
     assert response.status_code == 201
     assert response.json()["origin"] == "MANUAL"
@@ -53,6 +53,6 @@ def test_customer_admin_routes_require_admin_role():
 
 def test_customer_create_rejects_extra_identity_fields():
     response = make_client(FakeCustomers()).post("/api/admin/customers", json={
-        "display_name": "Cliente", "phone": "3001234567", "user_id": 99
+        "display_name": "Cliente", "phone": "987654321", "user_id": 99
     })
     assert response.status_code == 422

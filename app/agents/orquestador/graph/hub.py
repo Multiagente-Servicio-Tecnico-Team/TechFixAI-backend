@@ -120,6 +120,7 @@ def build_graph(
     repository: ServiceRepository | None = None,
     model: Any | None = None,
     retriever: MarkdownKnowledgeRetriever | None = None,
+    direct_sales_quotes: Any | None = None,
 ):
     settings = settings or load_settings()
     settings.require_chat_configuration()
@@ -130,7 +131,8 @@ def build_graph(
     graph = StateGraph(OrchestratorState)
     graph.add_node(SUPERVISOR, make_orchestrator_supervisor(llm, repository))
     for name, node in make_worker_nodes(
-        settings=settings, repository=repository, llm=llm, retriever=retriever
+        settings=settings, repository=repository, llm=llm, retriever=retriever,
+        direct_sales_quotes=direct_sales_quotes,
     ).items():
         graph.add_node(name, _returning_to_supervisor(name, node))
         graph.add_edge(name, SUPERVISOR)

@@ -77,8 +77,18 @@ def make_sales_agent(settings: Settings, direct_sales_quotes=None):
                     "outcome": "price_changed",
                     "quote_changed": True,
                 }
-        if request_type in {"SALE", "PC_BUILD"} and quote_id is None:
-            quote_id = int(persist_sale_quote(state, quote)["id"])
+        if request_type in {"SALE", "PC_BUILD"}:
+            previous = state.get("quote")
+            if quote_id is not None and previous and quote_changed(previous, quote):
+                # El cliente cambió artículos: la cotización guardada ya no es la que verá ni aceptará.
+                direct_sales_quotes.resolve_direct_sales_quote(
+                    quote_id=quote_id, customer_id=int(state["customer_id"]),
+                    actor_user_id=None, target_status="CANCELLED",
+                    notes="Reemplazada porque el cliente modificó los artículos.",
+                )
+                quote_id = None
+            if quote_id is None:
+                quote_id = int(persist_sale_quote(state, quote)["id"])
         return {"quote": quote, "quote_type": quote_type, "quote_id": quote_id}
 
     return sales_agent

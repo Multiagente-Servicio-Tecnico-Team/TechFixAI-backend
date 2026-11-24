@@ -30,13 +30,13 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 
 El contrato HTTP se mantiene en [`specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml`](specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml). La feature registra comprobantes, método y estado de pago, recepciones y movimientos auditables; no genera asientos contables ni PLE.
 
-`contexto/tablas postgres v2.sql` es un script destructivo que elimina y vuelve a crear los objetos del esquema `public` exportados desde la base local `multiagentedb`; no contiene filas. Úsalo solo en una base destino que pueda reinicializarse. Para actualizar una base existente y conservar sus datos, aplica migraciones versionadas; por ejemplo, [`sql/migrations/005_supplier_purchases.sql`](sql/migrations/005_supplier_purchases.sql).
+La base se instala con [`sql/esquema-vacio-produccion.sql`](sql/esquema-vacio-produccion.sql) (esquema completo, sin filas) y [`sql/seeds/datos-iniciales.sql`](sql/seeds/datos-iniciales.sql) (ADMIN por defecto, inventario y PCGE). Pasos en [`sql/README.md`](sql/README.md).
 
 ### Clientes, tickets de servicio y ventas directas
 
 La feature backend en [`specs/007-gestion-clientes-comerciales/`](specs/007-gestion-clientes-comerciales/) separa `users` (cuentas) de `customers` (identidad comercial). Los tickets son para servicio; una cotización de venta puede existir sin ticket. Aceptarla reserva stock; solo ADMIN confirma el pago y crea la venta. La respuesta de `POST /api/chat` incluye `quote_id` cuando el patrón guardó una cotización.
 
-Las migraciones 006–009 se aplicaron y verificaron en la base de prueba `multiagentedb` el 2026-11-03. La BD ahora tiene `customers`, perfil comercial vinculado a la cuenta del portal y relaciones comerciales obligatorias; se conservaron las columnas legacy durante compatibilidad. Se eliminaron los ocho tickets `SALE` de prueba aprobados y sus dependientes confirmados. El Orquestador aún no clasifica compras directas.
+La BD tiene `customers`, perfil comercial vinculado a la cuenta del portal y relaciones comerciales obligatorias; se conservaron las columnas legacy durante compatibilidad. Se eliminaron los ocho tickets `SALE` de prueba aprobados y sus dependientes confirmados. El Orquestador aún no clasifica compras directas.
 
 ## Integración de patrones
 
@@ -149,7 +149,7 @@ tests/
 
 - Python 3.12
 - Node.js 18 o superior (solo para ejecutar el frontend)
-- PostgreSQL 16 con las tablas del script del equipo (`creacion_tablas_sin_inserciones.sql`)
+- PostgreSQL 16 o 17, instalado con los scripts de [`sql/`](sql/README.md)
 - Claves de Groq y LangSmith para los patrones con LLM
 
 ## Configuración

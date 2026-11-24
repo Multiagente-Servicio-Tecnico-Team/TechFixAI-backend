@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.accounts.config import Settings as AccountSettings
 from app.accounts.models import Base
 from app.main import create_app
+from tests.integration.customer_fakes import customer_profiles_factory
 
 
 PASSWORD = "CombinedTest#2026"
@@ -28,7 +29,8 @@ def test_login_cookie_authenticates_chat_on_same_app():
         bcrypt_rounds=4,
     )
 
-    with TestClient(create_app(settings=settings, session_factory=factory)) as client:
+    app = create_app(settings=settings, session_factory=factory, customer_repository_factory=customer_profiles_factory())
+    with TestClient(app) as client:
         assert client.get("/api/chat/patterns").status_code == 401
 
         registered = client.post(

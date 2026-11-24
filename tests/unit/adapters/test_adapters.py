@@ -49,7 +49,9 @@ def test_base_sends_conversation_as_thread_and_customer_in_state():
 
     state, config = graph.calls[0]
     assert reply.reply == "Hola"
-    assert state["customer_id"] == 9 and state["messages"][0].content == "Mi laptop no enciende"
+    # Spec 011: el primer mensaje es la política del rol; el del cliente va al final.
+    assert state["customer_id"] == 9 and state["messages"][-1].content == "Mi laptop no enciende"
+    assert state["messages"][0].type == "system" and "TechFix.AI" in state["messages"][0].content
     assert config["configurable"] == {"thread_id": "conv-1"}
     assert config["run_name"] == "techfix-hierarchical"
     assert "pattern:hierarchical" in config["tags"]

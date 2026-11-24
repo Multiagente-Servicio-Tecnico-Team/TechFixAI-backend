@@ -20,7 +20,7 @@ class TicketRepository:
 
     def get_admin_ticket(self, _ticket_id):
         return {"id": 1, "code": "TCK-1", "customer_id": 99, "contact_name": "Ana Rojas",
-                "contact_phone": "3001234567", "contact_email": None, "origin": "MANUAL",
+                "contact_phone": "987654321", "contact_email": None, "origin": "MANUAL",
                 "title": "Laptop", "failure_description": "No enciende", "request_type": "REPAIR",
                 "status": "NEW", "estimated_labor_hours": 0, "advance_amount": None,
                 "payment_amount": None, "payment_method": None, "quote_id": None}
@@ -46,7 +46,7 @@ def test_admin_ticket_can_reference_commercial_customer_and_actor_is_separate():
         repository_factory=lambda: repo,
     ))
     response = TestClient(app).post("/api/admin/tickets", json={
-        "customer_id": 99, "contact_name": "Ana Rojas", "contact_phone": "3001234567",
+        "customer_id": 99, "contact_name": "Ana Rojas", "contact_phone": "987654321",
         "title": "Laptop", "failure_description": "No enciende el equipo", "request_type": "REPAIR"
     })
     assert response.status_code == 201
@@ -61,7 +61,7 @@ def test_customer_ticket_listing_uses_commercial_profile_resolved_by_session():
     app.include_router(create_chat_router(
         send_message=None,
         list_tickets=list_tickets,
-        require_customer=lambda: SessionCustomer(7, "Ana", "Rojas", "ana@example.test", "CUSTOMER", "3001234567", 99),
+        require_customer=lambda: SessionCustomer(7, "Ana", "Rojas", "ana@example.test", "CUSTOMER", "987654321", 99),
         pattern_names={},
     ))
     response = TestClient(app).get("/api/customer/tickets")
@@ -75,7 +75,7 @@ def test_portal_ticket_creation_uses_session_profile_and_service_types_only():
     app.include_router(create_chat_router(
         send_message=None,
         list_tickets=TicketUseCase(),
-        require_customer=lambda: SessionCustomer(7, "Ana", "Rojas", "ana@example.test", "CUSTOMER", "3001234567", 99),
+        require_customer=lambda: SessionCustomer(7, "Ana", "Rojas", "ana@example.test", "CUSTOMER", "987654321", 99),
         pattern_names={},
         create_portal_ticket=lambda **values: recorded.update(values) or {"id": 2, "status": "NEW"},
     ))

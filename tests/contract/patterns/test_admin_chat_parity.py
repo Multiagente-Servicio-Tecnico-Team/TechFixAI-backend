@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.application.admin_chat import AdminChatService, AdminCommand
+from app.infrastructure.admin_chat import AdminChatService, AdminCommand
 from app.application.admin_conversations import AdminConversationRegistry
 from app.application.audio_chat import SendAudioChatMessage
 from app.application.audio_requests import AudioRequestRegistry

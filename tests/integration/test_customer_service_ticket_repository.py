@@ -28,7 +28,7 @@ def test_manual_ticket_persists_customer_snapshot_and_admin_actor_separately():
     session = Session()
     repository = ServiceRepository(lambda: session)
     ticket_id = repository.create_admin_ticket(values={
-        "customer_id": None, "contact_name": "Cliente Mostrador", "contact_phone": "3001234567",
+        "customer_id": None, "contact_name": "Cliente Mostrador", "contact_phone": "987654321",
         "contact_email": "cliente@example.test", "technician_id": None, "title": "Laptop",
         "failure_description": "No enciende", "origin": "MANUAL", "advance_amount": None,
         "advance_payment_method": None, "request_type": "REPAIR", "diagnosis_type": "NONE",

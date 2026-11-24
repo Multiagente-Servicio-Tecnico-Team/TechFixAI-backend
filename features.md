@@ -42,7 +42,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 | Búsqueda en conocimiento (RAG) | `app/rag/`, adaptadores por patrón | Léxica compartida por defecto en los tres patrones; embeddings vectoriales optativos con `RAG_RETRIEVAL_MODE=hybrid` | `test_retriever.py`, `test_knowledge_base.py` |
 
 | Chat autenticado por voz `POST /api/chat/audio` | `app/application/audio_chat.py`, `app/adapters/speech/`, `app/adapters/api/chat.py` | Backend implementado; desactivado por defecto | `test_audio_chat_api.py`, `test_audio_chat_patterns.py` |
-| Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/migrations/003_accounting_entries.sql` | Implementado; migración aditiva aplicada y verificada en `multiagentedb` de pruebas | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
+| Asientos contables internos (registro, consulta, reversión y trazabilidad; solo ADMIN) | `app/adapters/api/accounting.py`, `app/adapters/persistence/accounting.py`, `sql/esquema-vacio-produccion.sql` | Implementado; tablas incluidas en el esquema de instalación | `test_accounting_api.py`, `test_accounting_contract.py`, `test_accounting_postgres.py` |
 | Catálogo contable y búsqueda de cuentas (solo ADMIN) | `app/adapters/api/accounting_catalog.py`, `app/adapters/persistence/accounting_catalog.py`, migraciones `012`–`013` | Implementado; lista por plan con `q` parcial en código/denominación, filtros ACTIVE/imputable y paginación; PCGE cargado en `multiagentedb` de pruebas | Validación de lectura directa contra el repositorio: plan 1, 1,192 cuentas, 844 activas/imputables; consultas parciales `10`, `efectivo`, `caja` devuelven coincidencias |
 
 ## Pendientes conocidos
@@ -59,7 +59,7 @@ funcionalidad. Estado al 2026-10-20 (rama `develop`).
 
 ### Asientos contables internos (Spec Kit)
 
-La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. La migración aditiva está en `sql/migrations/003_accounting_entries.sql`; se aplicó y verificó en la BD de prueba `multiagentedb` indicada explícitamente para la ejecución.
+La API administrativa permite listar categorías, crear asientos balanceados en PEN, consultar listado/detalle y revertir un asiento mediante otro vinculado. El actor proviene de la sesión y solo `ADMIN` puede acceder. No se integra con pagos, chat, agentes ni generación PLE. Las tablas, restricciones y triggers contables están en `sql/esquema-vacio-produccion.sql`, y el plan PCGE se carga con `sql/seeds/datos-iniciales.sql`.
 
 ### Borradores incompletos del chat ADMIN
 
@@ -112,3 +112,12 @@ se repite es la misma responsabilidad implementada varias veces; antes de crear 
 
 Módulos fuera del flujo de la aplicación: `app/web.py` (interfaz Streamlit de prueba) y `app/rag/ingest.py` (script de
 ingesta, se ejecuta con `python -m`); `app/agents/sales.py` y `app/tracing.py` se usan en pruebas y en el patrón de referencia.
+
+## Evaluación de componentes RAG con Ragas
+
+`rag_eval/evaluate_project.py` reutiliza el diagnóstico técnico jerárquico y la FAQ compartida, con 30 consultas sintéticas, referencias verificadas contra fuentes locales y métricas Faithfulness, ContextPrecision y ContextRecall. Juez JSON Schema estricto, caché y reanudación, evidencia JSON/CSV/Markdown en `.local/ragas/`. No modifica la API, el ranking ni los patrones. No equivale a evaluar el chat completo ni comparar topologías; mismo modelo genera y juzga y falta revisión humana independiente. Guía y evidencia: `docs/34-evaluacion-rag-ragas.md`; piloto inicial preservado en `evaluate_techfix.py`.
+Validación del perfil Ragas 120B: 30 procesados, 25 puntuables, 3 sin contexto y 2 controles; cero errores operativos pendientes. Medias Faithfulness 0,864, Context Precision 0,960 y Context Recall 0,952 (25 casos por métrica). Backend conserva 20B; no atribuir estos resultados a ese modelo. Nueve pruebas nuevas aisladas aprobadas. Detalle y límites en docs/34-evaluacion-rag-ragas.md.
+
+Propuesta experimental no aplicada: rag_eval/retrieval_candidate.py y compare_retrieval.py comparan preparación de consultas y selección FAQ sin modificar app/rag. En el piloto local recupera contexto y fuente esperada en 28/28 contestables; conserva 2/2 controles sin contexto. No cambia el chat ni sus puntuaciones Ragas. Evidencia y límites en docs/35-propuesta-local-recuperacion-rag.md.
+
+Línea base actual priorizada: evaluar sin mejorar el RAG; transporte nativo del modelo 20B configurado, juez 120B, sin cambios en app/. Recuperación actual 25/28 con contexto, CP 0,960 y CR 0,952 (25 casos); fidelidad 0,990 sobre nueve respuestas técnicas, parcial por cuota diaria de 20B. No comparar como mejora con el perfil 120B. Detalle y reanudación: docs/36-linea-base-rag-existente.md.

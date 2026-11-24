@@ -20,7 +20,7 @@ class CustomerRepository:
 def test_portal_customer_is_resolved_from_authenticated_user_not_payload():
     repository = CustomerRepository()
     service = CustomerProfileService(repository)
-    authenticated = SimpleNamespace(id=7, role="CUSTOMER", first_name="Ana", last_name="Rojas", phone="3001234567", email="ana@example.com")
+    authenticated = SimpleNamespace(id=7, role="CUSTOMER", first_name="Ana", last_name="Rojas", phone="987654321", email="ana@example.com")
     profile = service.resolve_session_customer(authenticated)
     assert profile["id"] == 41
-    assert repository.created == [(7, "Ana Rojas", "3001234567", "ana@example.com")]
+    assert repository.created == [(7, "Ana Rojas", "987654321", "ana@example.com")]

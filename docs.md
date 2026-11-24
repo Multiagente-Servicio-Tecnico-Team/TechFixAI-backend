@@ -60,6 +60,7 @@ El contrato backend de audio y su validacion local viven en
 | 31 | Operar como ADMIN por voz: capacidades, confirmación y exportación | `specs/011-chat-multirole-patrones/` | `docs/31-guia-pruebas-admin-por-voz.md` |
 | 32 | Respuestas estructuradas del chat ADMIN | `specs/011-chat-multirole-patrones/contracts/admin-chat.openapi.yaml` | `docs/32-chat-admin-respuestas-estructuradas.md` |
 | 33 | Borradores conversacionales para completar operaciones ADMIN | `specs/011-chat-multirole-patrones/` | `docs/33-borradores-chat-admin.md` |
+| 34 | Dataset LangSmith para comparar consultas de chat | `specs/001-patrones-multiagente-coherentes/contracts/pattern-evaluation.md` | `docs/34-dataset-evaluacion-langsmith-chat.md` |
 
 La numeración de `spec/` y `docs/` no coincide desde la tarea 07; para una tarea nueva usa el siguiente número
 libre en ambas carpetas y regístrala en esta tabla.

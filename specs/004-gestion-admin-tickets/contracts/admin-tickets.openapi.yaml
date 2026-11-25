@@ -1,0 +1,297 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Admin Tickets API
+  version: 1.0.0
+  description: >-
+    Administrative ticket management. All /api/admin operations require the
+    existing signed session cookie and ADMIN role. Online customer identity is
+    taken from the authenticated session, never from request content.
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+paths:
+  /api/admin/tickets:
+    get:
+      operationId: listAdminTickets
+      summary: List and filter workshop tickets
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/TicketStatus' }
+        - in: query
+          name: request_type
+          schema: { $ref: '#/components/schemas/RequestType' }
+        - in: query
+          name: origin
+          schema: { $ref: '#/components/schemas/TicketOrigin' }
+        - in: query
+          name: search
+          description: Searches ticket code, contact name, phone, email, title and description.
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Stable paginated result set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TicketSummary' }
+                  total: { type: integer, minimum: 0 }
+                  limit: { type: integer, minimum: 1, maximum: 200 }
+                  offset: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/StorageUnavailable' }
+    post:
+      operationId: createManualTicket
+      summary: Create a manual workshop ticket
+      description: >-
+        The origin is assigned as MANUAL by the server. No customer account is
+        required. A positive advance requires an advance payment method.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateManualTicket' }
+      responses:
+        '201':
+          description: Ticket created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/StorageUnavailable' }
+  /api/admin/tickets/{ticket_id}:
+    parameters:
+      - in: path
+        name: ticket_id
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      operationId: getAdminTicket
+      summary: Get a ticket with its latest quote and audit history
+      responses:
+        '200':
+          description: Ticket details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/StorageUnavailable' }
+    patch:
+      operationId: updateAdminTicket
+      summary: Update editable ticket fields or assign a canonical state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTicket' }
+      responses:
+        '200':
+          description: Updated ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/StorageUnavailable' }
+    delete:
+      operationId: rejectHardDeleteAdminTicket
+      deprecated: true
+      summary: Hard deletion is disabled to preserve ticket and financial history
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Tickets must be cancelled by updating status to CANCELLED.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/admin/tickets/{ticket_id}/quotes:
+    parameters:
+      - in: path
+        name: ticket_id
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      operationId: createAdminTicketQuote
+      summary: Create a pending quote linked to a ticket
+      description: >-
+        The server validates the quote type against the ticket, obtains current
+        catalog prices, calculates line subtotals and the total using exact
+        decimal arithmetic, and stores a PENDING quote. Creating the quote does
+        not create a payment or replace the ticket's advance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTicketQuote' }
+      responses:
+        '201':
+          description: Pending quote stored and linked to the ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketQuote' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/StorageUnavailable' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: techfix_session
+      description: Existing signed session cookie; backend validates ADMIN role.
+  schemas:
+    RequestType:
+      type: string
+      enum: [REPAIR, SALE, PC_BUILD, SUPPORT, WARRANTY_CLAIM]
+    TicketStatus:
+      type: string
+      enum: [NEW, IN_DIAGNOSIS, QUOTED, PAYMENT_PENDING, PAID, IN_REPAIR, READY_FOR_DELIVERY, DELIVERED, CANCELLED, WARRANTY_IN_REVIEW]
+    TicketOrigin:
+      type: string
+      enum: [MANUAL, ONLINE]
+    AdvancePaymentMethod:
+      type: string
+      enum: [YAPE_PLIN, CASH, CARD]
+    CreateManualTicket:
+      type: object
+      additionalProperties: false
+      required: [contact_name, contact_phone, title, failure_description, request_type]
+      properties:
+        contact_name: { type: string, minLength: 3, maxLength: 200 }
+        contact_phone: { type: string, minLength: 9, maxLength: 20 }
+        contact_email: { type: [string, 'null'], format: email, maxLength: 255 }
+        title: { type: string, minLength: 2, maxLength: 200, description: Equipo / marca / modelo del formulario. }
+        failure_description: { type: string, minLength: 5, maxLength: 10000 }
+        request_type: { $ref: '#/components/schemas/RequestType' }
+        advance_amount: { type: [string, 'null'], pattern: '^[0-9]{1,8}(\.[0-9]{1,2})?$', description: Adelanto opcional PEN; no es el total de cotización. }
+        advance_payment_method: { oneOf: [{ $ref: '#/components/schemas/AdvancePaymentMethod' }, { type: 'null' }] }
+    UpdateTicket:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        contact_name: { type: string, minLength: 3, maxLength: 200 }
+        contact_phone: { type: string, minLength: 9, maxLength: 20 }
+        contact_email: { type: [string, 'null'], format: email, maxLength: 255 }
+        title: { type: string, minLength: 2, maxLength: 200 }
+        failure_description: { type: string, minLength: 5, maxLength: 10000 }
+        request_type: { $ref: '#/components/schemas/RequestType' }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        advance_amount: { type: [string, 'null'], pattern: '^[0-9]{1,8}(\.[0-9]{1,2})?$' }
+        advance_payment_method: { oneOf: [{ $ref: '#/components/schemas/AdvancePaymentMethod' }, { type: 'null' }] }
+    TicketSummary:
+      type: object
+      required: [id, code, title, failure_description, request_type, status, origin, created_at]
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        customer_id: { type: [integer, 'null'] }
+        contact_name: { type: [string, 'null'] }
+        contact_phone: { type: [string, 'null'] }
+        contact_email: { type: [string, 'null'] }
+        title: { type: string }
+        failure_description: { type: string }
+        request_type: { $ref: '#/components/schemas/RequestType' }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        origin: { oneOf: [{ $ref: '#/components/schemas/TicketOrigin' }, { type: 'null' }], description: Null only for legacy tickets with unknown historical source. }
+        advance_amount: { type: [string, 'null'], pattern: '^[0-9]{1,8}(\.[0-9]{1,2})?$' }
+        advance_payment_method: { oneOf: [{ $ref: '#/components/schemas/AdvancePaymentMethod' }, { type: 'null' }] }
+        quote_total: { type: [string, 'null'] }
+        payment_status: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: [string, 'null'], format: date-time }
+    TicketDetail:
+      allOf:
+        - { $ref: '#/components/schemas/TicketSummary' }
+        - type: object
+          properties:
+            customer_name: { type: [string, 'null'] }
+            customer_phone: { type: [string, 'null'] }
+            customer_email: { type: [string, 'null'] }
+            quote: { oneOf: [{ $ref: '#/components/schemas/TicketQuote' }, { type: 'null' }] }
+            audit_events:
+              type: array
+              items: { $ref: '#/components/schemas/TicketAuditEvent' }
+    CreateTicketQuote:
+      type: object
+      additionalProperties: false
+      required: [quote_type, labor_task_type, parts]
+      properties:
+        quote_type: { type: string, enum: [REPAIR, DIRECT_SALE, PC_BUILD] }
+        labor_task_type: { type: string, enum: [maintenance, diagnosis, sale, pc_build] }
+        parts:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [spare_part_id, quantity]
+            properties:
+              spare_part_id: { type: integer, minimum: 1 }
+              quantity: { type: integer, minimum: 1, maximum: 1000 }
+        observations: { type: [string, 'null'], maxLength: 2000 }
+    TicketQuote:
+      type: object
+      required: [id, ticket_id, quote_type, labor_cost, parts_cost, total_amount, status, created_at]
+      properties:
+        id: { type: integer }
+        ticket_id: { type: integer }
+        quote_type: { type: string, enum: [REPAIR, DIRECT_SALE, PC_BUILD] }
+        labor_cost: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        parts_cost: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        total_amount: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        status: { type: string, enum: [PENDING, ACCEPTED, REJECTED, EXPIRED] }
+        observations: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+    TicketAuditEvent:
+      type: object
+      required: [event_type, actor_user_id, created_at]
+      properties:
+        event_type: { type: string, enum: [CREATED, UPDATED, STATUS_CHANGED, CANCELLED, QUOTE_CREATED] }
+        actor_user_id: { type: integer }
+        changed_fields: { type: [object, 'null'], additionalProperties: true }
+        created_at: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: { type: string }
+        code: { type: string }
+    Unauthorized:
+      $ref: '#/components/schemas/Error'
+    Forbidden:
+      $ref: '#/components/schemas/Error'
+    NotFound:
+      $ref: '#/components/schemas/Error'
+    Conflict:
+      $ref: '#/components/schemas/Error'
+    ValidationError:
+      $ref: '#/components/schemas/Error'
+    StorageUnavailable:
+      $ref: '#/components/schemas/Error'

@@ -6,8 +6,16 @@ from langchain_core.messages import HumanMessage
 from app.adapters.patterns.base import GraphPattern, last_message_text
 from app.domain.chat import PatternReply, Quote, QuoteLine, TicketRef
 
-QUOTE_STATUS_BY_OUTCOME = {"awaiting_confirmation": "proposed", "declined": "rejected"}
-TICKET_OUTCOMES = {"quoted", "warranty_claim_registered"}
+QUOTE_STATUS_BY_OUTCOME = {
+    "awaiting_confirmation": "proposed", "declined": "rejected",
+    "direct_sale_accepted": "confirmed",
+}
+TICKET_OUTCOMES = {
+    "awaiting_confirmation",
+    "declined",
+    "quoted",
+    "warranty_claim_registered",
+}
 LABOR_LABELS = {"diagnosis": "Diagnóstico técnico", "pc_build": "Ensamble"}
 
 
@@ -31,6 +39,7 @@ class HierarchicalPattern(GraphPattern):
             quote=self.quote(result),
             ticket=self.ticket(result),
             pending_quote=result.get("outcome") == "awaiting_confirmation",
+            quote_id=result.get("quote_id"),
         )
 
     @staticmethod
@@ -59,4 +68,7 @@ class HierarchicalPattern(GraphPattern):
         code = result.get("ticket_code")
         if result.get("outcome") not in TICKET_OUTCOMES or not isinstance(code, str) or not code:
             return None
-        return TicketRef(code=code, status=result.get("ticket_status", "QUOTED"))
+        status = result.get("ticket_status")
+        if not status:
+            status = "PAYMENT_PENDING" if result.get("outcome") == "quoted" else "IN_DIAGNOSIS"
+        return TicketRef(code=code, status=status)

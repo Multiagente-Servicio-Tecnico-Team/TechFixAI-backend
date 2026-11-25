@@ -1,11 +1,42 @@
 from decimal import Decimal
+import re
 from typing import Any
 from langchain_core.messages import AIMessage
 
 from app.database.repository import ServiceRepository
+from app.application.catalog import CatalogService
 from app.agents.jerarquico.graph.state import ServiceState
-from app.agents.jerarquico.tools.database import make_inventory_lookup_tool
 from app.agents.jerarquico.trace import traced_tool
+
+
+CATALOG_REFINEMENT_THRESHOLD = 8
+_CATALOG_BRANDS = (
+    "Western Digital", "Cooler Master", "Thermalright", "DeepCool",
+    "TeamGroup", "G.Skill", "Kingston", "Crucial", "Corsair", "Samsung",
+    "Gigabyte", "Seagate", "Adata", "Arctic", "Seasonic", "Logitech",
+    "Intel", "AMD", "ASUS", "MSI", "EVGA", "Acer", "Dell", "Lenovo", "HP",
+)
+
+
+def _refinement_message(search_term: str, candidates: list[dict[str, Any]]) -> str:
+    names = [" ".join(str(item.get(field) or "") for field in ("name", "category", "description")) for item in candidates]
+    categories = sorted({str(item.get("category", "")).strip() for item in candidates if item.get("category")})
+    capacities = sorted({match.group(0).replace(" ", "") for name in names for match in re.finditer(r"\b\d+(?:\.\d+)?\s*(?:GB|TB)\b", name, re.IGNORECASE)})
+    generations = sorted({match.group(0).replace(" ", "").upper() for name in names for match in re.finditer(r"\bDDR\s*[345]\b", name, re.IGNORECASE)})
+    speeds = sorted({match.group(0).replace(" ", "") for name in names for match in re.finditer(r"\b\d{3,5}\s*(?:MHz|MT\s*/?\s*S)\b", name, re.IGNORECASE)})
+    interfaces = sorted({value for name in names for value in ("NVMe", "SATA", "PCIe", "M.2", "SODIMM", "UDIMM") if re.search(rf"\b{re.escape(value)}\b", name, re.IGNORECASE)})
+    normalized_names = [name.casefold() for name in names]
+    brands = [brand for brand in _CATALOG_BRANDS if any(brand.casefold() in name for name in normalized_names)]
+    facets = []
+    for label, values in (("tipo o formato", categories), ("capacidad", capacities), ("generación", generations), ("velocidad", speeds), ("interfaz o formato", interfaces), ("marca", brands)):
+        if len(values) > 1:
+            facets.append(f"{label}: {', '.join(values[:8])}")
+    choices = "; ".join(facets) or "marca, modelo o alguna característica técnica"
+    return (
+        f"Encontré {len(candidates)} artículos con stock para «{search_term}». "
+        f"Para no mostrarte una lista demasiado amplia, ¿qué prefieres entre {choices}? "
+        "Puedes combinar varios criterios en una sola respuesta."
+    )
 
 
 def _matches_requested_family(
@@ -75,13 +106,12 @@ def make_warehouse_agent(
     *,
     pc_build_labor_cost: Decimal | None = None,
 ):
-    inventory_tool = make_inventory_lookup_tool(repository)
-
+    catalog = CatalogService(repository)
     def warehouse_agent(state: ServiceState) -> dict[str, Any]:
         if state.get("request_type") == "PC_BUILD":
-            return _lookup_pc_build(state, repository, pc_build_labor_cost)
+            return _lookup_pc_build(state, repository, pc_build_labor_cost, catalog)
         if state.get("request_type") == "SALE":
-            return _lookup_commercial_items(state, repository)
+            return _lookup_commercial_items(state, repository, catalog)
 
         if not state.get("manual_selection_complete", True):
             return {
@@ -127,7 +157,7 @@ def make_warehouse_agent(
             candidates = traced_tool(
                 state,
                 "inventory_lookup",
-                lambda: repository.find_spare_parts(requested_term),
+                lambda: catalog.find_spare_parts(requested_term),
             )
             exact_matches = [
                 item
@@ -224,7 +254,7 @@ def make_warehouse_agent(
                 alternatives = traced_tool(
                     state,
                     "inventory_lookup",
-                    lambda: repository.find_spare_part_alternatives(
+                    lambda: catalog.find_alternatives(
                         requested_term
                     ),
                 )
@@ -367,6 +397,7 @@ def _selection_response(
     confirmed_parts: list[dict[str, Any]],
     pending_requests: list[dict[str, Any]],
     replaces_category: str = "",
+    search_term: str = "",
 ) -> dict[str, Any]:
     options = "\n".join(
         f"{index}. {item['name']} ({item.get('category', 'artículo')}) — "
@@ -379,12 +410,17 @@ def _selection_response(
         "outcome": "awaiting_inventory_selection",
         "awaiting_quote_confirmation": False,
         "awaiting_inventory_selection": True,
+        "awaiting_catalog_refinement": False,
+        "catalog_refinement_request": {"search_term": search_term, "quantity": quantity},
         "inventory_options": [
             {
                 "code": item["code"],
                 "name": item["name"],
+                "category": item.get("category", ""),
                 "quantity": quantity,
                 "replacement_category": replaces_category,
+                "unit_price": str(item["unit_price"]),
+                "current_stock": int(item["current_stock"]),
             }
             for item in candidates
         ],
@@ -402,9 +438,28 @@ def _selection_response(
     }
 
 
+def _refinement_response(
+    *, search_term: str, quantity: int, candidates: list[dict[str, Any]],
+    confirmed_parts: list[dict[str, Any]], pending_requests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "route": "awaiting_inventory_selection",
+        "outcome": "awaiting_catalog_refinement",
+        "awaiting_quote_confirmation": False,
+        "awaiting_inventory_selection": False,
+        "inventory_options": [],
+        "awaiting_catalog_refinement": True,
+        "catalog_refinement_request": {"search_term": search_term, "quantity": quantity},
+        "pending_commercial_requests": pending_requests,
+        "matched_parts": confirmed_parts,
+        "messages": [AIMessage(content=_refinement_message(search_term, candidates))],
+    }
+
+
 def _lookup_commercial_items(
     state: ServiceState,
     repository: ServiceRepository,
+    catalog: CatalogService,
 ) -> dict[str, Any]:
     selection_requests = list(state.get("required_parts", []))
     pending_requests = list(state.get("pending_commercial_requests", []))
@@ -427,7 +482,7 @@ def _lookup_commercial_items(
             exact = traced_tool(
                 state,
                 "inventory_lookup",
-                lambda: repository.find_spare_part_by_code(search_term),
+                lambda: catalog.find_by_code(search_term),
             )
         candidates = (
             [exact]
@@ -435,7 +490,7 @@ def _lookup_commercial_items(
             else traced_tool(
                 state,
                 "inventory_lookup",
-                lambda: repository.find_catalog_items(search_term, limit=8),
+                lambda: catalog.find_catalog_items(search_term, limit=500),
             )
         )
         usable = [
@@ -446,24 +501,42 @@ def _lookup_commercial_items(
         ]
         if not usable:
             return {
-                "outcome": "procurement_unavailable",
+                "route": "clarification",
+                "awaiting_catalog_refinement": False,
+                "awaiting_inventory_selection": False,
+                "catalog_refinement_request": {},
+                "inventory_options": [],
+                "required_parts": [],
+                "pending_commercial_requests": [],
+                "matched_parts": [],
+                "inventory_selection_replaces_category": "",
+                "outcome": "inventory_unavailable",
                 "awaiting_quote_confirmation": False,
                 "messages": [
                     AIMessage(
                         content=(
-                            f"No encontré opciones cotizables con stock suficiente "
-                            f"para “{search_term}”. No puedo confirmar precio ni "
-                            "plazo de abastecimiento."
+                            f"No encontr\u00e9 art\u00edculos con stock suficiente y precio registrado para \u00ab{search_term}\u00bb. "
+                            "Puedes ajustar la capacidad, interfaz o marca, o buscar otro art\u00edculo "
+                            "del cat\u00e1logo. No se cre\u00f3 una cotizaci\u00f3n, compra, orden ni reserva."
                         )
                     )
                 ],
             }
+        if len(usable) > CATALOG_REFINEMENT_THRESHOLD:
+            return _refinement_response(
+                search_term=search_term,
+                quantity=quantity,
+                candidates=usable,
+                confirmed_parts=confirmed_parts,
+                pending_requests=requests[index + 1 :],
+            )
         if len(usable) > 1:
             return _selection_response(
                 candidates=usable,
                 quantity=quantity,
                 confirmed_parts=confirmed_parts,
                 pending_requests=requests[index + 1 :],
+                search_term=search_term,
             )
         confirmed_parts.append(_commercial_part(usable[0], quantity))
         is_selection = False
@@ -490,6 +563,7 @@ def _lookup_pc_build(
     state: ServiceState,
     repository: ServiceRepository,
     labor_cost: Decimal | None,
+    catalog: CatalogService,
 ) -> dict[str, Any]:
     if state.get("route") == "inventory_selection" and state.get(
         "inventory_selection_replaces_category"
@@ -501,7 +575,7 @@ def _lookup_pc_build(
         selected = traced_tool(
             state,
             "inventory_lookup",
-            lambda: repository.find_spare_part_by_code(requests[0]["search_term"]),
+            lambda: catalog.find_by_code(requests[0]["search_term"]),
         )
         if not selected or selected.get("category") != replacement_category:
             return {
@@ -556,7 +630,7 @@ def _lookup_pc_build(
             item = traced_tool(
                 state,
                 "inventory_lookup",
-                lambda code=current["code"]: repository.find_spare_part_by_code(code),
+                lambda code=current["code"]: catalog.find_by_code(code),
             )
             quantity = int(current["quantity"])
             if (
@@ -630,7 +704,7 @@ def _lookup_pc_build(
             item = traced_tool(
                 state,
                 "inventory_lookup",
-                lambda code=code: repository.find_spare_part_by_code(code),
+                lambda code=code: catalog.find_by_code(code),
             )
             if (
                 item is None

@@ -1,0 +1,184 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Audio Chat Contract
+  version: 1.0.0
+  description: Contrato para enviar una grabación de micrófono al chat multiagente.
+servers:
+  - url: https://{api-host}
+    variables:
+      api-host:
+        default: api.example.com
+paths:
+  /api/chat/audio:
+    post:
+      operationId: sendAudioChatMessage
+      summary: Transcribe una grabación y envía su texto al patrón de chat seleccionado
+      description: >-
+        Requiere la misma sesión de cliente que POST /api/chat. El primer toque del
+        control inicia MediaRecorder; el segundo lo detiene. El navegador envía el
+        audio detenido como multipart y muestra transcript junto a reply. El archivo
+        no se almacena de forma persistente.
+      security:
+        - TechFixSession: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio, duration_ms, pattern, request_id]
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: >-
+                    Grabación en formato FLAC, MP3, MP4, MPEG, MPGA, M4A, OGG, WAV
+                    o WEBM. Máximo 25.000.000 bytes; la duración máxima es 120 s.
+                duration_ms:
+                  type: integer
+                  minimum: 1
+                  maximum: 120000
+                  description: Duración medida por el navegador; detiene captura a 120 s.
+                pattern:
+                  type: string
+                  enum: [hierarchical, orchestrator, decentralized]
+                conversation_id:
+                  type: string
+                  format: uuid
+                  description: Omitir para iniciar conversación nueva.
+                request_id:
+                  type: string
+                  format: uuid
+                  description: Clave de idempotencia generada para este intento de envío.
+      responses:
+        '200':
+          description: Transcripción procesada por el patrón seleccionado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioChatOut'
+        '401':
+          description: Falta una sesión autenticada o expiró.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: La sesión no corresponde a un cliente habilitado para el chat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conversación inválida o clave de idempotencia reutilizada con otra solicitud.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: La carga supera 25.000.000 bytes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: El tipo de audio no está admitido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Audio vacío, voz no reconocida o transcripción superior a 2.000 caracteres.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Se alcanzó la cuota local de 5 envíos de audio por minuto.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Segundos antes de poder intentar de nuevo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: El patrón de chat no pudo completar el mensaje.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Transcripción deshabilitada o proveedor temporalmente no disponible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: Groq no devolvió una transcripción en 30 segundos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    TechFixSession:
+      type: apiKey
+      in: cookie
+      name: techfix_session
+  schemas:
+    AudioChatOut:
+      type: object
+      required: [transcript, conversation_id, reply, pattern]
+      properties:
+        transcript:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        conversation_id:
+          type: string
+          format: uuid
+        reply:
+          type: string
+        pattern:
+          type: string
+          enum: [hierarchical, orchestrator, decentralized]
+        quote:
+          oneOf:
+            - $ref: '#/components/schemas/QuoteOut'
+            - type: 'null'
+        ticket:
+          oneOf:
+            - $ref: '#/components/schemas/TicketOut'
+            - type: 'null'
+    QuoteOut:
+      type: object
+      required: [status, lines, total, currency]
+      properties:
+        status:
+          type: string
+          enum: [proposed, saved, confirmed, rejected]
+        lines:
+          type: array
+          items:
+            type: object
+            required: [label, amount]
+            properties:
+              label: {type: string}
+              amount: {type: string}
+        total: {type: string}
+        currency: {type: string, default: PEN}
+    TicketOut:
+      type: object
+      required: [code, status]
+      properties:
+        code: {type: string}
+        status: {type: string}
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: {type: string}
+        code: {type: string}

@@ -23,7 +23,20 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 | Patrón de Red Descentralizada | [`app/agents/decentralized/`](app/agents/decentralized/) | Integrado; herramientas aún simuladas |
 | Patrón Jerárquico | [`app/agents/jerarquico/`](app/agents/jerarquico/) | Integrado; consulta y persistencia PostgreSQL |
 | Patrón Orquestador/Supervisor | [`app/agents/orquestador/`](app/agents/orquestador/) | Integrado; consulta y persistencia PostgreSQL |
+| Compras y proveedores: rutas administrativas `/api/admin/purchases` y `/api/admin/suppliers` | [`app/adapters/api/purchases.py`](app/adapters/api/purchases.py) | Compras separadas de órdenes; recepción explícita para incrementar stock |
 | Correo transaccional (SMTP) | `app/email/` | En `main` |
+
+### Registro de compras a proveedores
+
+El contrato HTTP se mantiene en [`specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml`](specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml). La feature registra comprobantes, método y estado de pago, recepciones y movimientos auditables; no genera asientos contables ni PLE.
+
+La base se instala con [`sql/esquema-vacio-produccion.sql`](sql/esquema-vacio-produccion.sql) (esquema completo, sin filas) y [`sql/seeds/datos-iniciales.sql`](sql/seeds/datos-iniciales.sql) (ADMIN por defecto, inventario y PCGE). Pasos en [`sql/README.md`](sql/README.md).
+
+### Clientes, tickets de servicio y ventas directas
+
+La feature backend en [`specs/007-gestion-clientes-comerciales/`](specs/007-gestion-clientes-comerciales/) separa `users` (cuentas) de `customers` (identidad comercial). Los tickets son para servicio; una cotización de venta puede existir sin ticket. Aceptarla reserva stock; solo ADMIN confirma el pago y crea la venta. La respuesta de `POST /api/chat` incluye `quote_id` cuando el patrón guardó una cotización.
+
+La BD tiene `customers`, perfil comercial vinculado a la cuenta del portal y relaciones comerciales obligatorias; se conservaron las columnas legacy durante compatibilidad. Se eliminaron los ocho tickets `SALE` de prueba aprobados y sus dependientes confirmados. El Orquestador aún no clasifica compras directas.
 
 ## Integración de patrones
 
@@ -48,6 +61,22 @@ configurar el entorno local.
 Ver [`spec/06-integracion-patrones.md`](spec/06-integracion-patrones.md) y
 [`docs/06-integracion-patrones.md`](docs/06-integracion-patrones.md) para alcance,
 decisiones, validación y limitaciones del bloque.
+
+## Chat por voz (backend)
+
+`POST /api/chat/audio` recibe `multipart/form-data` autenticado por la misma cookie
+que el chat escrito. El backend transcribe con Groq `whisper-large-v3-turbo` y entrega
+el texto normalizado al caso de uso compartido de los tres patrones. No persiste el
+archivo; conserva respuestas exitosas para idempotencia durante diez minutos y aplica
+un limite de cinco envios por cliente por minuto.
+
+La funcion permanece desactivada hasta configurar `AUDIO_TRANSCRIPTION_ENABLED=true`.
+Usa el `GROQ_API_KEY` existente. Si LangSmith esta habilitado, ambas opciones
+`LANGSMITH_HIDE_INPUTS` y `LANGSMITH_HIDE_OUTPUTS` deben ser `true`. Los limites
+ajustables y sus valores por defecto estan en `.env.example`. El contrato HTTP
+canonico esta en
+[`specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml`](specs/002-transcripcion-audio/contracts/audio-chat.openapi.yaml);
+detalles de ejecucion en [`app/chat/README.md`](app/chat/README.md).
 
 ## Arquitectura
 
@@ -81,6 +110,8 @@ decisiones, validación y limitaciones del bloque.
   `SendChatMessage`; los importes usan `Decimal` (`domain/money.py`).
 
 - La identidad del cliente sale siempre de la cookie firmada; el chat nunca pide el correo.
+- La administración de tickets (`/api/admin/tickets` y `/api/admin/customers`) exige cookie de sesión de rol `ADMIN`; el backend rechaza clientes y técnicos con `403`.
+- Gestión administrativa de tickets (`/api/admin/tickets` y `/api/admin/customers`) exige una cookie de sesión de rol `ADMIN`; el backend rechaza clientes y técnicos con `403`.
 - Cada patrón expone el mismo `POST /api/chat`, así el frontend funciona con cualquiera de ellos. La guía para
   conectar un patrón está en [`app/chat/README.md`](app/chat/README.md).
 
@@ -93,7 +124,7 @@ app/
 ├── domain/          Entidades y reglas: presupuesto, ticket, respuesta del patrón, dinero (Decimal), errores
 ├── application/     Casos de uso (SendChatMessage, ListCustomerTickets), registro de conversaciones y puertos
 ├── adapters/
-│   ├── api/            Rutas FastAPI del chat (/api/chat, /api/chat/patterns, /api/customer/tickets)
+│   ├── api/            Rutas del chat y CRUD administrativo de tickets
 │   ├── patterns/       Un adaptador por patrón LangGraph + base común + registro
 │   ├── persistence/    Lectura de «Mis Tickets» desde PostgreSQL
 │   └── llm/            Trazas de LangSmith con contenido oculto
@@ -118,7 +149,7 @@ tests/
 
 - Python 3.12
 - Node.js 18 o superior (solo para ejecutar el frontend)
-- PostgreSQL 16 con las tablas del script del equipo (`creacion_tablas_sin_inserciones.sql`)
+- PostgreSQL 16 o 17, instalado con los scripts de [`sql/`](sql/README.md)
 - Claves de Groq y LangSmith para los patrones con LLM
 
 ## Configuración
@@ -135,18 +166,28 @@ Copiar `.env.example` a `.env` y completar:
 | `GROQ_API_KEY` | Modelo de los agentes de los patrones |
 | `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGSMITH_PROJECT` | Trazabilidad en LangSmith |
 | `LANGSMITH_HIDE_INPUTS`, `LANGSMITH_HIDE_OUTPUTS` | Ocultamiento de contenido en las trazas |
+| `RAG_RETRIEVAL_MODE` | `lexical` por defecto para los tres patrones; `hybrid` activa el índice vectorial local |
 
-La instalación raíz incluye las dependencias de API, agentes y RAG mediante
-`requirements-agent.txt`. Para crear o actualizar el índice vectorial local una
-vez instaladas las dependencias, ejecuta:
+El archivo único `requirements.txt` reúne las dependencias de API, agentes, RAG,
+Streamlit y pruebas. Instálalas desde la raíz del backend con:
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+```
+
+El chat usa búsqueda léxica compartida por defecto y no necesita crear un índice
+vectorial. Para probar el modo híbrido opcional, establece
+`RAG_RETRIEVAL_MODE=hybrid` y crea o actualiza el índice local:
 
 ```powershell
 .\.venv\Scripts\python.exe -m app.rag.ingest
 ```
 
 La ingesta descarga el modelo FastEmbed la primera vez y guarda el índice en
-`data/chroma/`, que está excluido de Git. Debe repetirse cuando cambie el
-contenido de `data/knowledge/`.
+`data/chroma/`, que está excluido de Git. Este modo no se recomienda para el
+servicio gratuito de Render: su disco es efímero y la instancia tiene recursos
+limitados. Si cambian los documentos, vuelve a generar el índice antes de usar
+el modo híbrido.
 
 El frontend ([TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
 `/auth` y `VITE_CHAT_URL` al mismo origen del chat. Los valores locales por defecto
@@ -170,6 +211,9 @@ en `/auth/*` y el chat en `/api/chat`; ambos clientes usan el mismo host y puert
 Para los endpoints independientes, ver la documentación de sus módulos.
 
 ## Pruebas
+
+Para recorrer manualmente las capacidades disponibles desde el chat, consulta la
+[guía de pruebas del patrón jerárquico](docs/22-guia-pruebas-manuales-jerarquico.md).
 
 ```bash
 .venv/Scripts/python -m pytest -q
@@ -204,3 +248,9 @@ Para los endpoints independientes, ver la documentación de sus módulos.
 - Tickets, inventario y "Mis Tickets" del frontend usan datos de demostración.
 - `npm audit --omit=dev` reporta dos vulnerabilidades moderadas en React Router; el arreglo sugerido por npm
   salta a la versión 7 y requiere evaluar cambios incompatibles antes de aplicarlo.
+
+## Especificación de paridad multiagente (en progreso)
+
+La rama `feature/spec-kit` conserva las tres topologías para evaluación académica y centraliza el perfil del modelo. El RAG compartido registra fuentes, secciones, versiones y nivel de confianza; el FAQ con datos ficticios se etiqueta como demostrativo. Las compras a proveedores siguen no disponibles. El repositorio puede registrar solicitudes de reembolso pendientes tras validar titularidad y pago, pero el flujo conversacional aún no está conectado a los tres grafos.
+
+La paridad funcional todavía no está implementada: la Red Descentralizada conserva herramientas simuladas y faltan flujos del Orquestador. Consulta [las tareas pendientes](specs/001-patrones-multiagente-coherentes/tasks.md) y [la trazabilidad del esquema](docs/20-esquema-ampliado-y-trazabilidad.md).

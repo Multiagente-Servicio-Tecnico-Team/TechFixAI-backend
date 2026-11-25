@@ -1,5 +1,10 @@
 # Spec 11 — Búsqueda comercial y armado de PC flexible
 
+**Estado retrospectivo: Parcial — cubre perfiles curados y cambios; no arma configuraciones libres ni reserva stock.**
+**Evidencia revisada:** docs/14-ventas-y-armado-pc-flexible.md; app/agents/jerarquico/
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Permitir que un cliente describa artículos, categorías y cambios con lenguaje

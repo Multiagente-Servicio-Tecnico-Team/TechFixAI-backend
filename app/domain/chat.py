@@ -56,6 +56,7 @@ class PatternReply:
     ticket: TicketRef | None = None
     # True cuando el patrón espera que el cliente acepte o rechace un presupuesto.
     pending_quote: bool = field(default=False)
+    quote_id: int | None = None
 
 
 def message_for_action(action: str | None, message: str | None) -> str:

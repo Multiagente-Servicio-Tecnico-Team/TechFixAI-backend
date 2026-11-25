@@ -1,15 +1,15 @@
 from langchain_core.tools import tool
 
-from app.rag.retriever import buscar_conocimiento
+from app.rag.retriever import retrieve_documents
 
 
 @tool
 def consultar_base_conocimiento(consulta: str) -> str:
     """Consulta la base de conocimiento del servicio técnico."""
 
-    documentos = buscar_conocimiento(
-        consulta=consulta,
-        k=2,
+    documentos = retrieve_documents(
+        consulta,
+        limit=2,
     )
 
     if not documentos:
@@ -18,11 +18,12 @@ def consultar_base_conocimiento(consulta: str) -> str:
     resultados = []
 
     for documento in documentos:
-        fuente = documento.metadata.get("source", "desconocida")
+        fuente = documento.source_path or documento.source_id
 
         resultados.append(
-            f"Fuente: {fuente}\n"
-            f"{documento.page_content}"
+            f"Fuente: {fuente} (confianza: {documento.trust_level}; "
+            f"área: {documento.area}; sección: {documento.section or documento.title or 'sin título'})\n"
+            f"{documento.content}"
         )
 
     return "\n\n".join(resultados)

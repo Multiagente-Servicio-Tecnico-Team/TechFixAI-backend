@@ -1,4 +1,9 @@
-﻿# Spec 14 - datos comerciales de FAQ para demostración
+# Spec 14 - datos comerciales de FAQ para demostración
+
+**Estado retrospectivo: Implementada para demostración; dirección, horario y medios de pago son ficticios.**
+**Evidencia revisada:** docs/17-datos-comerciales-faq-demo.md; data/knowledge/; app/rag/
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
 
 ## Objetivo
 

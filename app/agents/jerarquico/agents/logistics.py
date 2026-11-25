@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.jerarquico.graph.state import ServiceState
 from app.agents.jerarquico.trace import traced_tool
+from app.application.logistics import record_customer_logistics_preference
 from app.database.repository import ServiceRepository
 
 
@@ -62,8 +63,9 @@ def make_logistics_agent(llm: Any, repository: ServiceRepository):
         record_id = traced_tool(
             state,
             "logistics_record_write",
-            lambda: repository.create_logistics_record(
-                ticket_id=state["ticket_id"],
+            lambda: record_customer_logistics_preference(
+                repository,
+                ticket_id=state.get("logistics_ticket_id") or state["ticket_id"],
                 customer_id=state["customer_id"],
                 mode=decision.mode,
                 courier_company=decision.courier_company,

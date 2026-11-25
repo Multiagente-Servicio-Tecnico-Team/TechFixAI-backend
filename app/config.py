@@ -19,15 +19,9 @@ def configure_tracing() -> None:
 
 
 def create_chat_model():
-    from langchain_groq import ChatGroq
+    from app.adapters.llm.model_factory import create_model
+    from app.settings import load_settings
 
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("Agrega GROQ_API_KEY al archivo .env para iniciar los agentes")
-
+    settings = load_settings()
     configure_tracing()
-    return ChatGroq(
-        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-        temperature=0,
-        api_key=api_key,
-    )
+    return create_model(settings)

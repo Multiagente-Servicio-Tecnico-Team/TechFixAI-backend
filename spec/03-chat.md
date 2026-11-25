@@ -1,5 +1,10 @@
 # 03 — Chat autenticado del portal
 
+**Estado retrospectivo: Parcial — contrato backend implementado; proxy y smoke test de producción dependen del frontend/despliegue.**
+**Evidencia revisada:** docs/03-chat.md; app/accounts/; app/chat/; TechFixAI-frontend
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 El cliente autenticado debe poder usar el chat de patrones sin incluir su correo,

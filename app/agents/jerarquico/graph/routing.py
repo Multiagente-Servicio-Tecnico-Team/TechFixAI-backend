@@ -14,6 +14,7 @@ def after_supervisor(state: ServiceState) -> str:
         "pc_build": "commercial_team_supervisor",
         "warranty_status": "operations_team_supervisor",
         "warranty_claim": "operations_team_supervisor",
+        "refund_request": "refund_agent",
         "logistics": "operations_team_supervisor",
         "inventory_selection": "warehouse_agent",
         "diagnosis_only": "warehouse_agent",
@@ -23,6 +24,7 @@ def after_supervisor(state: ServiceState) -> str:
         "declined": END,
         "clarification": END,
         "customer_not_found": END,
+        "out_of_scope": "out_of_scope_agent",
     }.get(state.get("route", ""), END)
 
 
@@ -35,11 +37,8 @@ def after_operations_supervisor(state: ServiceState) -> str:
 
 
 def after_logistics(state: ServiceState) -> str:
-    if (
-        state.get("outcome") == "logistics_registered"
-        and state.get("request_type") in {"SALE", "PC_BUILD"}
-    ):
-        return "order_completion_agent"
+    # Sales and PC_BUILD have no service ticket. A PC_BUILD warranty is
+    # attached to its paid sales order inside payment confirmation.
     return END
 
 
@@ -56,8 +55,6 @@ def after_knowledge_retrieval(state: ServiceState) -> str:
 def after_inventory(state: ServiceState) -> str:
     if state.get("outcome") == "inventory_confirmed":
         return "sales_agent"
-    if state.get("outcome") == "procurement_unavailable":
-        return "purchasing_agent"
     return END
 
 

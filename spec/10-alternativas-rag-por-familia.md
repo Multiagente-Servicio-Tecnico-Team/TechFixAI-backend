@@ -1,5 +1,10 @@
 # Selección de alternativas de catálogo desde el RAG
 
+**Estado retrospectivo: Implementada según evidencia histórica; la compatibilidad física no está modelada.**
+**Evidencia revisada:** docs/13-alternativas-rag-por-familia.md; app/database/repository.py; app/agents/jerarquico/warehouse.py
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Generalizar a los casos del manual RAG el flujo de candidatos de inventario y

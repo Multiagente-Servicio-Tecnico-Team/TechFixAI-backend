@@ -1,5 +1,10 @@
 # Spec 16 - precios y deduplicación del seed de inventario
 
+**Estado retrospectivo: Aplicada al archivo seed según evidencia; no actualiza automáticamente bases ya pobladas.**
+**Evidencia revisada:** docs/19-precios-y-dedupe-catalogo-seed.md; sql/; contexto/
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 ## Objetivo
 
 Mejorar el catálogo de demostración usado para ventas, con precios de referencia

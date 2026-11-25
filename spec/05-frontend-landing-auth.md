@@ -1,5 +1,10 @@
 # 05 — Frontend: landing, registro de cuenta e inicio de sesión
 
+**Estado retrospectivo: Histórica — la implementación vive en el repositorio TechFixAI-frontend.**
+**Evidencia revisada:** TechFixAI-frontend/; docs/05-frontend-landing-auth.md
+**Alcance de esta revisión:** inspección estática; no se ejecutaron pruebas ni servicios. Ver [README.md](README.md) para el criterio y el flujo Spec Kit.
+
+
 Tarea: Landing, Registro de cuenta e Inicio de sesión. Esta es la **spec 1 de la tarea (solo frontend)**.
 Las specs siguientes (backend `/registro` y `/login`, persistencia en BD, contraseñas con hash y pruebas con
 Postman) se definen después y deben respetar el contrato de este documento.

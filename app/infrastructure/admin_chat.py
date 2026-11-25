@@ -57,7 +57,7 @@ def _describe_schema(schema: dict[str, Any], defs: dict[str, Any], depth: int = 
 @lru_cache(maxsize=1)
 def capability_argument_hints() -> str:
     """Campos de cada capacidad, derivados de los esquemas que validan la operación."""
-    from app.infrastructure.admin_capabilities import ReportExport
+    from app.infrastructure.admin_capabilities import PleExport, ReportExport
 
     lines = []
     for action in sorted(WRITE_ACTIONS):
@@ -70,6 +70,8 @@ def capability_argument_hints() -> str:
         lines.append(f"{action}: {text}")
     export = ReportExport.model_json_schema()
     lines.append("accounting.reports.export: " + _describe_schema(export, export.get("$defs", {})))
+    ple = PleExport.model_json_schema()
+    lines.append("accounting.ple.export: " + _describe_schema(ple, ple.get("$defs", {})))
     lines.append("*.get: {id*:integer}; *.list: {search, status, limit, offset, customer_id, supplier_id} según el recurso")
     return "\n".join(lines)
 
@@ -97,6 +99,7 @@ _RESOURCE_TITLES = {
     "purchase_orders": "Órdenes de compra", "sales_quotes": "Cotizaciones de venta",
     "sales_orders": "Ventas", "payments": "Pagos", "accounting.entries": "Asientos contables",
     "accounting.categories": "Categorías contables", "accounting.reports": "Reporte contable",
+    "accounting.ple": "Exportación PLE SUNAT",
 }
 
 _ACTION_LABELS = {
@@ -251,6 +254,10 @@ def _make_presentation(action: str, value: Any, *, title: str | None = None) -> 
         return {"kind": "download", "title": resource_title,
                 "summary": f"{value.get('report', 'Reporte').replace('_', ' ').capitalize()} · {value.get('from_date', '')} al {value.get('to_date', '')} · {str(value.get('format', 'xlsx')).upper()}",
                 "download_url": value.get("download_url"), "download_label": "Descargar reporte"}
+    if action == "accounting.ple.export" and isinstance(value, dict):
+        return {"kind": "download", "title": "Exportación PLE SUNAT",
+                "summary": f"Libro Diario 5.1 · {value.get('year')}-{int(value.get('month', 0)):02d}",
+                "download_url": value.get("download_url"), "download_label": "Descargar PLE .txt"}
     data = json_safe(value)
     display_title = title or resource_title
     if isinstance(data, dict) and isinstance(data.get("items"), list):
@@ -667,7 +674,7 @@ class AdminChatService:
             "Las fechas van en formato AAAA-MM-DD y los importes como texto decimal (\"150.00\"). "
             "Conserva en español y sin traducir los textos libres (motivo, detalle, notas, nombres) "
             "tal como los dicta el ADMIN. "
-            "Exportar o descargar un reporte contable es intent=read con accounting.reports.export. "
+            "Exportar o descargar un reporte contable es intent=read con accounting.reports.export; para el PLE SUNAT usa accounting.ple.export con year y month. "
             "En un asiento contable cada línea usa solo account_code con el código de cuenta que diga el ADMIN "
             "(no inventes account_id ni account_name), "
             "debit y credit como texto decimal y \"0.00\" en el lado que no corresponde; si el ADMIN da "

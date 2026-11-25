@@ -19,21 +19,15 @@ class KnowledgeSource:
 
 
 def knowledge_sources() -> tuple[KnowledgeSource, ...]:
-    roots = (
-        ("business", BASE_DIR / "data" / "knowledge", "verified_guide", True),
-        (
-            "hierarchical",
-            BASE_DIR / "app" / "agents" / "jerarquico" / "knowledge_base",
-            "verified_guide",
-            True,
-        ),
-        (
-            "orchestrator",
-            BASE_DIR / "app" / "agents" / "orquestador" / "knowledge",
-            "verified_guide",
-            True,
-        ),
-    )
+    # The reviewed hierarchical knowledge base is the one canonical corpus.
+    # Other historical Markdown directories are intentionally excluded until
+    # their content is reviewed and merged here.
+    roots = ((
+        "hierarchical",
+        BASE_DIR / "app" / "agents" / "jerarquico" / "knowledge_base",
+        "verified_guide",
+        True,
+    ),)
     sources: list[KnowledgeSource] = []
     for source_group, root, trust, customer_facts_allowed in roots:
         if not root.is_dir():
@@ -44,14 +38,14 @@ def knowledge_sources() -> tuple[KnowledgeSource, ...]:
             area = "faq" if path.name.casefold().startswith("faq") else (
                 "sales" if "build" in path.name.casefold() else "technical"
             )
-            trust_level = "demo_only" if area == "faq" else trust
+            trust_level = trust
             sources.append(
                 KnowledgeSource(
                     source_id=source_id,
                     path=path,
                     area=area,
                     trust_level=trust_level,
-                    customer_facts_allowed=customer_facts_allowed and trust_level != "demo_only",
+                    customer_facts_allowed=customer_facts_allowed,
                 )
             )
     return tuple(sources)

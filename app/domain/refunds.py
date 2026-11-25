@@ -8,7 +8,7 @@ from app.domain.errors import DomainError
 class RefundRequest:
     id: int
     payment_id: int
-    ticket_id: int
+    ticket_id: int | None
     amount: Decimal
     status: str = "REQUESTED"
 

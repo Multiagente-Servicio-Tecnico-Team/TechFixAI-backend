@@ -16,16 +16,16 @@
 - **Rationale**: The decentralized agents currently hardcode their model while other patterns use environment configuration. This confounds academic comparison.
 - **Alternatives considered**: Preserve per-pattern model defaults (not comparable); force identical full prompts (erases role-specific responsibilities).
 
-### 3. Use one knowledge source manifest and retrieval interface
+### 3. Use one canonical knowledge corpus and retrieval interface
 
-- **Decision**: Register the current FAQ, technical manuals, PC-build profiles, pattern-specific technical Markdown, and existing `data/knowledge` files through a single source manifest. Return stable source IDs, titles, source class, trust level, language, and document version with retrieved passages. Deduplicate exact content while retaining all source references.
-- **Rationale**: Existing sources overlap but carry different trust and usage semantics. A manifest centralizes inclusion, provenance, and the demonstrative-data guard without requiring an immediate content rewrite.
-- **Alternatives considered**: Only vectorize `data/knowledge` (leaves hierarchical/orchestrator content out); copy every file into a new corpus (causes two sources of truth); keep three retrievers (preserves inconsistent recall).
+- **Decision**: Use the reviewed `app/agents/jerarquico/knowledge_base/` Markdown as the canonical source through one manifest. Return stable source IDs, titles, source class, trust level, language, and document version with retrieved passages. Deduplicate exact content while retaining source references.
+- **Rationale**: The hierarchical corpus is the reviewed source selected by the project; excluding unreviewed historical directories avoids competing facts and inconsistent customer answers.
+- **Alternatives considered**: Include every historical Markdown directory immediately (can introduce conflicting facts); copy files into another corpus (creates two sources of truth); keep three retrievers (preserves inconsistent recall).
 
-### 4. Use a multilingual FastEmbed model and a versioned Chroma collection
+### 4. Keep embeddings optional and use lexical retrieval by default
 
-- **Decision**: Evaluate and use `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` as the shared embedding model for Spanish retrieval. Store the model ID and corpus version in collection metadata/name; build a new collection when the embedding model or corpus contract changes. Keep code/SKU lexical matching as a deterministic retrieval path.
-- **Rationale**: Current text is Spanish but `BAAI/bge-small-en-v1.5` is English-only. The official FastEmbed supported-model list identifies the chosen model as multilingual, 384 dimensions, Apache-2.0, and approximately 0.22 GB. The current model is also 384 dimensions, but equal dimensions do not make their vector spaces interchangeable, so the new collection must be versioned.
+- **Decision**: Keep `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and versioned Chroma ingestion behind `RAG_RETRIEVAL_MODE=hybrid`; default all three patterns to the shared lexical retriever.
+- **Rationale**: The first deployment target is Render Free, where avoiding an on-demand model download and local vector-store initialization reduces resource and persistence concerns. Lexical results, metadata filters, and abstention remain common across patterns. The hybrid implementation remains available for later evaluation with an appropriate resource plan.
 - **Alternatives considered**: Keep the English model (poor language alignment); add an unsupported/custom model (additional registration and packaging work); change to an English reranker (does not solve Spanish recall).
 - **Source**: [FastEmbed supported text embedding models](https://qdrant.github.io/fastembed/examples/Supported_Models/) and [FastEmbed project README](https://github.com/qdrant/fastembed/blob/main/README.md).
 
@@ -49,10 +49,10 @@
 
 ### 8. Database reference is already present in the test database
 
-- **Decision**: Treat the expanded schema as canonical and do not execute its destructive setup SQL. The current `.env` test database was inspected read-only on 2026-11-02; its public tables, relevant columns, and enum labels match the expanded schema. No schema migration is planned unless implementation discovers a concrete missing object.
+- **Decision**: Treat the live PostgreSQL database as canonical. On 2026-11-03, `contexto/tablas postgres v2.sql` was regenerated as a schema-only rebuild script from `multiagentedb`, with DROP statements for exported `public` objects. It is for a resettable target; migrations remain the path to evolve an existing database while preserving data.
 - **Rationale**: The expanded tables already include refunds, payments, logistics, warranty claims, supplier purchase orders, `quote_details.custom_item_name`, and separate diagnosis fields. The functional gaps are application behavior and consistency.
-- **Alternatives considered**: Re-run `contexto/tablas postgres v2.sql` (it starts with `DROP ... CASCADE`); apply the older `sql/creacion_tablas_ingles_sin_inserciones.sql` (it omits required expanded tables/columns).
-- **Traceability**: No database rows were read; no writes or DDL were issued. Record the schema comparison and this decision in the implementation change log.
+- **Alternatives considered**: Running the rebuild script against a database with data (destructive and rejected) or using the legacy `sql/creacion_tablas_ingles_sin_inserciones.sql` (it omits current tables and columns).
+- **Traceability**: The schema was dumped without row data or DDL execution. The read-only customer-ticket route check returned 200 with quoted tickets. Record any later schema changes in `sql/migrations/`.
 
 ### 9. Keep conversation checkpoint persistence out of scope
 

@@ -6,11 +6,17 @@ Se comparó en modo de solo lectura la estructura de la base de prueba configura
 
 La base contiene las entidades ampliadas de usuarios, tickets, cotizaciones y detalles, repuestos, pagos, solicitudes de reembolso, garantías y reclamos, logística, proveedores y órdenes de compra. Los estados y columnas relevantes coinciden con el esquema ampliado para los flujos revisados.
 
-**Resultado:** no se necesitó DDL ni migración en esta revisión. No se ejecutó `contexto/tablas postgres v2.sql`: ese archivo contiene `DROP ... CASCADE` y sirve como referencia de bootstrap destructivo, no como migración de una base existente.
+**Resultado de la revisión del 2026-11-02:** no se necesitó DDL ni migración en esa revisión. La versión de `contexto/tablas postgres v2.sql` consultada entonces contenía `DROP ... CASCADE`; ese dato es histórico y ya no describe la instantánea regenerada el 2026-11-03.
 
 La conciliación estática de las consultas y estados usados por `ServiceRepository` confirma los nombres del esquema ampliado: `payments.payment_code` y `payments.customer_id` para resolver pagos del cliente; `refunds.payment_id`, `ticket_id`, `amount`, `reason` y `refund_status_enum`; `PAYMENT_PENDING` y `CANCELLED` para tickets; además de los campos y enums de reclamos de garantía y logística. La prueba de contrato valida columnas y etiquetas concretas en `tests/unit/infrastructure/test_expanded_schema_contract.py`, y la búsqueda de pago verifica el filtro simultáneo por código y cliente.
 
 No se encontró una columna o etiqueta enum requerida ausente. El flujo de compras a proveedores no escribe en `purchase_orders` ni `purchase_order_items`, porque el sistema no tiene una oferta de proveedor asociada a un repuesto.
+
+## Instantánea generada desde la base el 2026-11-03
+
+Por indicación del usuario, la base PostgreSQL local `multiagentedb` pasa a ser la única fuente de verdad del esquema actual. El 2026-11-03 primero se generó una instantánea schema-only; a solicitud posterior, el mismo archivo se convirtió a un script de reconstrucción con `pg_dump --schema-only --clean --if-exists --no-owner --no-privileges --schema=public`. Contiene 26 tablas y elimina/recrea los objetos públicos exportados, sin filas de datos. Es destructivo y solo corresponde a una BD destino reinicializable. No se ejecutó el script ni se modificó la BD local. Para conservar datos se usan migraciones versionadas.
+
+Se verificó `GET /api/customer/tickets` con una dependencia de cliente inyectada y el repositorio conectado a `multiagentedb`: respondió `200`, devolvió 12 tickets y serializó líneas de cotización para 3 de ellos. Esto valida el SQL y la respuesta de la ruta contra esta base; no sustituye una comprobación de sesión real en el navegador.
 
 ## Auditoría de duplicados
 
@@ -28,6 +34,7 @@ La búsqueda de referencias en `app/`, `tests/` y el árbol del proyecto confirm
 | Fecha | Base | Cambio | Evidencia |
 |---|---|---|---|
 | 2026-11-02 | Base local de prueba | Ninguno; verificación de solo lectura | Coincidencia estructural con el esquema ampliado; prueba estática en `tests/unit/infrastructure/test_expanded_schema_contract.py` |
+| 2026-11-03 | `multiagentedb` | Regeneración local de la instantánea SQL; sin DDL ni cambios de datos | `pg_dump` schema-only; 26 tablas públicas; ruta “Mis Tickets” responde 200 con cotizaciones |
 
 ## Validación de implementación
 
@@ -62,3 +69,4 @@ T031, T039 y T041 fueron completadas: matriz de flujos compartida, integraciones
 - No se ejecutó el smoke test optativo que puede descargar el modelo de embeddings. La suite normal no requiere Groq ni LangSmith.
 
 Las 52 tareas de `specs/001-patrones-multiagente-coherentes/tasks.md` están completadas. No se aplicó DDL ni se modificó la base de prueba durante esta fase.
+| 2026-11-03 | `multiagentedb` | Conversión del snapshot a script destructivo de reconstrucción; no ejecutado | `pg_dump --clean --if-exists`; 26 tablas; sin filas; solo para base reinicializable |

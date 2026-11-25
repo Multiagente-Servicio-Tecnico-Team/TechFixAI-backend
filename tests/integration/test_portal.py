@@ -13,6 +13,7 @@ from app.accounts.config import Settings as AccountSettings
 from app.accounts.models import Base
 from app.accounts.session import SessionGuard
 from app.main import PATTERN_NAMES, create_app
+from tests.integration.customer_fakes import customer_profiles_factory
 from app.settings import Settings
 
 
@@ -69,6 +70,7 @@ def portal():
         graph_factories={key: (lambda graph=graph: graph) for key, graph in graphs.items()},
         settings_factory=lambda: settings,
         trace_context_factory=nullcontext,
+        customer_repository_factory=customer_profiles_factory(),
     )
     yield accounts, TestClient(app)
     engine.dispose()

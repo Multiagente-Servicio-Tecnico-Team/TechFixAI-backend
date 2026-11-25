@@ -9,9 +9,89 @@ from app.application.quotes import accept_quoted_draft
 from app.database.repository import ServiceRepository
 
 
-def make_billing_agent(repository: ServiceRepository):
+def make_billing_agent(repository: ServiceRepository, direct_sales_quotes: Any | None = None):
+    def sales_quotes():
+        # Se crea al usarse para no abrir la BD al construir el grafo; inyectable en pruebas.
+        if direct_sales_quotes is not None:
+            return direct_sales_quotes
+        from app.adapters.persistence.sales_quotes import SalesQuoteRepositoryAdapter
+        return SalesQuoteRepositoryAdapter()
+
     def billing_agent(state: ServiceState) -> dict[str, Any]:
         quote = state["quote"]
+        if state.get("request_type") in {"SALE", "PC_BUILD"}:
+            quote_id = int(state["quote_id"])
+            try:
+                accepted = traced_tool(
+                    state,
+                    "direct_sale_quote_acceptance",
+                    lambda: sales_quotes().accept_direct_sales_quote(
+                        quote_id=quote_id,
+                        customer_id=int(state["customer_id"]),
+                        actor_user_id=state.get("actor_user_id"),
+                        idempotency_key=f"chat-sale-quote-{quote_id}",
+                    ),
+                )
+            except ValueError as exc:
+                return {
+                    "route": "awaiting_confirmation",
+                    "outcome": "awaiting_confirmation",
+                    "quote_id": quote_id,
+                    "awaiting_quote_confirmation": True,
+                    "messages": [AIMessage(content=(
+                        f"No pude aceptar la cotización #{quote_id}: {exc} "
+                        "No se confirmó el pago. Actualiza la cotización y vuelve "
+                        "a intentarlo si sigue pendiente."
+                    ))],
+                }
+            except (LookupError, PermissionError):
+                return {
+                    "outcome": "direct_sale_acceptance_unavailable",
+                    "quote_id": quote_id,
+                    "awaiting_quote_confirmation": False,
+                    "messages": [AIMessage(content=(
+                        "No pude confirmar esta cotización desde la cuenta actual. "
+                        "Revisa su estado en Mis cotizaciones antes de volver a intentarlo."
+                    ))],
+                }
+            if accepted.get("error"):
+                return {
+                    "outcome": "direct_sale_acceptance_unavailable",
+                    "quote_id": quote_id,
+                    "awaiting_quote_confirmation": False,
+                    "messages": [AIMessage(content=(
+                        f"La cotización #{quote_id} no se aceptó: {accepted['error']} "
+                        "Revisa Mis cotizaciones para consultar su estado."
+                    ))],
+                }
+            if accepted.get("status") != "ACCEPTED" or accepted.get("payment_id") is None:
+                return {
+                    "outcome": "direct_sale_acceptance_unavailable",
+                    "quote_id": quote_id,
+                    "awaiting_quote_confirmation": False,
+                    "messages": [AIMessage(content=(
+                        "No recibí una confirmación completa de la cotización. "
+                        "Revisa su estado en Mis cotizaciones antes de volver a intentarlo."
+                    ))],
+                }
+            return {
+                "quote_id": accepted["quote_id"],
+                "payment_id": accepted["payment_id"],
+                "payment_code": accepted["payment_code"],
+                "payment_status": "PENDING",
+                "ticket_id": None,
+                "ticket_code": "",
+                "ticket_status": None,
+                "awaiting_quote_confirmation": False,
+                "awaiting_logistics": False,
+                "outcome": "direct_sale_accepted",
+                "messages": [AIMessage(content=(
+                    f"Aceptaste la cotización de venta #{accepted['quote_id']}. "
+                    f"Reservé el stock hasta su vencimiento. El pago {accepted['payment_code']} "
+                    f"por S/ {quote['total_amount']:.2f} está PENDIENTE; el pedido se creará "
+                    "cuando ADMIN confirme que recibió el pago. No se creó un ticket de reparación."
+                ))],
+            }
         accepted_quote = traced_tool(
             state,
             "accepted_quote_write",
@@ -37,6 +117,7 @@ def make_billing_agent(repository: ServiceRepository):
             "ticket_status": "PAYMENT_PENDING",
             "awaiting_quote_confirmation": False,
             "awaiting_logistics": True,
+            "logistics_ticket_id": state["ticket_id"],
             "outcome": "quoted",
             "messages": [
                 AIMessage(

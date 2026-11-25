@@ -14,7 +14,7 @@ El backend expone un endpoint multipart autenticado y devuelve la transcripción
 
 **Language/Version**: Python 3.12; frontend existente React + Vite (repositorio separado).
 
-**Primary Dependencies**: FastAPI 0.142.2, LangGraph 1.2.2, Groq SDK 0.37.1 ya listado en `requirements-agent.txt`, Pydantic 2.13.5; añadir `python-multipart` para recibir `multipart/form-data`.
+**Primary Dependencies**: FastAPI 0.142.2, LangGraph 1.2.2, Groq SDK 0.37.1 y Pydantic 2.13.5 en `requirements.txt`; `python-multipart` permite recibir `multipart/form-data`.
 
 **Storage**: Sin almacenamiento nuevo. Conversación y resultado conservan la política actual en memoria; el archivo se mantiene solo durante la petición y se cierra al terminar.
 
@@ -90,7 +90,7 @@ app/
 │   └── request_limits.py         # Límite incremental del cuerpo multipart
 └── settings.py                  # Flag y parámetros de audio
 
-requirements-agent.txt           # python-multipart
+requirements.txt                 # dependencias unificadas del backend
 .env.example                     # bandera y límites documentados
 tests/
 ├── unit/application/            # Flujo de voz, cuota, idempotencia y fallos

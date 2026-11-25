@@ -11,7 +11,7 @@ from app.application.errors import AudioIdempotencyConflict, AudioQuotaExceeded
 
 @dataclass(frozen=True)
 class AudioRequestLease:
-    key: tuple[int, str]
+    key: tuple[str, int, str]
     fingerprint: str
     cached: Any = None
 
@@ -22,19 +22,23 @@ class AudioRequestRegistry:
         self._window = window_seconds
         self._ttl = ttl_seconds
         self._condition = Condition(RLock())
-        self._records: dict[tuple[int, str], tuple[str, float, Any | None]] = {}
-        self._in_progress: set[tuple[int, str]] = set()
-        self._attempts: dict[int, deque[float]] = defaultdict(deque)
+        self._records: dict[tuple[str, int, str], tuple[str, float, Any | None]] = {}
+        self._in_progress: set[tuple[str, int, str]] = set()
+        self._attempts: dict[tuple[str, int], deque[float]] = defaultdict(deque)
 
     @staticmethod
-    def fingerprint(audio: bytes, *, duration_ms: int, pattern: str, conversation_id: str | None) -> str:
+    def fingerprint(audio: bytes, *, duration_ms: int, pattern: str, conversation_id: str | None,
+                    role: str = "CUSTOMER") -> str:
         digest = sha256()
         digest.update(audio)
-        digest.update(f"\0{duration_ms}\0{pattern}\0{conversation_id or ''}".encode())
+        digest.update(f"\0{role}\0{duration_ms}\0{pattern}\0{conversation_id or ''}".encode())
         return digest.hexdigest()
 
-    def begin(self, customer_id: int, request_id: str, fingerprint: str) -> AudioRequestLease:
-        key = (customer_id, request_id)
+    def begin(self, customer_id: int, request_id: str, fingerprint: str, *, role: str = "CUSTOMER") -> AudioRequestLease:
+        if role not in {"CUSTOMER", "ADMIN"}:
+            raise ValueError("Unsupported audio request role")
+        key = (role, customer_id, request_id)
+        actor_key = (role, customer_id)
         with self._condition:
             while True:
                 now = monotonic()
@@ -46,7 +50,7 @@ class AudioRequestRegistry:
                     if existing[2] is not None:
                         return AudioRequestLease(key, fingerprint, existing[2])
                 if key not in self._in_progress:
-                    attempts = self._attempts[customer_id]
+                    attempts = self._attempts[actor_key]
                     while attempts and attempts[0] <= now - self._window:
                         attempts.popleft()
                     if len(attempts) >= self._quota:

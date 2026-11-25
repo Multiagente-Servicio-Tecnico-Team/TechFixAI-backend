@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 
 
-SCHEMA = Path(__file__).parents[3] / "contexto" / "tablas postgres v2.sql"
+SCHEMA = Path(__file__).parents[3] / "sql" / "esquema-vacio-produccion.sql"
 
 
 def test_expanded_schema_contains_business_entities_and_refund_states():
@@ -13,7 +13,7 @@ def test_expanded_schema_contains_business_entities_and_refund_states():
         "logistics_records", "suppliers", "purchase_orders", "purchase_order_items",
     )
     for table in required_tables:
-        assert f"CREATE TABLE {table} " in sql, table
+        assert f"CREATE TABLE public.{table} (" in sql, table
     for label in ("REQUESTED", "APPROVED", "PROCESSED", "REJECTED"):
         assert f"'{label}'" in sql
 
@@ -40,7 +40,7 @@ def test_required_expanded_workflow_columns_and_enum_labels_are_present():
         "spare_parts": {"code", "unit_price", "current_stock", "active"},
     }
     for table, columns in required.items():
-        block = re.search(rf"CREATE TABLE {table} \((.*?)\n\);", sql, re.S)
+        block = re.search(rf"CREATE TABLE public\.{table} \((.*?)\n\);", sql, re.S)
         assert block, f"table {table} missing"
         for column in columns:
             assert re.search(rf"^\s*{column}\s", block.group(1), re.M), f"{table}.{column} missing"
@@ -54,7 +54,7 @@ def test_required_expanded_workflow_columns_and_enum_labels_are_present():
         "logistics_status_enum": {"PENDING_RECEIPT", "RECEIVED_AT_WORKSHOP", "IN_TRANSIT", "DELIVERED"},
     }
     for enum, labels in enums.items():
-        block = re.search(rf"CREATE TYPE {enum} AS ENUM \((.*?)\);", sql, re.S)
+        block = re.search(rf"CREATE TYPE public\.{enum} AS ENUM \((.*?)\);", sql, re.S)
         assert block, f"enum {enum} missing"
         found = set(re.findall(r"'([A-Z_]+)'", block.group(1)))
         assert labels <= found, f"{enum}: missing {labels - found}"

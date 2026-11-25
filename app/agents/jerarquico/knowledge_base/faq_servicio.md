@@ -31,14 +31,14 @@ Aceptamos Yape, Plin, transferencia bancaria, tarjetas Visa/Mastercard y efectiv
 1. Cuéntanos qué necesitas: soporte/reparación, un producto, una cotización o armar una PC; para una PC indica uso y presupuesto.
 2. El asistente consulta los datos disponibles. Para productos y armados verifica precio y stock actuales del catálogo, muestra opciones y permite elegir o cambiar componentes.
 3. Revisas la propuesta. Los cambios solicitados actualizan los componentes y el total antes de aceptar.
-4. Solo con tu aceptación explícita se guarda la cotización y se registra el pago como PENDIENTE. Aún no significa que el pago se haya recibido ni reserva inventario.
-5. Eliges retiro presencial o envío por courier y se registra tu preferencia. La recepción/entrega se confirma después. Para ventas y armados, al completar el registro logístico el sistema genera la póliza de 3 meses.
+4. Solo con tu aceptación explícita se acepta la cotización de venta, se reserva el stock por el plazo indicado y se registra el pago como PENDIENTE. Esto no significa que el pago se haya recibido.
+5. Cuando ADMIN confirma el pago, el sistema crea el pedido y descuenta el inventario en una transacción. Para armados de PC, en ese mismo proceso se genera una póliza de 3 meses vinculada al pedido pagado. No se crea un ticket de servicio por una compra o armado.
 
 En solicitudes de reparación/soporte, primero se registra el ticket; el técnico realiza una evaluación, puede pedir información o revisión física y después se presenta la cotización correspondiente. No se registra ni cobra una cotización rechazada.
 
 ## Garantía
 
-Las ventas directas de productos y los armados de PC registrados por el flujo tienen una garantía de 3 meses. La garantía se crea al completar el registro logístico y queda vinculada a un código de póliza; la vigencia individual se consulta con el código exacto de la póliza en la cuenta del cliente. Para reparaciones o servicios, el alcance depende de la póliza asociada al caso. Se puede registrar un reclamo para evaluación. La cobertura final depende de la póliza y de la revisión del equipo; no prometas aprobación, reparación gratuita ni reembolso.
+Los armados de PC pagados por el flujo reciben una garantía de 3 meses vinculada al pedido y a un código de póliza. La vigencia individual se consulta con el código exacto. Para reparaciones o servicios, el alcance depende de la póliza asociada al caso. Se puede registrar un reclamo para evaluación. La cobertura final depende de la póliza y de la revisión del equipo; no prometas aprobación, reparación gratuita ni reembolso.
 
 ## Retiro y envío
 

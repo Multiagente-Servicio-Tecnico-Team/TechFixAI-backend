@@ -1,0 +1,366 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Purchase Orders API
+  version: 1.0.0
+  description: Gestión interna de órdenes de compra y recepciones físicas. Todas las rutas requieren sesión ADMIN.
+servers:
+  - url: http://localhost:8000
+security:
+  - sessionCookie: []
+paths:
+  /api/admin/purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      summary: Buscar órdenes de compra
+      parameters:
+        - {$ref: '#/components/parameters/limit'}
+        - {$ref: '#/components/parameters/offset'}
+        - in: query
+          name: supplier_id
+          schema: {type: integer, minimum: 1}
+        - in: query
+          name: status
+          schema: {$ref: '#/components/schemas/OrderStatus'}
+        - in: query
+          name: date_from
+          schema: {type: string, format: date}
+        - in: query
+          name: date_to
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: Página de órdenes que coincide con los filtros.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/OrderSummary'}}
+                  total: {type: integer, minimum: 0}
+                  limit: {type: integer}
+                  offset: {type: integer}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createPurchaseOrder
+      summary: Crear orden en borrador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OrderWrite'}
+      responses:
+        '201':
+          description: Orden creada en estado DRAFT.
+          content:
+            application/json:
+              schema: {type: object, required: [order], properties: {order: {$ref: '#/components/schemas/Order'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/Invalid'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/admin/purchase-orders/{order_id}:
+    parameters:
+      - in: path
+        name: order_id
+        required: true
+        schema: {type: integer, minimum: 1}
+    get:
+      operationId: getPurchaseOrder
+      summary: Consultar orden, recepciones, facturas e historial
+      responses:
+        '200':
+          description: Detalle de la orden.
+          content:
+            application/json:
+              schema: {type: object, required: [order], properties: {order: {$ref: '#/components/schemas/Order'}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    patch:
+      operationId: updateDraftPurchaseOrder
+      summary: Editar orden en borrador
+      description: Solo permite editar una orden DRAFT; las órdenes emitidas son inmutables.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OrderPatch'}
+      responses:
+        '200': {description: Orden actualizada y auditada.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Invalid'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/admin/purchase-orders/{order_id}/issue:
+    post:
+      operationId: issuePurchaseOrder
+      summary: Emitir una orden al proveedor
+      responses:
+        '200': {description: Orden emitida; actor y fecha quedan auditados.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/admin/purchase-orders/{order_id}/cancel:
+    post:
+      operationId: cancelPurchaseOrder
+      summary: Cancelar cantidades pendientes de una orden
+      description: Conserva recepciones y movimientos existentes; no revierte stock ya recibido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '200': {description: Orden cancelada y motivo auditado.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Invalid'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/admin/purchase-orders/{order_id}/receipts:
+    parameters:
+      - in: path
+        name: order_id
+        required: true
+        schema: {type: integer, minimum: 1}
+    get:
+      operationId: listPurchaseOrderReceipts
+      summary: Listar recepciones de una orden
+      responses:
+        '200':
+          description: Recepciones con líneas, movimientos, responsables y fechas.
+          content:
+            application/json:
+              schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/OrderReceipt'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: receivePurchaseOrder
+      summary: Registrar recepción física contra líneas de la orden
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OrderReceiptWrite'}
+      responses:
+        '201':
+          description: Recepción y movimientos aplicados atómicamente.
+          content:
+            application/json:
+              schema: {type: object, required: [receipt], properties: {receipt: {$ref: '#/components/schemas/OrderReceipt'}}}
+        '200':
+          description: Reintento idempotente; se devuelve la recepción existente.
+          headers:
+            Idempotent-Replayed: {schema: {type: boolean}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Invalid'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: techfix_session}
+  parameters:
+    limit:
+      in: query
+      name: limit
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+    offset:
+      in: query
+      name: offset
+      schema: {type: integer, minimum: 0, default: 0}
+  schemas:
+    Money:
+      type: string
+      pattern: '^(0|[1-9][0-9]{0,11})\.[0-9]{2}$'
+      examples: ['125.50']
+    OrderStatus:
+      type: string
+      enum: [DRAFT, ISSUED, PARTIALLY_RECEIVED, RECEIVED, CANCELLED]
+    OrderLineWrite:
+      type: object
+      additionalProperties: false
+      required: [description, quantity, unit_cost]
+      properties:
+        spare_part_id: {type: [integer, 'null'], minimum: 1}
+        description: {type: string, minLength: 1, maxLength: 300}
+        quantity: {type: integer, minimum: 1}
+        unit_cost: {$ref: '#/components/schemas/Money'}
+    OrderWrite:
+      type: object
+      additionalProperties: false
+      required: [supplier_id, items]
+      properties:
+        supplier_id: {type: integer, minimum: 1}
+        estimated_arrival: {type: [string, 'null'], format: date}
+        notes: {type: [string, 'null'], maxLength: 2000}
+        items:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/OrderLineWrite'}
+    OrderPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        supplier_id: {type: integer, minimum: 1}
+        estimated_arrival: {type: [string, 'null'], format: date}
+        notes: {type: [string, 'null'], maxLength: 2000}
+        items:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/OrderLineWrite'}
+    OrderLine:
+      type: object
+      required: [id, quantity_ordered, quantity_received, quantity_pending, quantity_invoiced, quantity_cancelled, unit_cost, subtotal]
+      properties:
+        id: {type: integer}
+        spare_part_id: {type: [integer, 'null']}
+        code_snapshot: {type: [string, 'null'], maxLength: 50}
+        description_snapshot: {type: [string, 'null'], maxLength: 300, description: Null is possible only on legacy rows whose source item and custom name no longer exist.}
+        quantity_ordered: {type: string}
+        quantity_received: {type: string}
+        quantity_pending: {type: string}
+        quantity_invoiced: {type: [string, 'null'], description: Zero if no invoice is linked; null if an invoice line remains unmapped to an order line.}
+        quantity_cancelled: {type: string, description: Remaining quantity cancelled with the order; zero for non-cancelled orders.}
+        unit_cost: {$ref: '#/components/schemas/Money'}
+        subtotal: {$ref: '#/components/schemas/Money'}
+    OrderSummary:
+      type: object
+      required: [id, supplier_id, status, total_amount, currency, created_at]
+      properties:
+        id: {type: integer}
+        supplier_id: {type: integer}
+        supplier_name: {type: string}
+        status: {$ref: '#/components/schemas/OrderStatus'}
+        total_amount: {$ref: '#/components/schemas/Money'}
+        currency: {type: string, const: PEN}
+        estimated_arrival: {type: [string, 'null'], format: date}
+        created_at: {type: string, format: date-time}
+    Order:
+      allOf:
+        - {$ref: '#/components/schemas/OrderSummary'}
+        - type: object
+          properties:
+            created_by: {type: integer}
+            issued_by: {type: [integer, 'null']}
+            issued_at: {type: [string, 'null'], format: date-time}
+            cancelled_by: {type: [integer, 'null']}
+            cancelled_at: {type: [string, 'null'], format: date-time}
+            cancellation_reason: {type: [string, 'null']}
+            updated_at: {type: string, format: date-time}
+            notes: {type: [string, 'null']}
+            items: {type: array, items: {$ref: '#/components/schemas/OrderLine'}}
+            receipts: {type: array, items: {$ref: '#/components/schemas/OrderReceipt'}}
+            linked_purchases: {type: array, items: {$ref: '#/components/schemas/LinkedPurchase'}}
+            audit_events: {type: array, items: {$ref: '#/components/schemas/OrderAuditEvent'}}
+    LinkedPurchase:
+      type: object
+      required: [id, document_type, document_number, issue_date, total_amount, status, payment_status]
+      properties:
+        id: {type: integer}
+        document_type: {type: string}
+        document_number: {type: string}
+        issue_date: {type: string, format: date}
+        total_amount: {$ref: '#/components/schemas/Money'}
+        status: {type: string}
+        payment_status: {type: string, enum: [PENDING, PAID]}
+    OrderAuditEvent:
+      type: object
+      required: [id, actor_user_id, event_type, created_at]
+      properties:
+        id: {type: integer}
+        actor_user_id: {type: integer}
+        event_type: {type: string}
+        changed_fields: {type: [object, 'null']}
+        created_at: {type: string, format: date-time}
+    OrderReceiptWrite:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        notes: {type: [string, 'null'], maxLength: 2000}
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [purchase_order_item_id, quantity_received]
+            properties:
+              purchase_order_item_id: {type: integer, minimum: 1}
+              quantity_received: {type: integer, minimum: 1}
+    OrderReceipt:
+      type: object
+      required: [id, purchase_order_id, received_at, received_by, items]
+      properties:
+        id: {type: integer}
+        purchase_order_id: {type: integer}
+        received_at: {type: string, format: date-time}
+        received_by: {type: integer}
+        notes: {type: [string, 'null']}
+        items: {type: array, items: {$ref: '#/components/schemas/OrderReceiptLine'}}
+    OrderReceiptLine:
+      type: object
+      required: [purchase_order_item_id, quantity_received, movement]
+      properties:
+        purchase_order_item_id: {type: integer}
+        quantity_received: {type: string}
+        movement:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [id, quantity_delta, stock_before, stock_after]
+              properties:
+                id: {type: integer}
+                quantity_delta: {type: integer}
+                stock_before: {type: integer}
+                stock_after: {type: integer}
+    Error:
+      type: object
+      properties:
+        detail: {type: string}
+        code: {type: string}
+        field: {type: [string, 'null']}
+  responses:
+    Unauthorized:
+      description: Sesión ausente o vencida.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Forbidden:
+      description: Se requiere rol ADMIN.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    NotFound:
+      description: Recurso inexistente.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Conflict:
+      description: Estado incompatible, exceso de recepción o clave de idempotencia reutilizada con otro contenido.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Invalid:
+      description: Datos inválidos o cantidades/importes inconsistentes.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    Unavailable:
+      description: Persistencia temporalmente no disponible; la transacción no se aplicó parcialmente.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}

@@ -24,18 +24,19 @@ def test_faq_retriever_selects_topic_for_natural_questions():
     for question, expected_heading in cases.items():
         context = retriever.retrieve(question, limit=1)
         assert normalize(expected_heading) in normalize(context), question
-        assert "fuente demostrativa" in context.casefold()
+        assert "fuente faq: app/agents/jerarquico/knowledge_base/faq_servicio.md" in context.casefold()
 
 
-def test_faq_demo_address_and_hours_are_never_unlabelled():
+def test_faq_address_and_hours_retrieve_from_the_canonical_source():
     retriever = MarkdownFaqRetriever()
     location = retriever.retrieve("donde esta el local", limit=1).casefold()
     hours = retriever.retrieve("cuando abren", limit=1).casefold()
-    assert "fuente demostrativa" in location and "av. los talleres 450" in location
-    assert "fuente demostrativa" in hours and "09:00 a 18:00" in hours
+    source = "fuente faq: app/agents/jerarquico/knowledge_base/faq_servicio.md"
+    assert source in location and "av. los talleres 450" in location
+    assert source in hours and "09:00 a 18:00" in hours
 
 
-def test_faq_demo_payment_prices_and_warranty_keep_provenance():
+def test_faq_payment_prices_and_warranty_retrieve_from_the_canonical_source():
     retriever = MarkdownFaqRetriever()
     for question in (
         "que formas de pago aceptan",
@@ -44,4 +45,4 @@ def test_faq_demo_payment_prices_and_warranty_keep_provenance():
         "cuanto cuesta el diagnostico y armado",
     ):
         context = retriever.retrieve(question, limit=1)
-        assert "fuente demostrativa" in context.casefold()
+        assert "fuente faq: app/agents/jerarquico/knowledge_base/faq_servicio.md" in context.casefold()

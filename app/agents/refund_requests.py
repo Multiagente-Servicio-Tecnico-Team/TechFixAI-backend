@@ -47,7 +47,15 @@ def make_refund_agent(repository: Any, *, trace_tool: TraceTool | None = None):
 
         customer_id = state.get("customer_id", state.get("user_id"))
         if type(customer_id) is not int or customer_id < 1:
-            raise PermissionError("Se requiere una sesión de cliente autenticada.")
+            return {
+                "current_agent": "reembolsos",
+                "awaiting_refund_details": True,
+                "route": "refund_request",
+                "messages": [AIMessage(content=(
+                    "Para registrar la solicitud pendiente, inicia sesion como cliente y envia el codigo de pago, "
+                    "importe y motivo. No se consulto ni modifico ningun pago."
+                ))],
+            }
         payment_code, amount, reason = match.groups()
         try:
             payment_id = run_tool(

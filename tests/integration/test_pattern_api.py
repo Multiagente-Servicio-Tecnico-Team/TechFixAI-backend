@@ -125,11 +125,31 @@ def pattern_client():
         },
         settings_factory=lambda: settings,
         trace_context_factory=nullcontext,
+        conversation_owners_repository=TestOwners(),
+        conversation_locks=type("TestLocks", (), {"hold": lambda self, thread: nullcontext()})(),
     )
     client = TestClient(app)
     client.cookies.set("techfix_session", accounts.cookies.get("techfix_session"))
     yield client, graphs
     engine.dispose()
+
+
+class TestOwners:
+    __test__ = False
+
+    def __init__(self):
+        self.rows = {}
+
+    def register(self, *, conversation_id, thread_id, authenticated_customer_id):
+        self.rows[conversation_id] = dict(thread_id=thread_id, customer_id=authenticated_customer_id)
+        return self.rows[conversation_id]
+
+    def authorize(self, *, conversation_id, authenticated_customer_id):
+        from app.database.conversation_owners import ConversationNotFound
+        row = self.rows.get(conversation_id)
+        if not row or row["customer_id"] != authenticated_customer_id:
+            raise ConversationNotFound()
+        return row
 
 
 def test_patterns_require_authenticated_customer(pattern_client):
@@ -153,6 +173,7 @@ def test_selector_lists_patterns_and_chat_runs_selected_graph(pattern_client):
     )
     assert response.status_code == 200
     assert response.json()["pattern"] == "decentralized"
+    assert graphs["decentralized"].calls[0][0]["customer_id"] == 1
     assert response.json()["reply"] == "Red: Mi laptop no enciende"
     assert graphs["decentralized"].calls[0][1]["tags"] == [
         "service-chat",

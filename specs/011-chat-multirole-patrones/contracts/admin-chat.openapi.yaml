@@ -1,0 +1,156 @@
+openapi: 3.1.0
+info:
+  title: TechFix.AI Admin Chat
+  version: 1.0.0
+  description: Chat autenticado de ADMIN. La sesión determina identidad y rol. Los borradores de aclaración y las propuestas viven en memoria del proceso.
+paths:
+  /api/admin/chat/patterns:
+    get:
+      summary: Lista topologías disponibles para ADMIN
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: Patrones habilitados para ADMIN }
+        '401': { description: Sesión requerida }
+        '403': { description: Rol ADMIN requerido }
+  /api/admin/chat:
+    post:
+      summary: Envía un mensaje o confirma/cancela una propuesta de escritura
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pattern]
+              properties:
+                pattern: { type: string, enum: [hierarchical, orchestrator, decentralized] }
+                message: { type: [string, 'null'], maxLength: 4000 }
+                conversation_id: { type: [string, 'null'], format: uuid }
+                action: { type: [string, 'null'], enum: [confirm, cancel] }
+                proposal_id: { type: [string, 'null'], format: uuid }
+      responses:
+        '200':
+          description: Respuesta, resultado de lectura, aclaración de datos faltantes o inválidos, o propuesta pendiente. Las aclaraciones indican formatos/opciones aceptados o referencias que deben corregirse, conservan un borrador efímero y no ejecutan escrituras.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminChatTurn'
+        '401': { description: Sesión requerida }
+        '403': { description: Rol ADMIN requerido }
+        '404': { description: Conversación/propuesta no encontrada para el actor }
+        '409': { description: Propuesta vencida, repetida o estado de recurso cambiado }
+        '422': { description: Entrada inválida o confirmación ambigua }
+        '429': { description: Límite de solicitudes }
+        '502': { description: Patrón no disponible }
+        '503': { description: Persistencia no disponible }
+  /api/admin/chat/audio:
+    post:
+      summary: Transcribe audio y lo procesa bajo el rol ADMIN de la sesión
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio, duration_ms, pattern, request_id]
+              properties:
+                audio: { type: string, format: binary }
+                duration_ms: { type: integer, minimum: 1, maximum: 120000 }
+                pattern: { type: string, enum: [hierarchical, orchestrator, decentralized] }
+                request_id: { type: string, format: uuid }
+                conversation_id: { type: string, format: uuid }
+                action: { type: string, enum: [confirm, cancel] }
+                proposal_id: { type: string, format: uuid }
+      responses:
+        '200': { description: Transcripción y turno ADMIN; incluye aclaraciones de datos faltantes o inválidos con sus opciones/formato, o una propuesta. El audio sigue el mismo borrador de conversación que el texto; una frase inequívoca puede confirmar una propuesta completa }
+        '401': { description: Sesión requerida }
+        '403': { description: Rol ADMIN requerido }
+        '409': { description: Colisión de idempotencia/conversación }
+        '413': { description: Archivo demasiado grande }
+        '415': { description: Tipo de audio no admitido }
+        '422': { description: Audio inválido o transcripción vacía }
+        '429': { description: Cuota de audio agotada }
+        '502': { description: Fallo del patrón }
+        '503': { description: Transcripción no configurada }
+        '504': { description: Timeout de transcripción }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+  schemas:
+    AdminChatTurn:
+      type: object
+      required: [conversation_id, pattern, reply]
+      properties:
+        conversation_id: { type: string, format: uuid }
+        pattern: { type: string, enum: [hierarchical, orchestrator, decentralized] }
+        reply: { type: string }
+        proposal:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [proposal_id, status, summary, expires_at]
+              properties:
+                proposal_id: { type: string, format: uuid }
+                status: { type: string, enum: [PENDING_CONFIRMATION, EXECUTING, EXECUTED, CANCELLED, EXPIRED, CONFLICT] }
+                summary: { type: string, description: Texto breve; no contiene datos serializados como JSON. }
+                values:
+                  type: [object, 'null']
+                  description: Datos de la propuesta en forma estructurada para su presentación.
+                  additionalProperties: true
+                presentation:
+                  oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/AdminChatPresentation'
+                resource_type: { type: string }
+                expires_at: { type: string, format: date-time }
+        result:
+          type: [object, 'null']
+          description: Resultado estructurado de la operación; no incluir secretos ni datos no autorizados.
+        presentation:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AdminChatPresentation'
+    AdminChatPresentation:
+      type: object
+      required: [kind, title]
+      properties:
+        kind: { type: string, enum: [table, record, list, download] }
+        title: { type: string }
+        summary: { type: [string, 'null'] }
+        empty_message: { type: [string, 'null'] }
+        columns:
+          type: array
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminChatPresentation'
+        items:
+          type: array
+          items: { type: string }
+        download_url: { type: [string, 'null'] }
+        download_label: { type: [string, 'null'] }

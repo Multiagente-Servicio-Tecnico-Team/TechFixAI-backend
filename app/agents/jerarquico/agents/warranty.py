@@ -117,6 +117,7 @@ def make_warranty_agent(repository: ServiceRepository):
             "warranty_claim_code": claim_code,
             "ticket_status": "WARRANTY_IN_REVIEW",
             "awaiting_logistics": True,
+            "logistics_ticket_id": state["ticket_id"],
             "outcome": "warranty_claim_registered",
             "messages": [
                 AIMessage(

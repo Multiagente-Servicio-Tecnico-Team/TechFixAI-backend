@@ -67,7 +67,7 @@ Los documentos Markdown de `data/knowledge/` se cargan mediante `cargar_document
 
 La existencia de este flujo no garantiza la fundamentación de cada respuesta. Queda pendiente evaluar relevancia, fidelidad documental y cobertura del conocimiento. La recuperación actual no aplica filtro por área ni umbral de relevancia; la configuración de ingesta y recuperación está duplicada.
 
-La instalación raíz incluye `requirements-agent.txt`, que declara las dependencias del RAG. Tras instalarlas, se debe ejecutar `python -m app.rag.ingest` para generar el índice local `data/chroma/`; no se crea automáticamente al iniciar la API.
+El archivo raíz `requirements.txt` declara las dependencias de API, agentes y RAG. Tras instalarlas, se debe ejecutar `python -m app.rag.ingest` para generar el índice local `data/chroma/`; no se crea automáticamente al iniciar la API.
 
 ## Evidencia de validación
 

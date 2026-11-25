@@ -1,0 +1,1193 @@
+﻿code,name,parent_code,account_group,normal_balance,is_postable,source_line
+10,EFECTIVO Y EQUIVALENTES DE EFECTIVO,,ASSET,DEBIT,false,510
+11,INVERSIONES FINANCIERAS,,ASSET,DEBIT,false,528
+12,CUENTAS POR COBRAR COMERCIALES – TERCEROS,,ASSET,DEBIT,false,558
+13,CUENTAS POR COBRAR COMERCIALES – RELACIONADAS,,ASSET,DEBIT,false,569
+14,"CUENTAS POR COBRAR AL PERSONAL, A LOS ACCIONISTAS (SOCIOS) y DIRECTORES",,ASSET,DEBIT,false,581
+16,CUENTAS POR COBRAR DIVERSAS – TERCEROS,,ASSET,DEBIT,false,599
+17,CUENTAS POR COBRAR DIVERSAS – RELACIONADAS,,ASSET,DEBIT,false,649
+18,SERVICIOS Y OTROS CONTRATADOS POR ANTICIPADO,,ASSET,DEBIT,false,680
+19,ESTIMACIÓN DE CUENTAS DE COBRANZA DUDOSA,,ASSET,CREDIT,false,689
+20,MERCADERÍAS,,ASSET,DEBIT,false,723
+21,PRODUCTOS TERMINADOS,,ASSET,DEBIT,false,728
+22,"SUBPRODUCTOS, DESECHOS Y DESPERDICIOS",,ASSET,DEBIT,false,738
+23,PRODUCTOS EN PROCESO,,ASSET,DEBIT,false,742
+24,MATERIAS PRIMAS,,ASSET,DEBIT,false,750
+25,"MATERIALES AUXILIARES, SUMINISTROS Y REPUESTOS",,ASSET,DEBIT,false,756
+26,ENVASES Y EMBALAJES,,ASSET,DEBIT,false,765
+27,ACTIVOS NO CORRIENTES MANTENIDOS PARA LA VENTA,,ASSET,DEBIT,false,768
+28,INVENTARIOS POR RECIBIR,,ASSET,DEBIT,false,960
+29,DESVALORIZACIÓN DE INVENTARIOS,,ASSET,CREDIT,false,966
+31,PROPIEDADES DE INVERSIÓN,,ASSET,DEBIT,false,1054
+32,ACTIVOS POR DERECHO DE USO,,ASSET,DEBIT,false,1087
+33,"PROPIEDAD, PLANTA Y EQUIPO",,ASSET,DEBIT,false,1166
+34,INTANGIBLES,,ASSET,DEBIT,false,1267
+35,ACTIVOS BIOLÓGICOS,,ASSET,DEBIT,false,1322
+36,DESVALORIZACIÓN DE ACTIVO INMOVILIZADO,,ASSET,CREDIT,false,1347
+37,ACTIVO DIFERIDO,,ASSET,DEBIT,false,1497
+38,OTROS ACTIVOS,,ASSET,DEBIT,false,1507
+39,DEPRECIACIÓN y AMORTIZACIÓN ACUMULADOS,,ASSET,CREDIT,false,1517
+40,"TRIBUTOS, CONTRAPRESTACIONES Y APORTES AL SISTEMA PÚBLICO DE PENSIONES Y DE SALUD POR PAGAR",,LIABILITY,CREDIT,false,1616
+41,REMUNERACIONES Y PARTICIPACIONES POR PAGAR,,LIABILITY,CREDIT,false,1673
+42,CUENTAS POR PAGAR COMERCIALES TERCEROS,,LIABILITY,CREDIT,false,1689
+43,CUENTAS POR PAGAR COMERCIALES RELACIONADAS,,LIABILITY,CREDIT,false,1698
+44,"CUENTAS POR PAGAR A LOS ACCIONISTAS (SOCIOS, PARTÍCIPES) Y DIRECTORES",,LIABILITY,CREDIT,false,1709
+45,OBLIGACIONES FINANCIERAS,,LIABILITY,CREDIT,false,1718
+51,ACCIONES DE INVERSIÓN,,EQUITY,CREDIT,false,1779
+52,CAPITAL ADICIONAL,,EQUITY,CREDIT,false,1782
+56,RESULTADOS NO REALIZADOS,,EQUITY,CREDIT,false,1790
+57,EXCEDENTE DE REVALUACIÓN,,EQUITY,CREDIT,false,1802
+58,RESERVAS,,EQUITY,CREDIT,false,1814
+59,RESULTADOS ACUMULADOS,,EQUITY,CREDIT,false,1820
+60,COMPRAS,,EXPENSE,DEBIT,false,1836
+61,VARIACIÓN DE INVENTARIOS,,EXPENSE,DEBIT,false,1875
+62,GASTOS DE PERSONAL Y DIRECTORES,,EXPENSE,DEBIT,false,1887
+63,GASTOS DE SERVICIOS PRESTADOS POR TERCEROS,,EXPENSE,DEBIT,false,1917
+64,GASTOS POR TRIBUTOS,,EXPENSE,DEBIT,false,1963
+65,OTROS GASTOS DE GESTION,,EXPENSE,DEBIT,false,2002
+66,PÉRDIDA POR MEDICIÓN DE ACTIVOS NO FINANCIEROS AL VALOR RAZONABLE,,EXPENSE,DEBIT,false,2015
+67,GASTOS FINANCIEROS,,EXPENSE,DEBIT,false,2047
+69,COSTO DE VENTAS,,EXPENSE,DEBIT,false,2253
+73,"DESCUENTOS, REBAJAS Y BONIFICACIONES OBTENIDOS",,INCOME,CREDIT,false,2417
+74,"DESCUENTOS, REBAJAS y BONIFICACIONES CONCEDIDOS",,INCOME,DEBIT,false,2422
+75,OTROS INGRESOS DE GESTIÓN,,INCOME,CREDIT,false,2426
+76,GANANCIA POR MEDICIÓN DE ACTIVOS NO FINANCIEROS AL VALOR RAZONABLE,,INCOME,CREDIT,false,2461
+77,INGRESOS FINANCIEROS,,INCOME,CREDIT,false,2475
+78,CARGAS CUBIERTAS POR PROVISIONES,,INCOME,CREDIT,false,2498
+79,CARGAS IMPUTABLES A CUENTAS DE COSTOS Y GASTOS,,INCOME,CREDIT,false,2502
+80,MARGEN COMERCIAL,,RESULT,CREDIT,false,2510
+81,PRODUCCIÓN DEL EJERCICIO,,RESULT,CREDIT,false,2513
+82,VALOR AGREGADO,,RESULT,CREDIT,false,2518
+83,EXCEDENTE BRUTO (INSUFICIENCIA BRUTA) DE EXPLOTACIÓN,,RESULT,CREDIT,false,2520
+84,RESULTADO DE EXPLOTACIÓN,,RESULT,CREDIT,false,2523
+85,RESULTADO ANTES DE PARTICIPACIONES E IMPUESTOS,,RESULT,CREDIT,false,2526
+88,IMPUESTO A LA RENTA,,RESULT,DEBIT,false,2529
+89,DETERMINACIÓN DEL RESULTADO DEL EJERCICIO,,RESULT,,false,2533
+101,Caja,10,ASSET,DEBIT,true,511
+102,Fondos fijos,10,ASSET,DEBIT,true,512
+103,Efectivo y cheques en tránsito,10,ASSET,DEBIT,true,513
+104,Cuentas corrientes en instituciones financieras,10,ASSET,DEBIT,true,516
+105,Otros equivalentes de efectivo,10,ASSET,DEBIT,true,519
+106,Depósitos en instituciones financieras,10,ASSET,DEBIT,true,521
+107,Fondos sujetos a restricción,10,ASSET,DEBIT,true,524
+111,Inversiones mantenidas para negociación,11,ASSET,DEBIT,true,529
+112,Otras inversiones financieras,11,ASSET,DEBIT,false,545
+113,Activos financieros – Acuerdo de compra,11,ASSET,DEBIT,false,551
+121,"Facturas, boletas y otros comprobantes por cobrar",12,ASSET,DEBIT,false,559
+122,Anticipos de clientes,12,ASSET,DEBIT,true,564
+123,Letras por cobrar,12,ASSET,DEBIT,false,565
+131,"Facturas, boletas y otros comprobantes por cobrar",13,ASSET,DEBIT,false,570
+132,Anticipos recibidos,13,ASSET,DEBIT,false,575
+133,Letras por cobrar,13,ASSET,DEBIT,false,577
+141,Personal,14,ASSET,DEBIT,false,582
+142,Accionistas (o socios),14,ASSET,DEBIT,false,587
+143,Directores,14,ASSET,DEBIT,false,590
+149,Diversas,14,ASSET,DEBIT,true,597
+161,Préstamos,16,ASSET,DEBIT,false,600
+162,Reclamaciones a terceros,16,ASSET,DEBIT,false,604
+163,"Intereses, regalías y dividendos",16,ASSET,DEBIT,false,611
+164,Depósitos otorgados en garantía,16,ASSET,DEBIT,false,616
+165,Venta de activo inmovilizado,16,ASSET,DEBIT,false,621
+166,Activos por instrumentos financieros,16,ASSET,DEBIT,false,629
+167,Tributos por acreditar,16,ASSET,DEBIT,false,636
+169,Otras cuentas por cobrar diversas,16,ASSET,DEBIT,false,643
+171,Préstamos,17,ASSET,DEBIT,true,651
+173,"Intereses, regalías y dividendos",17,ASSET,DEBIT,true,654
+174,Depósitos otorgados en garantía,17,ASSET,DEBIT,true,659
+175,Venta de activo inmovilizado,17,ASSET,DEBIT,true,664
+176,Activos por instrumentos financieros,17,ASSET,DEBIT,true,671
+179,Otras cuentas por cobrar diversas,17,ASSET,DEBIT,true,679
+181,Costos financieros,18,ASSET,DEBIT,true,682
+182,Seguros,18,ASSET,DEBIT,true,683
+183,Alquileres,18,ASSET,DEBIT,true,684
+184,Primas pagadas por opciones,18,ASSET,DEBIT,true,685
+185,Mantenimiento de activos inmovilizados,18,ASSET,DEBIT,true,686
+189,Otros gastos contratados por anticipado,18,ASSET,DEBIT,true,687
+191,Cuentas por cobrar comerciales – Terceros,19,ASSET,CREDIT,true,691
+192,Cuentas por cobrar comerciales – Relacionadas,19,ASSET,CREDIT,true,694
+193,"Cuentas por cobrar al personal, a los accionistas (socios) y directores",19,ASSET,CREDIT,false,698
+194,Cuentas por cobrar diversas – Terceros,19,ASSET,CREDIT,false,701
+195,Cuentas por cobrar diversas – Relacionadas,19,ASSET,CREDIT,false,713
+201,Mercaderías,20,ASSET,DEBIT,false,724
+211,Productos terminados,21,ASSET,DEBIT,false,729
+215,Inventario de servicios terminados,21,ASSET,DEBIT,false,734
+221,Subproductos,22,ASSET,DEBIT,true,739
+222,Desechos y desperdicios,22,ASSET,DEBIT,true,740
+231,Productos en proceso,23,ASSET,DEBIT,false,743
+241,Materias primas,24,ASSET,DEBIT,false,751
+251,Materiales auxiliares,25,ASSET,DEBIT,true,757
+252,Suministros,25,ASSET,DEBIT,false,758
+253,Repuestos,25,ASSET,DEBIT,true,763
+261,Envases,26,ASSET,DEBIT,true,766
+262,Embalajes,26,ASSET,DEBIT,true,767
+271,Propiedades de inversión,27,ASSET,DEBIT,false,769
+272,"Propiedad, planta y equipo",27,ASSET,DEBIT,false,779
+273,Intangibles,27,ASSET,DEBIT,false,826
+274,Activos biológicos,27,ASSET,DEBIT,false,851
+275,Depreciación acumulada – Propiedades de inversión,27,ASSET,DEBIT,false,865
+276,"Depreciación acumulada – Propiedad, planta y equipo",27,ASSET,DEBIT,false,871
+277,Amortización acumulada – Intangibles,27,ASSET,DEBIT,false,905
+278,Depreciación acumulada – Activos biológicos,27,ASSET,DEBIT,false,924
+279,Desvalorización acumulada,27,ASSET,DEBIT,false,931
+281,Mercaderías,28,ASSET,DEBIT,true,961
+284,Materias primas,28,ASSET,DEBIT,true,962
+285,"Materiales auxiliares, suministros y repuestos",28,ASSET,DEBIT,true,963
+286,Envases y embalajes,28,ASSET,DEBIT,true,964
+291,Mercaderías,29,ASSET,CREDIT,false,967
+292,Productos terminados,29,ASSET,CREDIT,false,970
+293,"Subproductos, desechos y desperdicios",29,ASSET,CREDIT,false,977
+294,Productos en proceso,29,ASSET,CREDIT,false,981
+295,Materias primas,29,ASSET,CREDIT,false,987
+296,"Materiales auxiliares, suministros y repuestos",29,ASSET,CREDIT,false,990
+297,Envases y embalajes,29,ASSET,CREDIT,false,995
+298,Existencias por recibir,29,ASSET,CREDIT,false,999
+301,Inversiones a ser mantenidas hasta el vencimiento,,ASSET,DEBIT,true,1011
+302,Instrumentos financieros representativos de derecho patrimonial,,ASSET,DEBIT,true,1015
+303,Certificados de participación en fondos - Cuotas,,ASSET,DEBIT,true,1033
+304,Participaciones en acuerdos conjuntos,,ASSET,DEBIT,true,1040
+308,Inversiones mobiliarias – Acuerdos de compra,,ASSET,DEBIT,false,1049
+311,Terrenos,31,ASSET,DEBIT,false,1063
+312,Edificaciones,31,ASSET,DEBIT,false,1073
+313,Construcciones en curso,31,ASSET,DEBIT,false,1080
+321,Propiedades de inversión - Arrendamiento financiero,32,ASSET,DEBIT,false,1088
+322,"Propiedad, planta y equipo - Arrendamiento financiero",32,ASSET,DEBIT,false,1100
+323,"Propiedad, planta y equipo - Arrendamiento operativo",32,ASSET,DEBIT,false,1142
+330,Planta productora,33,ASSET,DEBIT,false,1171
+331,Terrenos,33,ASSET,DEBIT,false,1184
+332,Edificaciones,33,ASSET,DEBIT,false,1188
+333,Maquinaria y equipo de explotación,33,ASSET,DEBIT,false,1204
+334,Unidades de transporte,33,ASSET,DEBIT,false,1209
+335,Muebles y enseres,33,ASSET,DEBIT,false,1218
+336,Equipos diversos,33,ASSET,DEBIT,true,1229
+337,Herramientas y unidades de reemplazo,33,ASSET,DEBIT,true,1245
+338,Unidades por recibir,33,ASSET,DEBIT,true,1252
+339,Obras en curso,33,ASSET,DEBIT,true,1258
+342,Patentes y propiedad industrial,34,ASSET,DEBIT,true,1283
+343,Programas de computadora (software),34,ASSET,DEBIT,true,1291
+344,Costos de exploración y desarrollo,34,ASSET,DEBIT,true,1296
+345,"Fórmulas, diseños y prototipos",34,ASSET,DEBIT,true,1306
+347,Plusvalía mercantil,34,ASSET,DEBIT,true,1314
+349,Otros activos intangibles,34,ASSET,DEBIT,true,1317
+352,Activos biológicos en desarrollo,35,ASSET,DEBIT,false,1336
+361,Desvalorización de propiedades de inversión,36,ASSET,CREDIT,false,1349
+362,Desvalorización de propiedades de inversión - Arrendamiento financiero,36,ASSET,CREDIT,false,1363
+363,"Desvalorización de propiedad, planta y equipo - Arrendamiento financiero",36,ASSET,CREDIT,false,1372
+364,"Desvalorización de propiedad, planta y equipo",36,ASSET,CREDIT,false,1399
+365,Desvalorización de intangibles,36,ASSET,CREDIT,false,1451
+366,Desvalorización de activos biológicos,36,ASSET,CREDIT,false,1478
+367,Desvalorización de inversiones mobiliarias,36,ASSET,CREDIT,false,1486
+371,Impuesto a la renta diferido,37,ASSET,DEBIT,false,1498
+372,Participaciones de los trabajadores diferidas,37,ASSET,DEBIT,false,1501
+373,Intereses diferidos,37,ASSET,DEBIT,false,1504
+381,Bienes de arte y cultura,38,ASSET,DEBIT,false,1508
+382,Diversos,38,ASSET,DEBIT,false,1512
+391,Depreciación acumulada propiedades de inversión,39,ASSET,CREDIT,false,1518
+392,Depreciación acumulada propiedades de inversión - Arrendamiento financiero,39,ASSET,CREDIT,false,1523
+393,"Depreciación acumulada propiedad, planta y equipo - Arrendamiento financiero",39,ASSET,CREDIT,false,1528
+394,Depreciación acumulada - Arrendamiento operativo,39,ASSET,CREDIT,true,1550
+395,"Depreciación acumulada de propiedad, planta y equipo",39,ASSET,CREDIT,true,1558
+396,Amortización acumulada,39,ASSET,CREDIT,false,1588
+398,Depreciación acumulada - Activos biológicos en producción,39,ASSET,CREDIT,false,1610
+401,Gobierno nacional,40,LIABILITY,CREDIT,false,1617
+402,Certificados tributarios,40,LIABILITY,CREDIT,true,1649
+403,Instituciones públicas,40,LIABILITY,CREDIT,true,1650
+405,Gobiernos regionales,40,LIABILITY,CREDIT,true,1656
+406,Gobiernos locales,40,LIABILITY,CREDIT,true,1657
+409,Otros costos administrativos e intereses,40,LIABILITY,CREDIT,true,1672
+421,"Facturas, boletas y otros comprobantes por pagar",42,LIABILITY,CREDIT,true,1691
+422,Anticipos a proveedores,42,LIABILITY,CREDIT,true,1694
+423,Letras por pagar,42,LIABILITY,CREDIT,true,1695
+424,Honorarios por pagar,42,LIABILITY,CREDIT,true,1696
+431,"Facturas, boletas y otros comprobantes por pagar",43,LIABILITY,CREDIT,true,1699
+432,Anticipos otorgados,43,LIABILITY,CREDIT,true,1702
+433,Letras por pagar,43,LIABILITY,CREDIT,true,1704
+434,Honorarios por pagar,43,LIABILITY,CREDIT,true,1706
+441,"Accionistas ( socios, partícipes)",44,LIABILITY,CREDIT,true,1710
+442,Directores,44,LIABILITY,CREDIT,true,1714
+451,Préstamos de instituciones financieras y otras entidades,45,LIABILITY,CREDIT,true,1719
+452,Contratos de arrendamiento financiero,45,LIABILITY,CREDIT,true,1722
+453,Obligaciones emitidas,45,LIABILITY,CREDIT,true,1723
+454,Otros Instrumentos financieros por pagar,45,LIABILITY,CREDIT,true,1728
+475,Dividendos,,LIABILITY,CREDIT,true,1735
+476,Depósitos recibidos en garantía,,LIABILITY,CREDIT,true,1736
+477,Pasivo por compra de activo inmovilizado,,LIABILITY,CREDIT,true,1737
+479,Otras cuentas por pagar diversas,,LIABILITY,CREDIT,true,1744
+481,Provisión para litigios,,LIABILITY,CREDIT,true,1747
+482,"Provisión por desmantelamiento, retiro o rehabilitación del inmovilizado",,LIABILITY,CREDIT,true,1748
+483,Provisión para reestructuraciones,,LIABILITY,CREDIT,true,1749
+484,Provisión para protección y remediación del medio ambiente,,LIABILITY,CREDIT,true,1750
+485,Provisión para gastos de responsabilidad social,,LIABILITY,CREDIT,true,1751
+486,Provisión para garantías,,LIABILITY,CREDIT,true,1752
+487,Provisión por activos por derecho de uso,,LIABILITY,CREDIT,true,1753
+489,Otras provisiones,,LIABILITY,CREDIT,true,1754
+491,Impuesto a la renta diferido,,LIABILITY,CREDIT,true,1756
+492,Participaciones de los trabajadores diferidas,,LIABILITY,CREDIT,true,1759
+493,Intereses diferidos,,LIABILITY,CREDIT,true,1762
+494,Ganancia en venta con arrendamiento financiero paralelo,,LIABILITY,CREDIT,true,1765
+495,Subsidios recibidos diferidos,,LIABILITY,CREDIT,true,1766
+496,Ingresos diferidos,,LIABILITY,CREDIT,true,1767
+497,Costos diferidos,,LIABILITY,CREDIT,true,1768
+501,Capital social,,EQUITY,CREDIT,true,1772
+502,Acciones en tesorería,,EQUITY,CREDIT,true,1775
+511,Acciones de inversión,51,EQUITY,CREDIT,true,1780
+512,Acciones de inversión en tesorería,51,EQUITY,CREDIT,true,1781
+521,Primas (descuento) de acciones,52,EQUITY,CREDIT,true,1783
+522,Capitalizaciones en trámite,52,EQUITY,CREDIT,true,1784
+523,Reducciones de capital pendientes de formalización,52,EQUITY,CREDIT,true,1789
+561,Diferencia en cambio de inversiones permanentes en entidades extranjeras,56,EQUITY,CREDIT,true,1791
+562,Instrumentos financieros – Coberturas,56,EQUITY,CREDIT,true,1792
+571,Excedente de revaluación,57,EQUITY,CREDIT,true,1803
+572,Excedente de revaluación – Acciones liberadas recibidas,57,EQUITY,CREDIT,true,1812
+573,Participación en excedente de revaluación – Inversiones en entidades relacionadas,57,EQUITY,CREDIT,true,1813
+581,Reinv ersión,58,EQUITY,CREDIT,true,1815
+582,Legal,58,EQUITY,CREDIT,true,1816
+583,Contractuales,58,EQUITY,CREDIT,true,1822
+584,Estatutarias,58,EQUITY,CREDIT,true,1823
+585,Facultativas,58,EQUITY,CREDIT,true,1824
+589,Otras reservas,58,EQUITY,CREDIT,true,1825
+591,Utilidades no distribuidas,59,EQUITY,CREDIT,true,1827
+592,Pérdidas acumuladas,59,EQUITY,CREDIT,true,1831
+611,Mercaderías,61,EXPENSE,DEBIT,false,1876
+612,Materias primas,61,EXPENSE,DEBIT,false,1878
+613,"Materiales auxiliares, suministros y repuestos",61,EXPENSE,DEBIT,false,1880
+614,Envases y embalajes,61,EXPENSE,DEBIT,false,1884
+621,Remuneraciones,62,EXPENSE,DEBIT,false,1888
+622,Otras remuneraciones,62,EXPENSE,DEBIT,true,1894
+623,Indemnizaciones al personal,62,EXPENSE,DEBIT,true,1895
+624,Capacitación,62,EXPENSE,DEBIT,true,1896
+625,Atención al personal,62,EXPENSE,DEBIT,true,1897
+627,"Seguridad, previsión social y otras contribuciones",62,EXPENSE,DEBIT,false,1898
+628,Retribuciones al directorio,62,EXPENSE,DEBIT,true,1906
+629,Beneficios sociales de los trabajadores,62,EXPENSE,DEBIT,false,1907
+631,"Transporte, correos y gastos de viaje",63,EXPENSE,DEBIT,true,1918
+632,Asesoría y consultoría,63,EXPENSE,DEBIT,true,1926
+633,Producción encargada a terceros,63,EXPENSE,DEBIT,true,1936
+634,Mantenimiento y reparaciones,63,EXPENSE,DEBIT,true,1937
+635,Alquileres,63,EXPENSE,DEBIT,true,1945
+636,Servicios básicos,63,EXPENSE,DEBIT,false,1953
+637,"Publicidad, publicaciones, relaciones públicas",63,EXPENSE,DEBIT,false,1965
+638,Servicios de contratistas,63,EXPENSE,DEBIT,true,1970
+639,Otros servicios prestados por terceros,63,EXPENSE,DEBIT,false,1972
+641,Gobierno nacional,64,EXPENSE,DEBIT,false,1975
+642,Gobierno regional,64,EXPENSE,DEBIT,true,1984
+643,Gobierno local,64,EXPENSE,DEBIT,false,1985
+644,Otros gastos por tributos,64,EXPENSE,DEBIT,false,1992
+645,Gastos en deuda tributaria,64,EXPENSE,DEBIT,false,1996
+651,Seguros,65,EXPENSE,DEBIT,true,2003
+652,Regalías,65,EXPENSE,DEBIT,true,2004
+653,Suscripciones,65,EXPENSE,DEBIT,true,2005
+654,Licencias y derechos de vigencia,65,EXPENSE,DEBIT,true,2006
+655,Costo neto de enajenación de activos inmovilizados y operaciones discontinuadas,65,EXPENSE,DEBIT,false,2007
+656,Suministros,65,EXPENSE,DEBIT,true,2027
+658,Gestión medioambiental,65,EXPENSE,DEBIT,true,2028
+659,Otros gastos de gestión,65,EXPENSE,DEBIT,false,2029
+661,Activo realizable,66,EXPENSE,DEBIT,false,2035
+662,Activo inmovilizado,66,EXPENSE,DEBIT,false,2043
+671,Gastos en operaciones de endeudamiento y otros,67,EXPENSE,DEBIT,false,2049
+672,Pérdida por instrumentos financieros derivados,67,EXPENSE,DEBIT,true,2055
+673,Intereses por préstamos y otras obligaciones,67,EXPENSE,DEBIT,false,2056
+674,Gastos en operaciones de factoraje (factoring),67,EXPENSE,DEBIT,false,2067
+675,Descuentos concedidos por pronto pago,67,EXPENSE,DEBIT,true,2069
+676,Diferencia de cambio,67,EXPENSE,DEBIT,true,2070
+677,Pérdida por medición de activos y pasivos financieros al valor razonable,67,EXPENSE,DEBIT,false,2071
+678,Participación en resultados de entidades relacionadas,67,EXPENSE,DEBIT,false,2075
+679,Otros gastos financieros,67,EXPENSE,DEBIT,false,2078
+681,Depreciación de propiedades de inversión,,EXPENSE,DEBIT,false,2083
+682,Depreciación de activos por derecho de uso - arrendamiento financiero,,EXPENSE,DEBIT,false,2089
+683,Depreciación de activos por derecho de uso - arrendamiento operativo,,EXPENSE,DEBIT,false,2116
+684,"Depreciación de propiedad, planta y equipo",,EXPENSE,DEBIT,false,2133
+685,Depreciación de activos biológicos en producción,,EXPENSE,DEBIT,false,2155
+686,Amortización de intangibles,,EXPENSE,DEBIT,false,2166
+687,Valuación de activos,,EXPENSE,DEBIT,false,2181
+688,Deterioro del valor de los activos,,EXPENSE,DEBIT,false,2192
+689,Provisiones,,EXPENSE,DEBIT,false,2231
+691,Mercaderías,69,EXPENSE,DEBIT,false,2257
+692,Productos terminados,69,EXPENSE,DEBIT,false,2264
+693,Servicios terminados,69,EXPENSE,DEBIT,false,2276
+694,"Subproductos, desechos y desperdicios",69,EXPENSE,DEBIT,false,2284
+695,Gastos por desvalorización de inventarios al costo,69,EXPENSE,DEBIT,false,2291
+701,Mercaderías,,INCOME,CREDIT,false,2307
+702,Productos terminados,,INCOME,CREDIT,false,2316
+703,Servicios terminados,,INCOME,CREDIT,false,2326
+704,"Subproductos, desechos y desperdicios",,INCOME,CREDIT,false,2336
+709,Devoluciones sobre ventas,,INCOME,CREDIT,false,2345
+711,Variación de productos terminados,,INCOME,CREDIT,true,2373
+712,"Variación de subproductos, desechos y desperdicios",,INCOME,CREDIT,true,2375
+713,Variación de productos en proceso,,INCOME,CREDIT,true,2378
+714,Variación de envases y embalajes,,INCOME,CREDIT,true,2380
+715,Variación de inventarios de servicios,,INCOME,CREDIT,true,2383
+721,Propiedades de inversión,,INCOME,CREDIT,true,2386
+722,"Propiedad, planta y equipo",,INCOME,CREDIT,true,2388
+723,Intangibles,,INCOME,CREDIT,true,2395
+724,Activos biológicos,,INCOME,CREDIT,true,2399
+725,Costos de financiación capitalizados,,INCOME,CREDIT,false,2402
+731,"Descuentos, rebajas y bonificaciones obtenidos",73,INCOME,CREDIT,true,2418
+741,"Descuentos, rebajas y bonificaciones concedidos",74,INCOME,DEBIT,true,2423
+751,Servicios en beneficio del personal,75,INCOME,CREDIT,true,2427
+752,Comisiones y corretajes,75,INCOME,CREDIT,true,2428
+753,Regalías,75,INCOME,CREDIT,true,2429
+754,Alquileres,75,INCOME,CREDIT,true,2430
+755,Recuperación de cuentas de valuación,75,INCOME,CREDIT,true,2437
+756,Enajenación de activos inmovilizados,75,INCOME,CREDIT,true,2441
+757,Recuperación de deterioro de cuentas de activos inmovilizados,75,INCOME,CREDIT,true,2448
+759,Otros ingresos de gestión,75,INCOME,CREDIT,true,2453
+761,Activo realizable,76,INCOME,CREDIT,true,2463
+762,Activo inmovilizado,76,INCOME,CREDIT,true,2471
+771,Ganancia por instrumento financiero derivado,77,INCOME,CREDIT,true,2476
+772,Rendimientos ganados,77,INCOME,CREDIT,true,2477
+773,Dividendos,77,INCOME,CREDIT,true,2483
+774,Ingresos en operaciones de factoraje (factoring),77,INCOME,CREDIT,true,2484
+775,Descuentos obtenidos por pronto pago,77,INCOME,CREDIT,true,2485
+776,Diferencia en cambio,77,INCOME,CREDIT,true,2486
+777,Ganancia por medición de activos y pasivos financieros al valor razonable,77,INCOME,CREDIT,true,2487
+778,Participación en resultados de entidades relacionadas,77,INCOME,CREDIT,true,2491
+779,Otros ingresos financieros,77,INCOME,CREDIT,true,2495
+781,Cargas cubiertas por provisiones,78,INCOME,CREDIT,true,2500
+791,Cargas imputables a cuentas de costos y gastos,79,INCOME,CREDIT,true,2503
+792,Gastos financieros imputables a cuentas de inventarios,79,INCOME,CREDIT,true,2504
+801,Margen comercial,80,RESULT,CREDIT,true,2511
+811,Producción de bienes,81,RESULT,CREDIT,true,2514
+812,Producción de servicios,81,RESULT,CREDIT,true,2515
+813,Producción de activo inmovilizado,81,RESULT,CREDIT,true,2516
+821,Valor agregado,82,RESULT,CREDIT,true,2519
+831,Excedente bruto (insuficiencia bruta) de explotación,83,RESULT,CREDIT,true,2521
+841,Resultado de explotación,84,RESULT,CREDIT,true,2524
+851,Resultado antes del impuesto a las ganancias,85,RESULT,CREDIT,true,2527
+881,Impuesto a las ganancias – Corriente,88,RESULT,DEBIT,true,2530
+882,Impuesto a las ganancias – Diferido,88,RESULT,DEBIT,true,2531
+891,Utilidad,89,RESULT,,false,2534
+892,Pérdida,89,RESULT,,false,2535
+1121,Otras inversiones financieras,112,ASSET,DEBIT,false,546
+1131,Inversiones mantenidas para negociación – Acuerdo de compra,113,ASSET,DEBIT,false,552
+1132,Otras inversiones financieras,113,ASSET,DEBIT,false,555
+1211,No emitidas,121,ASSET,DEBIT,true,560
+1212,Emitidas en cartera,121,ASSET,DEBIT,true,561
+1213,En cobranza,121,ASSET,DEBIT,true,562
+1214,En descuento,121,ASSET,DEBIT,true,563
+1232,En cartera,123,ASSET,DEBIT,true,566
+1233,En cobranza,123,ASSET,DEBIT,true,567
+1234,En descuento,123,ASSET,DEBIT,true,568
+1311,No emitidas,131,ASSET,DEBIT,true,571
+1312,En cartera,131,ASSET,DEBIT,true,572
+1313,En cobranza,131,ASSET,DEBIT,true,573
+1314,En descuento,131,ASSET,DEBIT,true,574
+1321,Anticipos recibidos,132,ASSET,DEBIT,true,576
+1331,En cartera,133,ASSET,DEBIT,true,578
+1332,En cobranza,133,ASSET,DEBIT,true,579
+1333,En descuento,133,ASSET,DEBIT,true,580
+1411,Préstamos,141,ASSET,DEBIT,true,583
+1412,Adelanto de remuneraciones,141,ASSET,DEBIT,true,584
+1413,Entregas a rendir cuenta,141,ASSET,DEBIT,true,585
+1419,Otras cuentas por cobrar al personal,141,ASSET,DEBIT,true,586
+1421,Suscripciones por cobrar a socios o accionistas,142,ASSET,DEBIT,true,588
+1422,Préstamos,142,ASSET,DEBIT,true,589
+1431,Préstamos,143,ASSET,DEBIT,true,591
+1432,Adelanto de dietas,143,ASSET,DEBIT,true,595
+1433,Entregas a rendir cuenta,143,ASSET,DEBIT,true,596
+1611,Con garantía,161,ASSET,DEBIT,true,601
+1612,Sin garantía,161,ASSET,DEBIT,true,602
+1621,Compañías aseguradoras,162,ASSET,DEBIT,true,605
+1622,Transportadoras,162,ASSET,DEBIT,true,606
+1623,Servicios públicos,162,ASSET,DEBIT,true,607
+1624,Tributos,162,ASSET,DEBIT,true,608
+1629,Otras,162,ASSET,DEBIT,true,609
+1631,Intereses,163,ASSET,DEBIT,true,612
+1632,Regalías,163,ASSET,DEBIT,true,613
+1633,Dividendos,163,ASSET,DEBIT,true,614
+1641,Préstamos de instituciones financieras,164,ASSET,DEBIT,true,617
+1642,Préstamos de instituciones no financieras,164,ASSET,DEBIT,true,618
+1643,Depósitos en garantía por alquileres,164,ASSET,DEBIT,true,619
+1649,Otros depósitos en garantía,164,ASSET,DEBIT,true,620
+1651,Inversión mobiliaria,165,ASSET,DEBIT,true,622
+1652,Propiedades de inversión,165,ASSET,DEBIT,true,623
+1653,"Propiedad, planta y equipo",165,ASSET,DEBIT,true,624
+1654,Intangibles,165,ASSET,DEBIT,true,625
+1655,Activos biológicos,165,ASSET,DEBIT,true,626
+1659,Otros activos inmovilizados,165,ASSET,DEBIT,true,627
+1661,Instrumentos financieros primarios,166,ASSET,DEBIT,false,630
+1662,Instrumentos financieros derivados,166,ASSET,DEBIT,false,633
+1671,Pagos a cuenta del impuesto a la renta,167,ASSET,DEBIT,true,637
+1672,Pagos a cuenta de ITAN,167,ASSET,DEBIT,true,638
+1673,IGV por acreditar en compras,167,ASSET,DEBIT,true,639
+1674,IGV por acreditar no domiciliados,167,ASSET,DEBIT,true,640
+1675,Obras por impuestos,167,ASSET,DEBIT,true,641
+1691,Entregas a rendir cuenta a terceros,169,ASSET,DEBIT,true,644
+1699,Otras cuentas por cobrar diversas,169,ASSET,DEBIT,true,645
+1931,Personal,193,ASSET,CREDIT,true,702
+1932,Accionistas (o socios),193,ASSET,CREDIT,true,703
+1933,Directores,193,ASSET,CREDIT,true,704
+1939,Diversas,193,ASSET,CREDIT,true,705
+1941,Préstamos,194,ASSET,CREDIT,true,706
+1942,Reclamaciones a terceros,194,ASSET,CREDIT,true,707
+1943,"Intereses, regalías y dividendos",194,ASSET,CREDIT,true,708
+1944,Depósitos otorgados en garantía,194,ASSET,CREDIT,true,709
+1945,Venta de activo inmovilizado,194,ASSET,CREDIT,true,710
+1946,Activos por instrumentos financieros,194,ASSET,CREDIT,true,711
+1949,Otras cuentas por cobrar diversas,194,ASSET,CREDIT,true,712
+1951,Préstamos,195,ASSET,CREDIT,true,714
+1953,"Intereses, regalías y dividendos",195,ASSET,CREDIT,true,715
+1954,Depósitos otorgados en garantía,195,ASSET,CREDIT,true,716
+1955,Venta de activo inmovilizado,195,ASSET,CREDIT,true,717
+1956,Activos por instrumentos financieros,195,ASSET,CREDIT,true,718
+1959,Otras cuentas por cobrar diversas,195,ASSET,CREDIT,true,719
+2011,Mercaderías,201,ASSET,DEBIT,false,725
+2111,Productos terminados,211,ASSET,DEBIT,false,730
+2151,Servicios terminados,215,ASSET,DEBIT,false,735
+2311,Productos en proceso,231,ASSET,DEBIT,true,744
+2351,Servicios en proceso,23,ASSET,DEBIT,false,748
+2411,Materias primas,241,ASSET,DEBIT,false,752
+2521,Combustibles,252,ASSET,DEBIT,true,759
+2522,Lubricantes,252,ASSET,DEBIT,true,760
+2523,Energía,252,ASSET,DEBIT,true,761
+2524,Otros suministros,252,ASSET,DEBIT,true,762
+2711,Terrenos,271,ASSET,DEBIT,false,770
+2712,Edificaciones,271,ASSET,DEBIT,false,774
+2720,Planta productora en producción,272,ASSET,DEBIT,false,780
+2721,Planta productora en desarrollo,272,ASSET,DEBIT,false,785
+2722,Terrenos,272,ASSET,DEBIT,false,793
+2723,Edificaciones,272,ASSET,DEBIT,false,797
+2724,Maquinarias y equipos de explotación,272,ASSET,DEBIT,false,802
+2725,Unidades de transporte,272,ASSET,DEBIT,false,807
+2726,Muebles y enseres,272,ASSET,DEBIT,false,811
+2727,Equipos diversos,272,ASSET,DEBIT,false,815
+2728,Herramientas y unidades de reemplazo,272,ASSET,DEBIT,false,818
+2729,Obras en curso,272,ASSET,DEBIT,false,822
+2731,"Concesiones, licencias y derechos",273,ASSET,DEBIT,false,827
+2732,Patentes y propiedad industrial,273,ASSET,DEBIT,false,831
+2733,Programas de computadora (software),273,ASSET,DEBIT,false,835
+2734,Costos de exploración y desarrollo,273,ASSET,DEBIT,false,839
+2735,"Fórmulas, diseños y prototipos",273,ASSET,DEBIT,false,842
+2739,Otros activos intangibles,273,ASSET,DEBIT,false,846
+2741,Activos biológicos en producción,274,ASSET,DEBIT,false,855
+2742,Activos biológicos en desarrollo,274,ASSET,DEBIT,false,860
+2752,Edificaciones,275,ASSET,DEBIT,false,866
+2760,Planta productora en producción,276,ASSET,DEBIT,false,873
+2762,Edificaciones,276,ASSET,DEBIT,false,879
+2763,Maquinarias y equipo de explotación,276,ASSET,DEBIT,false,884
+2764,Unidades de transporte,276,ASSET,DEBIT,false,888
+2765,Muebles y enseres,276,ASSET,DEBIT,false,892
+2766,Equipos diversos,276,ASSET,DEBIT,false,896
+2767,Herramientas y unidades de reemplazo,276,ASSET,DEBIT,false,900
+2771,"Concesiones, licencias y derechos",277,ASSET,DEBIT,false,906
+2772,Patentes y propiedad industrial,277,ASSET,DEBIT,false,909
+2773,Programas de computadora (software),277,ASSET,DEBIT,false,912
+2774,Costos de exploración y desarrollo,277,ASSET,DEBIT,false,915
+2775,"Fórmulas, diseños y prototipos",277,ASSET,DEBIT,false,918
+2779,Otros activos intangibles,277,ASSET,DEBIT,false,921
+2781,Activos biológicos en producción,278,ASSET,DEBIT,false,925
+2782,Activos biológicos en desarrollo,278,ASSET,DEBIT,false,928
+2791,Propiedad de inversión,279,ASSET,DEBIT,false,932
+2793,"Propiedad, planta y equipo",279,ASSET,DEBIT,false,937
+2794,Intangibles,279,ASSET,DEBIT,false,947
+2795,Activos biológicos,279,ASSET,DEBIT,false,956
+2911,Mercaderías,291,ASSET,CREDIT,false,968
+2921,Productos terminados,292,ASSET,CREDIT,false,971
+2925,Inventario de servicios terminados,292,ASSET,CREDIT,false,974
+2931,Subproductos,293,ASSET,CREDIT,true,978
+2932,Desechos y desperdicios,293,ASSET,CREDIT,true,979
+2941,Productos en proceso,294,ASSET,CREDIT,false,982
+2945,Inventario de servicios en proceso,294,ASSET,CREDIT,true,985
+2951,Materias primas,295,ASSET,CREDIT,false,988
+2961,Materiales auxiliares,296,ASSET,CREDIT,true,991
+2962,Suministros,296,ASSET,CREDIT,true,992
+2963,Repuestos,296,ASSET,CREDIT,true,993
+2971,Envases,297,ASSET,CREDIT,true,996
+2972,Embalajes,297,ASSET,CREDIT,true,997
+2981,Mercaderías,298,ASSET,CREDIT,true,1000
+2982,Materias primas,298,ASSET,CREDIT,true,1001
+2983,"Materiales auxiliares, suministros y repuestos",298,ASSET,CREDIT,true,1002
+2984,Envases y embalajes,298,ASSET,CREDIT,true,1006
+3082,Instrumentos financieros representativos de derecho patrimonial – Acuerdo de compra,308,ASSET,DEBIT,false,1059
+3111,Urbanos,311,ASSET,DEBIT,false,1064
+3112,Rurales,311,ASSET,DEBIT,false,1068
+3121,Edificaciones,312,ASSET,DEBIT,false,1074
+3131,Edificaciones,313,ASSET,DEBIT,false,1081
+3211,Terrenos,321,ASSET,DEBIT,false,1089
+3212,Edificaciones,321,ASSET,DEBIT,false,1094
+3220,Planta productora en producción,322,ASSET,DEBIT,false,1101
+3221,Planta productora en desarrollo,322,ASSET,DEBIT,false,1108
+3222,Terrenos,322,ASSET,DEBIT,false,1113
+3223,Edificaciones,322,ASSET,DEBIT,false,1117
+3224,Maquinaria y equipo de explotación,322,ASSET,DEBIT,false,1122
+3225,Unidades de transporte,322,ASSET,DEBIT,false,1127
+3226,Muebles y enseres,322,ASSET,DEBIT,false,1131
+3227,Equipos diversos,322,ASSET,DEBIT,false,1134
+3228,Herramientas y unidades de reemplazo,322,ASSET,DEBIT,false,1138
+3230,Planta productora en producción,323,ASSET,DEBIT,false,1144
+3232,Terrenos,323,ASSET,DEBIT,false,1148
+3233,Edificaciones,323,ASSET,DEBIT,false,1151
+3234,Maquinaria y equipo de explotación,323,ASSET,DEBIT,false,1155
+3235,Unidades de transporte,323,ASSET,DEBIT,false,1159
+3236,Equipos diversos,323,ASSET,DEBIT,false,1162
+3301,Planta productora en producción,330,ASSET,DEBIT,false,1172
+3302,Planta productora en desarrollo,330,ASSET,DEBIT,false,1178
+3311,Terrenos,331,ASSET,DEBIT,false,1185
+3321,Edificaciones,332,ASSET,DEBIT,false,1189
+3324,Instalaciones,332,ASSET,DEBIT,false,1194
+3325,Mejoras en locales arrendados.,332,ASSET,DEBIT,false,1199
+3331,Maquinaria y equipo de explotación,333,ASSET,DEBIT,false,1205
+3341,Vehículos motorizados,334,ASSET,DEBIT,false,1210
+3342,Vehículos no motorizados,334,ASSET,DEBIT,false,1214
+3351,Muebles,335,ASSET,DEBIT,true,1222
+3352,Enseres,335,ASSET,DEBIT,true,1226
+3411,Derechos por concesiones,34,ASSET,DEBIT,true,1271
+3412,Licencias,34,ASSET,DEBIT,true,1275
+3419,Otros derechos,34,ASSET,DEBIT,true,1279
+3512,De origen vegetal,35,ASSET,DEBIT,false,1331
+3521,De origen animal,352,ASSET,DEBIT,false,1337
+3522,De origen vegetal,352,ASSET,DEBIT,false,1342
+3611,Terrenos,361,ASSET,CREDIT,false,1350
+3612,Edificaciones,361,ASSET,CREDIT,false,1353
+3613,Construcciones en curso - edificaciones,361,ASSET,CREDIT,false,1358
+3621,Terrenos,362,ASSET,CREDIT,false,1364
+3622,Edificaciones,362,ASSET,CREDIT,false,1368
+3631,Terrenos,363,ASSET,CREDIT,false,1373
+3632,Edificaciones,363,ASSET,CREDIT,false,1377
+3633,Maquinaria y equipo de explotación,363,ASSET,CREDIT,true,1384
+3634,Unidades de transporte,363,ASSET,CREDIT,true,1389
+3635,Muebles y enseres,363,ASSET,CREDIT,true,1392
+3636,Equipos diversos,363,ASSET,CREDIT,true,1396
+3646,Equipos diversos,364,ASSET,CREDIT,false,1438
+3647,Herramientas y unidades de reemplazo,364,ASSET,CREDIT,false,1441
+3649,Obras en curso,364,ASSET,CREDIT,false,1447
+3651,"Concesiones, licencias y otros derechos",365,ASSET,CREDIT,false,1452
+3652,Patentes y propiedad industrial,365,ASSET,CREDIT,false,1456
+3653,Programas de computadora (software),365,ASSET,CREDIT,false,1460
+3654,Costos de exploración y desarrollo,365,ASSET,CREDIT,false,1463
+3655,"Fórmulas, diseños y prototipos",365,ASSET,CREDIT,false,1468
+3657,Plusvalía mercantil,365,ASSET,CREDIT,true,1472
+3659,Otros activos intangibles,365,ASSET,CREDIT,false,1474
+3661,Activos biológicos en producción,366,ASSET,CREDIT,false,1479
+3662,Activos biológicos en desarrollo,366,ASSET,CREDIT,false,1483
+3671,Inversiones a ser mantenidas hasta el vencimiento,367,ASSET,CREDIT,false,1487
+3672,Inversiones financieras representativas de derecho patrimonial,367,ASSET,CREDIT,false,1490
+3673,Otras inversiones financieras,367,ASSET,CREDIT,false,1495
+3711,Impuesto a la renta diferido – Patrimonio,371,ASSET,DEBIT,true,1499
+3712,Impuesto a la renta diferido – Resultados,371,ASSET,DEBIT,true,1500
+3721,Participaciones de los trabajadores diferidas – Patrimonio,372,ASSET,DEBIT,true,1502
+3722,Participaciones de los trabajadores diferidas – Resultados,372,ASSET,DEBIT,true,1503
+3731,Intereses no devengados en transacciones con terceros,373,ASSET,DEBIT,true,1505
+3732,Intereses no devengados en medición a valor descontado,373,ASSET,DEBIT,true,1506
+3811,Obras de arte,381,ASSET,DEBIT,true,1509
+3812,Biblioteca,381,ASSET,DEBIT,true,1510
+3813,Otros,381,ASSET,DEBIT,true,1511
+3821,Monedas y joyas,382,ASSET,DEBIT,true,1513
+3822,Bienes entregados en comodato,382,ASSET,DEBIT,true,1514
+3823,Bienes recibidos en pago (adjudicados y realizables),382,ASSET,DEBIT,true,1515
+3829,Otros,382,ASSET,DEBIT,true,1516
+3911,Edificaciones,391,ASSET,CREDIT,false,1519
+3921,Edificaciones,392,ASSET,CREDIT,false,1524
+3932,Edificaciones,393,ASSET,CREDIT,false,1529
+3933,Maquinarias y equipos de explotación,393,ASSET,CREDIT,false,1533
+3934,Unidades de transporte,393,ASSET,CREDIT,true,1539
+3935,Muebles y enseres,393,ASSET,CREDIT,true,1543
+3936,Equipos diversos,393,ASSET,CREDIT,true,1547
+3961,Intangibles – Costo,396,ASSET,CREDIT,false,1591
+3962,Intangibles – Revaluación,396,ASSET,CREDIT,false,1598
+3963,Intangibles – Costos de financiación,396,ASSET,CREDIT,false,1606
+3981,Activos biológicos en producción - Costo,398,ASSET,CREDIT,false,1611
+4011,Impuesto general a las ventas,401,LIABILITY,CREDIT,false,1618
+4012,Impuesto selectivo al consumo,401,LIABILITY,CREDIT,true,1627
+4015,Derechos aduaneros,401,LIABILITY,CREDIT,false,1629
+4017,Impuesto a la renta,401,LIABILITY,CREDIT,false,1632
+4018,Otros impuestos y contraprestaciones,401,LIABILITY,CREDIT,false,1639
+6094,Costos vinculados con las compras de envases y embalajes,60,EXPENSE,DEBIT,false,1868
+6111,Mercaderías,611,EXPENSE,DEBIT,true,1877
+6121,Materias primas,612,EXPENSE,DEBIT,true,1879
+6131,Materiales auxiliares,613,EXPENSE,DEBIT,true,1881
+6132,Suministros,613,EXPENSE,DEBIT,true,1882
+6133,Repuestos,613,EXPENSE,DEBIT,true,1883
+6141,Envases,614,EXPENSE,DEBIT,true,1885
+6142,Embalajes,614,EXPENSE,DEBIT,true,1886
+6211,Sueldos y salarios,621,EXPENSE,DEBIT,true,1889
+6212,Comisiones,621,EXPENSE,DEBIT,true,1890
+6213,Remuneraciones en especie,621,EXPENSE,DEBIT,true,1891
+6214,Gratificaciones,621,EXPENSE,DEBIT,true,1892
+6215,Vacaciones,621,EXPENSE,DEBIT,true,1893
+6271,Régimen de prestaciones de salud,627,EXPENSE,DEBIT,true,1899
+6272,Régimen de pensiones - Aporte de empresa,627,EXPENSE,DEBIT,true,1900
+6273,"Seguro complementario de trabajo de riesgo, accidentes de trabajo y enfermedades profesionales",627,EXPENSE,DEBIT,true,1901
+6274,Seguro de vida,627,EXPENSE,DEBIT,true,1902
+6275,Seguros particulares de prestaciones de salud – EPS y otros particulares,627,EXPENSE,DEBIT,true,1903
+6276,Caja de beneficios de seguridad social del pescador,627,EXPENSE,DEBIT,true,1904
+6277,Contribuciones al SENATI,627,EXPENSE,DEBIT,true,1905
+6291,Compensación por tiempo de servicio,629,EXPENSE,DEBIT,true,1908
+6292,Pensiones y jubilaciones,629,EXPENSE,DEBIT,true,1909
+6293,Otros beneficios post-empleo,629,EXPENSE,DEBIT,true,1912
+6294,Participación en las utilidades,629,EXPENSE,DEBIT,true,1913
+6367,Cable,636,EXPENSE,DEBIT,true,1964
+6371,Publicidad,637,EXPENSE,DEBIT,true,1966
+6372,Publicaciones,637,EXPENSE,DEBIT,true,1967
+6373,Relaciones públicas,637,EXPENSE,DEBIT,true,1968
+6391,Gastos bancarios,639,EXPENSE,DEBIT,true,1973
+6392,Gastos de laboratorio,639,EXPENSE,DEBIT,true,1974
+6411,Impuesto general a las ventas y selectivo al consumo,641,EXPENSE,DEBIT,true,1976
+6412,Impuesto a las transacciones financieras,641,EXPENSE,DEBIT,true,1977
+6413,Impuesto temporal a los activos netos,641,EXPENSE,DEBIT,true,1978
+6414,Impuesto a los juegos de casino y máquinas tragamonedas,641,EXPENSE,DEBIT,true,1979
+6415,Regalías mineras,641,EXPENSE,DEBIT,true,1980
+6416,Cánones,641,EXPENSE,DEBIT,true,1981
+6419,Otros,641,EXPENSE,DEBIT,true,1982
+6431,Impuesto predial,643,EXPENSE,DEBIT,true,1986
+6432,Arbitrios municipales y seguridad ciudadana,643,EXPENSE,DEBIT,true,1987
+6433,Impuesto al patrimonio vehicular,643,EXPENSE,DEBIT,true,1988
+6434,Licencia de funcionamiento,643,EXPENSE,DEBIT,true,1989
+6439,Otros,643,EXPENSE,DEBIT,true,1990
+6442,Contribución al SENCICO,644,EXPENSE,DEBIT,true,1993
+6443,Otros,644,EXPENSE,DEBIT,true,1994
+6451,Intereses,645,EXPENSE,DEBIT,true,1997
+6452,intereses - fraccionamiento,645,EXPENSE,DEBIT,true,1998
+6453,Multas,645,EXPENSE,DEBIT,true,1999
+6454,Costas y otros,645,EXPENSE,DEBIT,true,2000
+6551,Costo neto de enajenación de activos inmovilizados,655,EXPENSE,DEBIT,false,2009
+6552,Operaciones discontinuadas – Abandono de activos,655,EXPENSE,DEBIT,false,2021
+6591,Donaciones,659,EXPENSE,DEBIT,true,2030
+6592,Sanciones administrativas,659,EXPENSE,DEBIT,true,2031
+6611,Mercaderías,661,EXPENSE,DEBIT,true,2036
+6612,Productos terminados,661,EXPENSE,DEBIT,true,2037
+6613,Activos no corrientes mantenidos para la venta,661,EXPENSE,DEBIT,false,2038
+6621,Propiedades de inversión,662,EXPENSE,DEBIT,true,2044
+6622,Activos biológicos,662,EXPENSE,DEBIT,true,2045
+6711,Préstamos de instituciones financieras y otras entidades,671,EXPENSE,DEBIT,true,2050
+6712,Contratos de arrendamiento financiero,671,EXPENSE,DEBIT,true,2051
+6713,Emisión y colocación de instrumentos representativos de deuda y patrimonio,671,EXPENSE,DEBIT,true,2052
+6714,Documentos vendidos o descontados,671,EXPENSE,DEBIT,true,2053
+6731,Préstamos de instituciones financieras y otras entidades,673,EXPENSE,DEBIT,false,2057
+6732,Contratos de arrendamiento financiero,673,EXPENSE,DEBIT,true,2060
+6733,Otros instrumentos financieros por pagar,673,EXPENSE,DEBIT,true,2061
+6734,Documentos vendidos o descontados,673,EXPENSE,DEBIT,true,2062
+6735,Obligaciones emitidas,673,EXPENSE,DEBIT,true,2063
+6736,Obligaciones comerciales,673,EXPENSE,DEBIT,true,2066
+6741,Pérdida en instrumentos vendidos,674,EXPENSE,DEBIT,true,2068
+6771,Inversiones mantenidas para negociación,677,EXPENSE,DEBIT,true,2072
+6772,Otras inversiones financieras,677,EXPENSE,DEBIT,true,2073
+6773,Otros,677,EXPENSE,DEBIT,true,2074
+6781,Participación en los resultados de subsidiarias y asociadas bajo el método del valor patrimonial,678,EXPENSE,DEBIT,true,2076
+6782,Participaciones en negocios conjuntos,678,EXPENSE,DEBIT,true,2077
+6791,Primas por opciones,679,EXPENSE,DEBIT,true,2079
+6792,Gastos financieros en medición a valor descontado,679,EXPENSE,DEBIT,true,2080
+6793,Gastos financieros en actualización de activos por derecho de uso,679,EXPENSE,DEBIT,true,2081
+6811,Edificaciones,681,EXPENSE,DEBIT,false,2084
+6821,Propiedades de inversión,682,EXPENSE,DEBIT,false,2090
+6822,"Propiedad, planta y equipo",682,EXPENSE,DEBIT,false,2096
+6831,Depreciación de activos por derecho de uso - arrendamiento operativo,683,EXPENSE,DEBIT,false,2117
+6841,"Depreciación de propiedad, planta y equipo - Costo",684,EXPENSE,DEBIT,false,2134
+6842,"Depreciación de propiedad, planta y equipo - Revaluación",684,EXPENSE,DEBIT,false,2142
+6843,"Depreciación de propiedad, planta y equipo - Costos de financiación",684,EXPENSE,DEBIT,false,2151
+6851,Depreciación de activos biológicos en producción - costo,685,EXPENSE,DEBIT,false,2156
+6852,Depreciación de activos biológicos en producción - costo de financiación,685,EXPENSE,DEBIT,false,2160
+6861,Amortización de intangibles – Costo,686,EXPENSE,DEBIT,false,2167
+6862,Amortización de intangibles – Revaluación,686,EXPENSE,DEBIT,false,2174
+6871,Estimación de cuentas de cobranza dudosa,687,EXPENSE,DEBIT,false,2182
+6873,Desvalorización de inversiones mobiliarias,687,EXPENSE,DEBIT,false,2188
+6882,Desvalorización de propiedad de inversión,688,EXPENSE,DEBIT,false,2193
+6883,"Desvalorización de propiedad, planta y equipo",688,EXPENSE,DEBIT,false,2207
+6884,Desvalorización de intangibles,688,EXPENSE,DEBIT,false,2219
+6889,Desvalorización de activos biológicos en producción,688,EXPENSE,DEBIT,false,2228
+6891,Provisión para litigios,689,EXPENSE,DEBIT,false,2232
+6892,"Provisión por desmantelamiento, retiro o rehabilitación del inmovilizado",689,EXPENSE,DEBIT,false,2236
+6893,Provisión para reestructuraciones,689,EXPENSE,DEBIT,true,2239
+6894,Provisión para protección y remediación del medio ambiente,689,EXPENSE,DEBIT,false,2240
+6896,Provisión para garantías,689,EXPENSE,DEBIT,false,2244
+6897,Provisión por activos por derecho de uso,689,EXPENSE,DEBIT,false,2247
+6899,Otras provisiones,689,EXPENSE,DEBIT,true,2251
+6911,Mercaderías - exportación,691,EXPENSE,DEBIT,true,2258
+6912,Mercaderías - venta local,691,EXPENSE,DEBIT,true,2261
+6921,Productos terminados - Exportación,692,EXPENSE,DEBIT,true,2265
+6922,Productos terminados - Venta local,692,EXPENSE,DEBIT,true,2268
+6923,Costos de financiación – Productos terminados,692,EXPENSE,DEBIT,true,2271
+6924,Costos de producción no absorbido – Productos terminados,692,EXPENSE,DEBIT,true,2274
+6925,Costo de ineficiencia – Productos terminados,692,EXPENSE,DEBIT,true,2275
+6931,Servicios – Exportación,693,EXPENSE,DEBIT,true,2277
+6932,Servicios – local,693,EXPENSE,DEBIT,true,2280
+6941,Subproductos,694,EXPENSE,DEBIT,true,2285
+6942,Desechos y desperdicios,694,EXPENSE,DEBIT,true,2288
+6951,Mercaderías,695,EXPENSE,DEBIT,true,2292
+6952,Productos terminados,695,EXPENSE,DEBIT,true,2293
+6953,"Subproductos, desechos y desperdicios",695,EXPENSE,DEBIT,true,2294
+6954,Productos en proceso,695,EXPENSE,DEBIT,true,2295
+6955,Materias primas,695,EXPENSE,DEBIT,true,2296
+6956,"Materiales auxiliares, suministros y repuestos",695,EXPENSE,DEBIT,true,2297
+6957,Envases y embalajes,695,EXPENSE,DEBIT,true,2298
+6958,Inventarios por recibir,695,EXPENSE,DEBIT,true,2299
+7011,Mercaderías - venta de exportación,701,INCOME,CREDIT,false,2309
+7012,Mercaderías - venta local,701,INCOME,CREDIT,true,2312
+7021,Productos terminados - venta de exportación,702,INCOME,CREDIT,false,2318
+7022,Productos terminados - venta local,702,INCOME,CREDIT,false,2322
+7031,Servicios – exportación,703,INCOME,CREDIT,false,2328
+7032,Servicios – local,703,INCOME,CREDIT,false,2332
+7041,Subproductos,704,INCOME,CREDIT,false,2337
+7042,Desechos y desperdicios,704,INCOME,CREDIT,false,2341
+7091,Mercaderías - Venta de exportación,709,INCOME,CREDIT,false,2347
+7092,Mercaderías - Venta local,709,INCOME,CREDIT,false,2351
+7093,Productos terminados - Venta de exportación,709,INCOME,CREDIT,false,2355
+7094,Productos terminados - Venta local,709,INCOME,CREDIT,false,2359
+7095,Inventarios de servicios rechazados,709,INCOME,CREDIT,false,2362
+7096,"Subproductos, desechos y desperdicios",709,INCOME,CREDIT,false,2366
+11211,Costo,1121,ASSET,DEBIT,true,547
+11212,Valor Razonable,1121,ASSET,DEBIT,true,550
+11311,Costo,1131,ASSET,DEBIT,true,553
+11312,Valor Razonable,1131,ASSET,DEBIT,true,554
+11321,Costo,1132,ASSET,DEBIT,true,556
+11322,Valor Razonable,1132,ASSET,DEBIT,true,557
+16611,Costo,1661,ASSET,DEBIT,true,631
+16612,Valor razonable,1661,ASSET,DEBIT,true,632
+16621,Costo,1662,ASSET,DEBIT,true,634
+16622,Valor razonable,1662,ASSET,DEBIT,true,635
+20111,Costo,2011,ASSET,DEBIT,true,726
+20114,Valor razonable,2011,ASSET,DEBIT,true,727
+21111,Costo,2111,ASSET,DEBIT,true,731
+21113,Costo de financiación,2111,ASSET,DEBIT,true,732
+21114,Valor razonable,2111,ASSET,DEBIT,true,733
+21511,Costo,2151,ASSET,DEBIT,true,736
+23511,Costo,2351,ASSET,DEBIT,true,749
+24111,Costo,2411,ASSET,DEBIT,true,753
+24114,Valor razonable,2411,ASSET,DEBIT,true,754
+27111,Costo,2711,ASSET,DEBIT,true,771
+27112,Revaluación,2711,ASSET,DEBIT,true,772
+27114,Valor razonable,2711,ASSET,DEBIT,true,773
+27121,Costo,2712,ASSET,DEBIT,true,775
+27122,Revaluación,2712,ASSET,DEBIT,true,776
+27123,Costos de financiación,2712,ASSET,DEBIT,true,777
+27124,Valor razonable,2712,ASSET,DEBIT,true,778
+27201,Costo,2720,ASSET,DEBIT,true,781
+27202,Revaluación,2720,ASSET,DEBIT,true,782
+27203,Costo de financiación,2720,ASSET,DEBIT,true,783
+27204,Valor razonable,2720,ASSET,DEBIT,true,784
+27211,Costo,2721,ASSET,DEBIT,true,786
+27212,Revaluación,2721,ASSET,DEBIT,true,787
+27213,Costo de financiación,2721,ASSET,DEBIT,true,790
+27214,Valor razonable,2721,ASSET,DEBIT,true,791
+27221,Costo,2722,ASSET,DEBIT,true,794
+27222,Revaluación,2722,ASSET,DEBIT,true,795
+27231,Costo,2723,ASSET,DEBIT,true,798
+27232,Revaluación,2723,ASSET,DEBIT,true,799
+27233,Costo de financiación,2723,ASSET,DEBIT,true,800
+27241,Costo,2724,ASSET,DEBIT,true,803
+27242,Revaluación,2724,ASSET,DEBIT,true,804
+27251,Costo,2725,ASSET,DEBIT,true,808
+27252,Revaluación,2725,ASSET,DEBIT,true,809
+27261,Costo,2726,ASSET,DEBIT,true,812
+27262,Revaluación,2726,ASSET,DEBIT,true,813
+27271,Costo,2727,ASSET,DEBIT,true,816
+27272,Revaluación,2727,ASSET,DEBIT,true,817
+27281,Costo,2728,ASSET,DEBIT,true,819
+27282,Revaluación,2728,ASSET,DEBIT,true,820
+27291,Costo,2729,ASSET,DEBIT,true,823
+27292,Revaluación,2729,ASSET,DEBIT,true,824
+27311,Costo,2731,ASSET,DEBIT,true,828
+27312,Revaluación,2731,ASSET,DEBIT,true,829
+27321,Costo,2732,ASSET,DEBIT,true,832
+27322,Revaluación,2732,ASSET,DEBIT,true,833
+27331,Costo,2733,ASSET,DEBIT,true,836
+27332,Revaluación,2733,ASSET,DEBIT,true,837
+27341,Costo,2734,ASSET,DEBIT,true,840
+27342,Revaluación,2734,ASSET,DEBIT,true,841
+27351,Costo,2735,ASSET,DEBIT,true,843
+27352,Revaluación,2735,ASSET,DEBIT,true,844
+27391,Costo,2739,ASSET,DEBIT,true,847
+27392,Revaluación,2739,ASSET,DEBIT,true,853
+27411,Costo,2741,ASSET,DEBIT,true,856
+27413,Costos de financiación,2741,ASSET,DEBIT,true,857
+27414,Valor razonable,2741,ASSET,DEBIT,true,858
+27421,Costo,2742,ASSET,DEBIT,true,861
+27423,Costos de financiación,2742,ASSET,DEBIT,true,862
+27424,Valor razonable,2742,ASSET,DEBIT,true,863
+27521,Costo,2752,ASSET,DEBIT,true,867
+27522,Revaluación,2752,ASSET,DEBIT,true,868
+27523,Costo de financiación,2752,ASSET,DEBIT,true,869
+27601,Costo,2760,ASSET,DEBIT,true,874
+27602,Revaluación,2760,ASSET,DEBIT,true,875
+27603,Costo de financiación,2760,ASSET,DEBIT,true,876
+27604,Valor razonable,2760,ASSET,DEBIT,true,877
+27621,Costo,2762,ASSET,DEBIT,true,880
+27622,Revaluación,2762,ASSET,DEBIT,true,881
+27623,Costo de financiación,2762,ASSET,DEBIT,true,882
+27631,Costo,2763,ASSET,DEBIT,true,885
+27632,Revaluación,2763,ASSET,DEBIT,true,886
+27633,Costo de financiación,2763,ASSET,DEBIT,true,887
+27641,Costo,2764,ASSET,DEBIT,true,889
+27642,Revaluación,2764,ASSET,DEBIT,true,890
+27651,Costo,2765,ASSET,DEBIT,true,893
+27652,Revaluación,2765,ASSET,DEBIT,true,894
+27661,Costo,2766,ASSET,DEBIT,true,897
+27662,Revaluación,2766,ASSET,DEBIT,true,898
+27671,Costo,2767,ASSET,DEBIT,true,901
+27672,Revaluación,2767,ASSET,DEBIT,true,902
+27711,Costo,2771,ASSET,DEBIT,true,907
+27712,Revaluación,2771,ASSET,DEBIT,true,908
+27721,Costo,2772,ASSET,DEBIT,true,910
+27722,Revaluación,2772,ASSET,DEBIT,true,911
+27731,Costo,2773,ASSET,DEBIT,true,913
+27732,Revaluación,2773,ASSET,DEBIT,true,914
+27741,Costo,2774,ASSET,DEBIT,true,916
+27742,Revaluación,2774,ASSET,DEBIT,true,917
+27751,Costo,2775,ASSET,DEBIT,true,919
+27752,Revaluación,2775,ASSET,DEBIT,true,920
+27791,Costo,2779,ASSET,DEBIT,true,922
+27792,Revaluación,2779,ASSET,DEBIT,true,923
+27811,Costo,2781,ASSET,DEBIT,true,926
+27813,Costo de financiación,2781,ASSET,DEBIT,true,927
+27821,Costo,2782,ASSET,DEBIT,true,929
+27823,Costo de financiación,2782,ASSET,DEBIT,true,930
+27910,Planta productora en producción,2791,ASSET,DEBIT,true,933
+27911,Planta productora en desarrollo,2791,ASSET,DEBIT,true,934
+27912,Terrenos,2791,ASSET,DEBIT,true,935
+27913,Edificaciones,2791,ASSET,DEBIT,true,936
+27930,Plantas productoras en producción,2793,ASSET,DEBIT,true,938
+27931,Planta productora en desarrollo,2793,ASSET,DEBIT,true,939
+27932,Terrenos,2793,ASSET,DEBIT,true,940
+27933,Edificaciones,2793,ASSET,DEBIT,true,941
+27934,Maquinarias y equipos de explotación,2793,ASSET,DEBIT,true,942
+27935,Unidades de transporte,2793,ASSET,DEBIT,true,943
+27936,Muebles y enseres,2793,ASSET,DEBIT,true,944
+27937,Equipos diversos,2793,ASSET,DEBIT,true,945
+27938,Herramientas y unidades de reemplazo,2793,ASSET,DEBIT,true,946
+27941,"Concesiones, licencias y otros derechos",2794,ASSET,DEBIT,true,948
+27942,Patentes y propiedad industrial,2794,ASSET,DEBIT,true,949
+27943,Programas de computadora (software),2794,ASSET,DEBIT,true,950
+27944,Costos de exploración y desarrollo,2794,ASSET,DEBIT,true,953
+27945,"Fórmulas, diseños y prototipos",2794,ASSET,DEBIT,true,954
+27949,Otros activos intangibles,2794,ASSET,DEBIT,true,955
+27951,Activos biológicos en producción,2795,ASSET,DEBIT,true,957
+27952,Activos biológicos en desarrollo,2795,ASSET,DEBIT,true,958
+29111,Costo,2911,ASSET,CREDIT,true,969
+29211,Costo,2921,ASSET,CREDIT,true,972
+29213,Costo de financiación,2921,ASSET,CREDIT,true,973
+29251,Costo,2925,ASSET,CREDIT,true,975
+29411,Costo,2941,ASSET,CREDIT,true,983
+29413,Costo de financiación,2941,ASSET,CREDIT,true,984
+29511,Costo,2951,ASSET,CREDIT,true,989
+30811,Costo,308,ASSET,DEBIT,true,1056
+30814,Valor razonable,308,ASSET,DEBIT,true,1057
+30821,Costo,3082,ASSET,DEBIT,true,1060
+30824,Valor razonable,3082,ASSET,DEBIT,true,1061
+31111,Costo,3111,ASSET,DEBIT,true,1065
+31112,Revaluación,3111,ASSET,DEBIT,true,1066
+31114,Valor razonable,3111,ASSET,DEBIT,true,1067
+31121,Costo,3112,ASSET,DEBIT,true,1069
+31122,Revaluación,3112,ASSET,DEBIT,true,1070
+31124,Valor razonable,3112,ASSET,DEBIT,true,1071
+31211,Costo,3121,ASSET,DEBIT,true,1075
+31212,Revaluación,3121,ASSET,DEBIT,true,1076
+31213,Costos de financiación,3121,ASSET,DEBIT,true,1077
+31214,Valor razonable,3121,ASSET,DEBIT,true,1078
+31311,Costo,3131,ASSET,DEBIT,true,1082
+31312,Revaluación,3131,ASSET,DEBIT,true,1083
+31313,Costos de financiación,3131,ASSET,DEBIT,true,1084
+31314,Valor razonable,3131,ASSET,DEBIT,true,1085
+32111,Costo,3211,ASSET,DEBIT,true,1090
+32112,Revaluación,3211,ASSET,DEBIT,true,1091
+32114,Valor razonable,3211,ASSET,DEBIT,true,1092
+32121,Costo,3212,ASSET,DEBIT,true,1095
+32122,Revaluación,3212,ASSET,DEBIT,true,1096
+32123,Costo de financiación,3212,ASSET,DEBIT,true,1097
+32124,Valor razonable,3212,ASSET,DEBIT,true,1098
+32201,Costo,3220,ASSET,DEBIT,true,1102
+32202,Revaluación,3220,ASSET,DEBIT,true,1103
+32203,Costo de financiación,3220,ASSET,DEBIT,true,1107
+32211,Costo,3221,ASSET,DEBIT,true,1109
+32212,Revaluación,3221,ASSET,DEBIT,true,1110
+32213,Costo de financiación,3221,ASSET,DEBIT,true,1111
+32221,Costo,3222,ASSET,DEBIT,true,1114
+32222,Revaluación,3222,ASSET,DEBIT,true,1115
+32231,Costo,3223,ASSET,DEBIT,true,1118
+32232,Revaluación,3223,ASSET,DEBIT,true,1119
+32233,Costo de financiación,3223,ASSET,DEBIT,true,1120
+32241,Costo,3224,ASSET,DEBIT,true,1123
+32242,Revaluación,3224,ASSET,DEBIT,true,1124
+32243,Costo de financiación,3224,ASSET,DEBIT,true,1125
+32251,Costo,3225,ASSET,DEBIT,true,1128
+32252,Revaluación,3225,ASSET,DEBIT,true,1129
+32261,Costo,3226,ASSET,DEBIT,true,1132
+32262,Revaluación,3226,ASSET,DEBIT,true,1133
+32271,Costo,3227,ASSET,DEBIT,true,1135
+32272,Revaluación,3227,ASSET,DEBIT,true,1136
+32281,Costo,3228,ASSET,DEBIT,true,1139
+32282,Revaluación,3228,ASSET,DEBIT,true,1140
+32301,Costo,3230,ASSET,DEBIT,true,1145
+32302,Revaluación,3230,ASSET,DEBIT,true,1146
+32321,Costo,3232,ASSET,DEBIT,true,1149
+32331,Costo,3233,ASSET,DEBIT,true,1152
+32332,Revaluación,3233,ASSET,DEBIT,true,1153
+32341,Costo,3234,ASSET,DEBIT,true,1156
+32342,Revaluación,3234,ASSET,DEBIT,true,1157
+32351,Costo,3235,ASSET,DEBIT,true,1160
+32352,Revaluación,3235,ASSET,DEBIT,true,1161
+32361,Costo,3236,ASSET,DEBIT,true,1168
+32362,Revaluación,3236,ASSET,DEBIT,true,1169
+33011,Costo,3301,ASSET,DEBIT,true,1173
+33012,Revaluación,3301,ASSET,DEBIT,true,1174
+33013,Costo de financiación,3301,ASSET,DEBIT,true,1175
+33014,Valor razonable,3301,ASSET,DEBIT,true,1176
+33021,Costo,3302,ASSET,DEBIT,true,1179
+33022,Revaluación,3302,ASSET,DEBIT,true,1180
+33023,Costo de financiación,3302,ASSET,DEBIT,true,1181
+33024,Valor razonable,3302,ASSET,DEBIT,true,1182
+33111,Costo,3311,ASSET,DEBIT,true,1186
+33112,Revaluación,3311,ASSET,DEBIT,true,1187
+33211,Costo,3321,ASSET,DEBIT,true,1190
+33212,Revaluación,3321,ASSET,DEBIT,true,1191
+33213,Costo de financiación,3321,ASSET,DEBIT,true,1192
+33241,Costo,3324,ASSET,DEBIT,true,1195
+33242,Revaluación,3324,ASSET,DEBIT,true,1196
+33243,Costo de financiación,3324,ASSET,DEBIT,true,1197
+33251,Costo,3325,ASSET,DEBIT,true,1200
+33252,Revaluación,3325,ASSET,DEBIT,true,1201
+33253,Costo de Financiación,3325,ASSET,DEBIT,true,1202
+33311,Costo,3331,ASSET,DEBIT,true,1206
+33312,Revaluación,3331,ASSET,DEBIT,true,1207
+33313,Costo de financiación,3331,ASSET,DEBIT,true,1208
+33411,Costo,3341,ASSET,DEBIT,true,1211
+33412,Revaluación,3341,ASSET,DEBIT,true,1212
+33421,Costo,3342,ASSET,DEBIT,true,1215
+33422,Revaluación,3342,ASSET,DEBIT,true,1216
+35111,Costo,35,ASSET,DEBIT,true,1328
+35113,Costo de financiación,35,ASSET,DEBIT,true,1329
+35114,Valor razonable,35,ASSET,DEBIT,true,1330
+35121,Costo,3512,ASSET,DEBIT,true,1332
+35123,Costo de financiación,3512,ASSET,DEBIT,true,1333
+35124,Valor razonable,3512,ASSET,DEBIT,true,1334
+35211,Costo,3521,ASSET,DEBIT,true,1338
+35213,Costo de financiación,3521,ASSET,DEBIT,true,1339
+35214,Valor razonable,3521,ASSET,DEBIT,true,1340
+35221,Costo,3522,ASSET,DEBIT,true,1343
+35223,Costo de financiación,3522,ASSET,DEBIT,true,1344
+35224,Valor razonable,3522,ASSET,DEBIT,true,1345
+36111,Costo,3611,ASSET,CREDIT,true,1351
+36112,Revaluación,3611,ASSET,CREDIT,true,1352
+36121,Costo,3612,ASSET,CREDIT,true,1354
+36122,Revaluación,3612,ASSET,CREDIT,true,1355
+36123,Costo de financiación,3612,ASSET,CREDIT,true,1356
+36131,Costo,3613,ASSET,CREDIT,true,1359
+36132,Revaluación,3613,ASSET,CREDIT,true,1360
+36133,Costo de financiación,3613,ASSET,CREDIT,true,1361
+36211,Costo,3621,ASSET,CREDIT,true,1365
+36212,Revaluación,3621,ASSET,CREDIT,true,1366
+36221,Costo,3622,ASSET,CREDIT,true,1369
+36222,Revaluación,3622,ASSET,CREDIT,true,1370
+36223,Costo de financiación,3622,ASSET,CREDIT,true,1371
+36311,Costo,3631,ASSET,CREDIT,true,1374
+36312,Revaluación,3631,ASSET,CREDIT,true,1375
+36321,Costo,3632,ASSET,CREDIT,true,1378
+36322,Revaluación,3632,ASSET,CREDIT,true,1379
+36323,Costo de financiación,3632,ASSET,CREDIT,true,1380
+36452,Revaluación,364,ASSET,CREDIT,true,1436
+36461,Costo,3646,ASSET,CREDIT,true,1439
+36462,Revaluación,3646,ASSET,CREDIT,true,1440
+36471,Herramientas - Costo,3647,ASSET,CREDIT,true,1442
+36472,Herramientas - Revaluación,3647,ASSET,CREDIT,true,1443
+36473,Unidades de reemplazo - costo,3647,ASSET,CREDIT,true,1444
+36474,Unidades de reemplazo - Revaluación,3647,ASSET,CREDIT,true,1445
+36491,Costo,3649,ASSET,CREDIT,true,1448
+36492,Revaluación,3649,ASSET,CREDIT,true,1449
+36511,Costo,3651,ASSET,CREDIT,true,1453
+36512,Revaluación,3651,ASSET,CREDIT,true,1454
+36521,Costo,3652,ASSET,CREDIT,true,1457
+36522,Revaluación,3652,ASSET,CREDIT,true,1458
+36531,Costo,3653,ASSET,CREDIT,true,1461
+36532,Revaluación,3653,ASSET,CREDIT,true,1462
+36541,Costo,3654,ASSET,CREDIT,true,1464
+36542,Revaluación,3654,ASSET,CREDIT,true,1465
+36543,Costo de financiación,3654,ASSET,CREDIT,true,1466
+36551,Costo,3655,ASSET,CREDIT,true,1469
+36552,Revaluación,3655,ASSET,CREDIT,true,1470
+36591,Costo,3659,ASSET,CREDIT,true,1475
+36592,Revaluación,3659,ASSET,CREDIT,true,1476
+36611,Costo,3661,ASSET,CREDIT,true,1480
+36613,Costo de financiación,3661,ASSET,CREDIT,true,1481
+36621,Costo,3662,ASSET,CREDIT,true,1484
+36622,Costo de financiación,3662,ASSET,CREDIT,true,1485
+36711,Costo,3671,ASSET,CREDIT,true,1488
+36721,Costo,3672,ASSET,CREDIT,true,1491
+36731,Costo,3673,ASSET,CREDIT,true,1496
+39111,Costo,3911,ASSET,CREDIT,true,1520
+39112,Revaluación,3911,ASSET,CREDIT,true,1521
+39113,Costo de financiación,3911,ASSET,CREDIT,true,1522
+39211,Costo,3921,ASSET,CREDIT,true,1525
+39212,Revaluación,3921,ASSET,CREDIT,true,1526
+39213,Costo de financiación,3921,ASSET,CREDIT,true,1527
+39321,Costo,3932,ASSET,CREDIT,true,1530
+39322,Revaluación,3932,ASSET,CREDIT,true,1531
+39323,Costo de financiación,3932,ASSET,CREDIT,true,1532
+39331,Costo,3933,ASSET,CREDIT,true,1534
+39332,Revaluación,3933,ASSET,CREDIT,true,1535
+39333,Costo de financiación,3933,ASSET,CREDIT,true,1536
+39611,"Concesiones, licencias y otros derechos",3961,ASSET,CREDIT,true,1592
+39612,Patentes y propiedad industrial,3961,ASSET,CREDIT,true,1593
+39613,Programas de computadora (software),3961,ASSET,CREDIT,true,1594
+39614,Costos de exploración y desarrollo,3961,ASSET,CREDIT,true,1595
+39615,"Fórmulas, diseños y prototipos",3961,ASSET,CREDIT,true,1596
+39619,Otros activos intangibles,3961,ASSET,CREDIT,true,1597
+39621,"Concesiones, licencias y otros derechos",3962,ASSET,CREDIT,true,1599
+39622,Patentes y propiedad industrial,3962,ASSET,CREDIT,true,1600
+39623,Programas de computadora (software),3962,ASSET,CREDIT,true,1601
+39624,Costos de exploración y desarrollo,3962,ASSET,CREDIT,true,1602
+39625,"Fórmulas, diseños y prototipos",3962,ASSET,CREDIT,true,1603
+39629,Otros activos intangibles,3962,ASSET,CREDIT,true,1604
+39633,Programas de computadora,3963,ASSET,CREDIT,true,1607
+39634,Costos de exploración,3963,ASSET,CREDIT,true,1608
+39635,Costos de desarrollo,3963,ASSET,CREDIT,true,1609
+39811,Activos biológicos en producción,3981,ASSET,CREDIT,true,1612
+40111,IGV – Cuenta propia,4011,LIABILITY,CREDIT,true,1619
+40112,IGV – Servicios prestados por no domiciliados,4011,LIABILITY,CREDIT,true,1620
+40113,IGV – Régimen de percepciones,4011,LIABILITY,CREDIT,true,1621
+40114,IGV – Régimen de retenciones,4011,LIABILITY,CREDIT,true,1622
+40115,IGV – Importaciones,4011,LIABILITY,CREDIT,true,1623
+40116,IGV – Destinado a operaciones gravadas,4011,LIABILITY,CREDIT,true,1624
+40117,IGV - Destinado a operaciones comunes,4011,LIABILITY,CREDIT,true,1625
+40151,Derechos arancelarios,4015,LIABILITY,CREDIT,true,1630
+40152,Otros derechos arancelarios,4015,LIABILITY,CREDIT,true,1631
+40171,Renta de tercera categoría,4017,LIABILITY,CREDIT,true,1633
+40172,Renta de cuarta categoría,4017,LIABILITY,CREDIT,true,1634
+40173,Renta de quinta categoría,4017,LIABILITY,CREDIT,true,1635
+40174,Renta de no domiciliados,4017,LIABILITY,CREDIT,true,1636
+40175,Otras retenciones,4017,LIABILITY,CREDIT,true,1637
+40181,Impuesto a las transacciones financieras,4018,LIABILITY,CREDIT,true,1642
+40182,Impuesto a los juegos de casino y tragamonedas,4018,LIABILITY,CREDIT,true,1643
+40183,Tasas por la prestación de servicios públicos,4018,LIABILITY,CREDIT,true,1644
+40184,Regalías,4018,LIABILITY,CREDIT,true,1645
+40185,Impuesto a los dividendos,4018,LIABILITY,CREDIT,true,1646
+40186,Impuesto temporal a los activos netos,4018,LIABILITY,CREDIT,true,1647
+40189,Otros impuestos,4018,LIABILITY,CREDIT,true,1648
+60935,Otros costos,60,EXPENSE,DEBIT,true,1867
+60941,Transporte,6094,EXPENSE,DEBIT,true,1869
+60942,Seguros,6094,EXPENSE,DEBIT,true,1870
+60943,Derechos aduaneros,6094,EXPENSE,DEBIT,true,1871
+60944,Comisiones,6094,EXPENSE,DEBIT,true,1872
+60945,Otros costos,6094,EXPENSE,DEBIT,true,1873
+65511,Inversiones mobiliarias,6551,EXPENSE,DEBIT,true,2010
+65512,Propiedades de inversión,6551,EXPENSE,DEBIT,true,2011
+65513,Activos por derecho de uso - arrendamiento financiero,6551,EXPENSE,DEBIT,true,2016
+65514,"Propiedad, planta y equipo",6551,EXPENSE,DEBIT,true,2017
+65515,Intangibles,6551,EXPENSE,DEBIT,true,2018
+65516,Activos biológicos,6551,EXPENSE,DEBIT,true,2019
+65521,Propiedades de inversión,6552,EXPENSE,DEBIT,true,2022
+65522,Activos por derecho de uso - Arrendamiento financiero,6552,EXPENSE,DEBIT,true,2023
+65523,"Propiedad, planta y equipo",6552,EXPENSE,DEBIT,true,2024
+65524,Intangibles,6552,EXPENSE,DEBIT,true,2025
+65525,Activos biológicos,6552,EXPENSE,DEBIT,true,2026
+66131,Propiedades de inversión,6613,EXPENSE,DEBIT,true,2039
+66132,"Propiedad, planta y equipo",6613,EXPENSE,DEBIT,true,2040
+66133,Intangibles,6613,EXPENSE,DEBIT,true,2041
+66134,Activos biológicos,6613,EXPENSE,DEBIT,true,2042
+67311,Instituciones financieras,6731,EXPENSE,DEBIT,true,2058
+67312,Otras entidades,6731,EXPENSE,DEBIT,true,2059
+68111,Costo,6811,EXPENSE,DEBIT,true,2085
+68112,Revaluación,6811,EXPENSE,DEBIT,true,2086
+68113,Costo de financiación,6811,EXPENSE,DEBIT,true,2087
+68211,Edificaciones,6821,EXPENSE,DEBIT,true,2091
+68221,Edificaciones,6822,EXPENSE,DEBIT,true,2097
+68222,Maquinarias y equipos de explotación,6822,EXPENSE,DEBIT,true,2101
+68223,Unidades de transporte,6822,EXPENSE,DEBIT,true,2106
+68225,Equipos diversos,6822,EXPENSE,DEBIT,true,2112
+68311,Edificaciones,6831,EXPENSE,DEBIT,true,2119
+68312,Maquinarias y equipos de explotación,6831,EXPENSE,DEBIT,true,2122
+68313,Unidades de transporte,6831,EXPENSE,DEBIT,true,2126
+68315,Equipos diversos,6831,EXPENSE,DEBIT,true,2130
+68410,Plantas productoras,6841,EXPENSE,DEBIT,true,2135
+68411,Edificaciones,6841,EXPENSE,DEBIT,true,2136
+68412,Maquinarias y equipos de explotación,6841,EXPENSE,DEBIT,true,2137
+68413,Unidades de transporte,6841,EXPENSE,DEBIT,true,2138
+68414,Muebles y enseres,6841,EXPENSE,DEBIT,true,2139
+68415,Equipos diversos,6841,EXPENSE,DEBIT,true,2140
+68416,Herramientas y unidades de reemplazo,6841,EXPENSE,DEBIT,true,2141
+68420,Plantas productoras,6842,EXPENSE,DEBIT,true,2143
+68421,Edificaciones,6842,EXPENSE,DEBIT,true,2144
+68422,Maquinarias y equipos de explotación,6842,EXPENSE,DEBIT,true,2145
+68423,Unidades de transporte,6842,EXPENSE,DEBIT,true,2146
+68424,Muebles y enseres,6842,EXPENSE,DEBIT,true,2147
+68425,Equipos diversos,6842,EXPENSE,DEBIT,true,2148
+68426,Herramientas y unidades de reemplazo,6842,EXPENSE,DEBIT,true,2149
+68430,Plantas productoras,6843,EXPENSE,DEBIT,true,2152
+68431,Edificaciones,6843,EXPENSE,DEBIT,true,2153
+68432,Maquinarias y equipos de explotación,6843,EXPENSE,DEBIT,true,2154
+68511,Activos biológicos de origen animal,6851,EXPENSE,DEBIT,true,2157
+68512,Activos biológicos de origen vegetal,6851,EXPENSE,DEBIT,true,2158
+68521,Activos biológicos de origen animal,6852,EXPENSE,DEBIT,true,2161
+68522,Activos biológicos de origen vegetal,6852,EXPENSE,DEBIT,true,2165
+68611,"Concesiones, licencias y otros derechos",6861,EXPENSE,DEBIT,true,2168
+68612,Patentes y propiedad industrial,6861,EXPENSE,DEBIT,true,2169
+68613,Programas de computadora (software),6861,EXPENSE,DEBIT,true,2170
+68614,Costos de exploración y desarrollo,6861,EXPENSE,DEBIT,true,2171
+68615,"Fórmulas, diseños y prototipos",6861,EXPENSE,DEBIT,true,2172
+68619,Otros activos intangibles,6861,EXPENSE,DEBIT,true,2173
+68621,"Concesiones, licencias y otros derechos",6862,EXPENSE,DEBIT,true,2175
+68622,Patentes y propiedad industrial,6862,EXPENSE,DEBIT,true,2176
+68623,Programas de computadora (software),6862,EXPENSE,DEBIT,true,2177
+68624,Costos de exploración y desarrollo,6862,EXPENSE,DEBIT,true,2178
+68625,"Fórmulas, diseños y prototipos",6862,EXPENSE,DEBIT,true,2179
+68629,Otros activos intangibles,6862,EXPENSE,DEBIT,true,2180
+68711,Cuentas por cobrar comerciales – Terceros,6871,EXPENSE,DEBIT,true,2183
+68712,Cuentas por cobrar comerciales – Relacionadas,6871,EXPENSE,DEBIT,true,2184
+68713,"Cuentas por cobrar al personal, a los accionistas (socios) y directores",6871,EXPENSE,DEBIT,true,2185
+68714,Cuentas por cobrar diversas – Terceros,6871,EXPENSE,DEBIT,true,2186
+68715,Cuentas por cobrar diversas – Relacionadas,6871,EXPENSE,DEBIT,true,2187
+68731,Inversiones a ser mantenidas hasta el vencimiento,6873,EXPENSE,DEBIT,true,2189
+68732,Instrumentos financieros representativos de derecho patrimonial,6873,EXPENSE,DEBIT,true,2190
+68812,Edificaciones,688,EXPENSE,DEBIT,true,2194
+68813,Construcciones en curso,688,EXPENSE,DEBIT,true,2195
+68820,Planta productora en producción,6882,EXPENSE,DEBIT,true,2197
+68821,Planta productora en desarrollo,6882,EXPENSE,DEBIT,true,2198
+68822,Terrenos,6882,EXPENSE,DEBIT,true,2199
+68823,Edificaciones,6882,EXPENSE,DEBIT,true,2200
+68824,Maquinarias y equipos de explotación,6882,EXPENSE,DEBIT,true,2201
+68825,Unidades de transporte,6882,EXPENSE,DEBIT,true,2202
+68826,Muebles y enseres,6882,EXPENSE,DEBIT,true,2203
+68827,Equipos diversos,6882,EXPENSE,DEBIT,true,2204
+68828,Herramientas y unidades de reemplazo,6882,EXPENSE,DEBIT,true,2205
+68830,Planta productora en producción,6883,EXPENSE,DEBIT,true,2208
+68831,Planta productora en desarrollo,6883,EXPENSE,DEBIT,true,2211
+68832,Terrenos,6883,EXPENSE,DEBIT,true,2212
+68833,Edificaciones,6883,EXPENSE,DEBIT,true,2213
+68834,Maquinarias y equipos de explotación,6883,EXPENSE,DEBIT,true,2214
+68835,Unidades de transporte,6883,EXPENSE,DEBIT,true,2215
+68836,Muebles y enseres,6883,EXPENSE,DEBIT,true,2216
+68837,Equipos diversos,6883,EXPENSE,DEBIT,true,2217
+68838,Herramientas y unidades de reemplazo,6883,EXPENSE,DEBIT,true,2218
+68841,"Concesiones, licencias y otros derechos",6884,EXPENSE,DEBIT,true,2220
+68842,Patentes y propiedad industrial,6884,EXPENSE,DEBIT,true,2221
+68843,Programas de computadora (software),6884,EXPENSE,DEBIT,true,2222
+68844,Costos de exploración y desarrollo,6884,EXPENSE,DEBIT,true,2223
+68845,"Fórmulas, diseños y prototipos",6884,EXPENSE,DEBIT,true,2224
+68846,Otros activos intangibles,6884,EXPENSE,DEBIT,true,2225
+68847,Plusvalía mercantil,6884,EXPENSE,DEBIT,true,2226
+68891,Activos biológicos de origen animal,6889,EXPENSE,DEBIT,true,2229
+68892,Activos biológicos de origen vegetal,6889,EXPENSE,DEBIT,true,2230
+68911,Provisión para litigios – Costo,6891,EXPENSE,DEBIT,true,2233
+68912,Provisión para litigios – Actualización financiera,6891,EXPENSE,DEBIT,true,2234
+68921,"Provisión por desmantelamiento, retiro o rehabilitación del inmovilizado – Costo",6892,EXPENSE,DEBIT,true,2237
+68922,"Provisión por desmantelamiento, retiro o rehabilitación del inmovilizado – Actualización financiera",6892,EXPENSE,DEBIT,true,2238
+68941,Provisión para protección y remediación del medio ambiente – Costo,6894,EXPENSE,DEBIT,true,2241
+68942,Provisión para protección y remediación del medio ambiente – Actualización financiera,6894,EXPENSE,DEBIT,true,2242
+68961,Provisión para garantías – Costo,6896,EXPENSE,DEBIT,true,2245
+68962,Provisión para garantías – Actualización financiera,6896,EXPENSE,DEBIT,true,2246
+68971,Provisión por activos por derecho de uso arrendamiento operativo,6897,EXPENSE,DEBIT,true,2248
+68972,Provisión por activos por derecho de uso arrendamiento operativo - actualización financiera,6897,EXPENSE,DEBIT,true,2249
+70111,Terceros,7011,INCOME,CREDIT,true,2310
+70112,Relacionadas,7011,INCOME,CREDIT,true,2311
+70211,Terceros,7021,INCOME,CREDIT,true,2319
+70212,Relacionadas,7021,INCOME,CREDIT,true,2320
+70221,Terceros,7022,INCOME,CREDIT,true,2323
+70222,Relacionadas,7022,INCOME,CREDIT,true,2324
+70311,Terceros,7031,INCOME,CREDIT,true,2329
+70312,Relacionadas,7031,INCOME,CREDIT,true,2330
+70321,Terceros,7032,INCOME,CREDIT,true,2333
+70322,Relacionadas,7032,INCOME,CREDIT,true,2334
+70411,Terceros,7041,INCOME,CREDIT,true,2338
+70412,Relacionadas,7041,INCOME,CREDIT,true,2339
+70421,Terceros,7042,INCOME,CREDIT,true,2342
+70422,Relacionadas,7042,INCOME,CREDIT,true,2343
+70911,Terceros,7091,INCOME,CREDIT,true,2348
+70912,Relacionadas,7091,INCOME,CREDIT,true,2349
+70921,Terceros,7092,INCOME,CREDIT,true,2352
+70922,Relacionadas,7092,INCOME,CREDIT,true,2353
+70931,Terceros,7093,INCOME,CREDIT,true,2356
+70932,Relacionadas,7093,INCOME,CREDIT,true,2357
+70941,Terceros,7094,INCOME,CREDIT,true,2360
+70942,Relacionadas,7094,INCOME,CREDIT,true,2361
+70951,Terceros,7095,INCOME,CREDIT,true,2363
+70952,Relacionadas,7095,INCOME,CREDIT,true,2364
+70961,Terceros,7096,INCOME,CREDIT,true,2370
+70962,Relacionadas,7096,INCOME,CREDIT,true,2371
+72542,Activos biológicos de origen vegetal,725,INCOME,CREDIT,true,2415

@@ -10,7 +10,7 @@ class RequestBodyLimitMiddleware:
         self.max_bytes = max_bytes
 
     async def __call__(self, scope: dict[str, Any], receive: Callable[..., Awaitable[dict]], send: Callable[..., Awaitable[None]]) -> None:
-        if scope["type"] != "http" or scope.get("path") != "/api/chat/audio":
+        if scope["type"] != "http" or scope.get("path") not in {"/api/chat/audio", "/api/admin/chat/audio"}:
             await self.app(scope, receive, send)
             return
         headers = dict(scope.get("headers", ()))

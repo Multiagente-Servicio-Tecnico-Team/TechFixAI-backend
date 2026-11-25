@@ -65,7 +65,7 @@ def make_logistics_agent(llm: Any, repository: ServiceRepository):
             "logistics_record_write",
             lambda: record_customer_logistics_preference(
                 repository,
-                ticket_id=state["ticket_id"],
+                ticket_id=state.get("logistics_ticket_id") or state["ticket_id"],
                 customer_id=state["customer_id"],
                 mode=decision.mode,
                 courier_company=decision.courier_company,

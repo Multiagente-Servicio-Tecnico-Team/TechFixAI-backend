@@ -23,7 +23,20 @@ persistencia de inventario y presupuestos está disponible en los dos primeros p
 | Patrón de Red Descentralizada | [`app/agents/decentralized/`](app/agents/decentralized/) | Integrado; herramientas aún simuladas |
 | Patrón Jerárquico | [`app/agents/jerarquico/`](app/agents/jerarquico/) | Integrado; consulta y persistencia PostgreSQL |
 | Patrón Orquestador/Supervisor | [`app/agents/orquestador/`](app/agents/orquestador/) | Integrado; consulta y persistencia PostgreSQL |
+| Compras y proveedores: rutas administrativas `/api/admin/purchases` y `/api/admin/suppliers` | [`app/adapters/api/purchases.py`](app/adapters/api/purchases.py) | Compras separadas de órdenes; recepción explícita para incrementar stock |
 | Correo transaccional (SMTP) | `app/email/` | En `main` |
+
+### Registro de compras a proveedores
+
+El contrato HTTP se mantiene en [`specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml`](specs/006-registro-compras-proveedores/contracts/purchases.openapi.yaml). La feature registra comprobantes, método y estado de pago, recepciones y movimientos auditables; no genera asientos contables ni PLE.
+
+La base se instala con [`sql/esquema-vacio-produccion.sql`](sql/esquema-vacio-produccion.sql) (esquema completo, sin filas) y [`sql/seeds/datos-iniciales.sql`](sql/seeds/datos-iniciales.sql) (ADMIN por defecto, inventario y PCGE). Pasos en [`sql/README.md`](sql/README.md).
+
+### Clientes, tickets de servicio y ventas directas
+
+La feature backend en [`specs/007-gestion-clientes-comerciales/`](specs/007-gestion-clientes-comerciales/) separa `users` (cuentas) de `customers` (identidad comercial). Los tickets son para servicio; una cotización de venta puede existir sin ticket. Aceptarla reserva stock; solo ADMIN confirma el pago y crea la venta. La respuesta de `POST /api/chat` incluye `quote_id` cuando el patrón guardó una cotización.
+
+La BD tiene `customers`, perfil comercial vinculado a la cuenta del portal y relaciones comerciales obligatorias; se conservaron las columnas legacy durante compatibilidad. Se eliminaron los ocho tickets `SALE` de prueba aprobados y sus dependientes confirmados. El Orquestador aún no clasifica compras directas.
 
 ## Integración de patrones
 
@@ -136,7 +149,7 @@ tests/
 
 - Python 3.12
 - Node.js 18 o superior (solo para ejecutar el frontend)
-- PostgreSQL 16 con las tablas del script del equipo (`creacion_tablas_sin_inserciones.sql`)
+- PostgreSQL 16 o 17, instalado con los scripts de [`sql/`](sql/README.md)
 - Claves de Groq y LangSmith para los patrones con LLM
 
 ## Configuración
@@ -153,18 +166,28 @@ Copiar `.env.example` a `.env` y completar:
 | `GROQ_API_KEY` | Modelo de los agentes de los patrones |
 | `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGSMITH_PROJECT` | Trazabilidad en LangSmith |
 | `LANGSMITH_HIDE_INPUTS`, `LANGSMITH_HIDE_OUTPUTS` | Ocultamiento de contenido en las trazas |
+| `RAG_RETRIEVAL_MODE` | `lexical` por defecto para los tres patrones; `hybrid` activa el índice vectorial local |
 
-La instalación raíz incluye las dependencias de API, agentes y RAG mediante
-`requirements-agent.txt`. Para crear o actualizar el índice vectorial local una
-vez instaladas las dependencias, ejecuta:
+El archivo único `requirements.txt` reúne las dependencias de API, agentes, RAG,
+Streamlit y pruebas. Instálalas desde la raíz del backend con:
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+```
+
+El chat usa búsqueda léxica compartida por defecto y no necesita crear un índice
+vectorial. Para probar el modo híbrido opcional, establece
+`RAG_RETRIEVAL_MODE=hybrid` y crea o actualiza el índice local:
 
 ```powershell
 .\.venv\Scripts\python.exe -m app.rag.ingest
 ```
 
 La ingesta descarga el modelo FastEmbed la primera vez y guarda el índice en
-`data/chroma/`, que está excluido de Git. Debe repetirse cuando cambie el
-contenido de `data/knowledge/`.
+`data/chroma/`, que está excluido de Git. Este modo no se recomienda para el
+servicio gratuito de Render: su disco es efímero y la instancia tiene recursos
+limitados. Si cambian los documentos, vuelve a generar el índice antes de usar
+el modo híbrido.
 
 El frontend ([TechFixAI-frontend](https://github.com/SebasBazauri/TechFixAI-frontend)) usa un `.env` propio: `VITE_API_URL` apunta a
 `/auth` y `VITE_CHAT_URL` al mismo origen del chat. Los valores locales por defecto

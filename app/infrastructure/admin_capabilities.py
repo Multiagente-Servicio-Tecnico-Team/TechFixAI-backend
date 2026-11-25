@@ -129,6 +129,13 @@ class ReportExport(BaseModel):
     account_code: str | None = Field(default=None, min_length=1, max_length=40)
 
 
+class PleExport(BaseModel):
+    """Periodo para validar y descargar el Libro Diario PLE."""
+    model_config = ConfigDict(extra="forbid")
+    year: int = Field(ge=2000, le=9999)
+    month: int = Field(ge=1, le=12)
+
+
 class AdminFieldValidationError(ValueError):
     """A correctable field/reference error that can be returned through a chat draft."""
 
@@ -150,7 +157,7 @@ READ_ACTIONS = {
     "purchases.get", "purchase_orders.list", "purchase_orders.get",
     "sales_quotes.list", "sales_quotes.get", "sales_orders.list", "sales_orders.get",
     "payments.list", "accounting.entries.list", "accounting.entries.get",
-    "accounting.categories.list", "accounting.reports.export",
+    "accounting.categories.list", "accounting.reports.export", "accounting.ple.export",
 }
 
 WRITE_ACTIONS = {
@@ -278,6 +285,12 @@ class AdminCapabilityService:
         raise ValueError("La capacidad no existe.")
 
     def read(self, action: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if action == "accounting.ple.export":
+            from urllib.parse import urlencode
+            body = PleExport.model_validate(arguments)
+            query = urlencode({"year": body.year, "month": body.month})
+            return {"report": "Libro Diario 5.1", "year": body.year, "month": body.month,
+                    "download_url": f"/api/admin/accounting/ple/libro-diario/export?{query}"}
         list_fields = {
             "customers.list": {"search", "limit", "offset"},
             "tickets.list": {"search", "status", "limit", "offset"},

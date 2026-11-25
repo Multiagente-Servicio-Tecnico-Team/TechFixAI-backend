@@ -135,6 +135,24 @@ class AccountingRepositoryAdapter:
         except SQLAlchemyError as exc:
             raise self._storage_error(exc) from exc
 
+    def ple_libro_diario(self, year: int, month: int):
+        """Lee todas las líneas de asientos confirmados del periodo, orden estable."""
+        try:
+            with self._session_factory() as session:
+                rows = session.execute(text("""SELECT e.id, e.operation_date, e.concept, e.detail,
+                        e.currency, e.status, l.line_number, l.account_code, l.description, l.debit, l.credit
+                    FROM accounting_entries e
+                    JOIN accounting_entry_lines l ON l.entry_id = e.id
+                    WHERE e.status = 'CONFIRMED'
+                      AND e.operation_date >= :from_date
+                      AND e.operation_date < :to_date
+                    ORDER BY e.operation_date, e.entry_number, l.line_number"""),
+                    {"from_date": date(year, month, 1),
+                     "to_date": date(year + (month == 12), month % 12 + 1, 1)}).mappings().all()
+            return [dict(row) for row in rows]
+        except SQLAlchemyError as exc:
+            raise self._storage_error(exc) from exc
+
     @staticmethod
     def _lock_open_period(session, operation_date: date) -> None:
         year, month = operation_date.year, operation_date.month

@@ -7,6 +7,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -94,6 +95,36 @@ def create_accounting_router(repository_factory, require_admin):
             return Response(content=content, media_type=media_type,
                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
         return result
+
+    def ple_result(year: int, month: int):
+        from app.adapters.exports.ple_service import validate_and_export_libro_diario
+        return validate_and_export_libro_diario(repository_factory(), year, month)
+
+    @router.get("/ple/libro-diario/validate")
+    def validate_ple_libro_diario(year: int = Query(ge=2000, le=9999),
+                                  month: int = Query(ge=1, le=12),
+                                  _actor=Depends(require_admin)):
+        try:
+            result = ple_result(year, month)
+            return {key: result[key] for key in ("valid", "filename", "entries_count", "lines_count",
+                                                  "total_debit", "total_credit", "errors")}
+        except (SQLAlchemyError, AccountingError) as exc:
+            return error_response(exc)
+
+    @router.get("/ple/libro-diario/export")
+    def export_ple_libro_diario(year: int = Query(ge=2000, le=9999),
+                                month: int = Query(ge=1, le=12),
+                                _actor=Depends(require_admin)):
+        try:
+            result = ple_result(year, month)
+            if not result["valid"]:
+                return JSONResponse(status_code=422, content={"detail": result["errors"], "errors": result["errors"],
+                                                              "code": "ple_validation"})
+            return StreamingResponse(iter([result["content"].encode("utf-8")]), media_type="text/plain; charset=utf-8",
+                            headers={"Content-Disposition": f'attachment; filename="{result["filename"]}"',
+                                     "Access-Control-Expose-Headers": "Content-Disposition"})
+        except (SQLAlchemyError, AccountingError) as exc:
+            return error_response(exc)
 
     @router.get("/categories")
     def list_categories(_actor=Depends(require_admin)):

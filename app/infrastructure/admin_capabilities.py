@@ -24,6 +24,7 @@ class PageQuery(BaseModel):
     status: str | None = Field(default=None, max_length=30)
     customer_id: int | None = Field(default=None, ge=1)
     supplier_id: int | None = Field(default=None, ge=1)
+    low_stock: bool | None = None
 
 
 class RecordId(BaseModel):
@@ -294,7 +295,7 @@ class AdminCapabilityService:
         list_fields = {
             "customers.list": {"search", "limit", "offset"},
             "tickets.list": {"search", "status", "limit", "offset"},
-            "inventory.list": {"search", "limit", "offset"},
+            "inventory.list": {"search", "low_stock", "limit", "offset"},
             "suppliers.list": {"search", "limit", "offset"},
             "purchases.list": {"supplier_id", "search", "status", "limit", "offset"},
             "purchase_orders.list": {"supplier_id", "status", "limit", "offset"},
@@ -334,6 +335,9 @@ class AdminCapabilityService:
                 items = [item for item in items if needle in item.name.casefold()
                          or needle in item.code.casefold()
                          or needle in (item.category or "").casefold()]
+            if args.low_stock:
+                from app.domain.inventory import is_low_stock
+                items = [item for item in items if is_low_stock(item.current_stock, item.minimum_threshold)]
             total = len(items)
             result = {"items": items[args.offset:args.offset + args.limit], "total": total,
                       "limit": args.limit, "offset": args.offset}

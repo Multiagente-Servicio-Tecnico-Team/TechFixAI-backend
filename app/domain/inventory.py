@@ -38,6 +38,11 @@ class InventoryPart:
     updated_at: datetime | str
 
 
+def is_low_stock(current_stock: int, minimum_threshold: int) -> bool:
+    """Un repuesto tiene stock bajo cuando sus existencias no superan el mínimo de alerta."""
+    return current_stock <= minimum_threshold
+
+
 def validate_inventory_part(values: Mapping[str, object]) -> InventoryPartDraft:
     """Valida un alta/reemplazo sin convertir dinero a float ni normalizar la categoría."""
     code = values.get("code")

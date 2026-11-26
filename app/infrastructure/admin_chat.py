@@ -73,6 +73,8 @@ def capability_argument_hints() -> str:
     ple = PleExport.model_json_schema()
     lines.append("accounting.ple.export: " + _describe_schema(ple, ple.get("$defs", {})))
     lines.append("*.get: {id*:integer}; *.list: {search, status, limit, offset, customer_id, supplier_id} según el recurso")
+    lines.append("inventory.list: {search, low_stock:boolean, limit, offset}; usa low_stock=true para los repuestos "
+                 "con stock bajo o crítico (existencias menores o iguales al mínimo)")
     return "\n".join(lines)
 
 
